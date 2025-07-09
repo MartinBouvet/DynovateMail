@@ -10,10 +10,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont
 
-from ..gmail_client import GmailClient
-from ..models.email_model import Email
-from .email_view import EmailView
-from .compose_view import ComposeView
+from gmail_client import GmailClient
+from models.email_model import Email
+from ui.email_view import EmailView
+from ui.compose_view import ComposeView
 
 logger = logging.getLogger(__name__)
 

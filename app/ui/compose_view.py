@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from ..gmail_client import GmailClient
+from gmail_client import GmailClient
 
 logger = logging.getLogger(__name__)
 

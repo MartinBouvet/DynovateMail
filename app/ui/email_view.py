@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
-from ..models.email_model import Email
+from models.email_model import Email
 
 class EmailView(QWidget):
     """Widget pour afficher le contenu d'un email."""

@@ -1,9 +1,15 @@
+# Solution 1 : Modifier app/main.py pour corriger les imports
 #!/usr/bin/env python3
 """
 Point d'entrée principal pour l'application Gmail Assistant avec IA.
 """
 import sys
 import os
+from pathlib import Path
+
+# Ajouter le répertoire parent au PYTHONPATH
+sys.path.insert(0, str(Path(__file__).parent))
+
 from dotenv import load_dotenv
 from PyQt6.QtWidgets import QApplication
 
