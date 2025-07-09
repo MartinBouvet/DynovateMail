@@ -1,12 +1,12 @@
 """
-Vue des paramètres de l'application.
+Vue des paramètres corrigée et simplifiée.
 """
 import logging
 from typing import Dict, Any
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, 
     QPushButton, QLineEdit, QTextEdit, QCheckBox, QSpinBox,
-    QComboBox, QGroupBox, QFormLayout, QScrollArea
+    QComboBox, QGroupBox, QFormLayout, QScrollArea, QTabWidget
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -16,7 +16,7 @@ from utils.config import save_config
 logger = logging.getLogger(__name__)
 
 class SettingsView(QWidget):
-    """Vue des paramètres de l'application."""
+    """Vue des paramètres corrigée avec lisibilité améliorée."""
     
     settings_changed = pyqtSignal(dict)
     
@@ -24,6 +24,7 @@ class SettingsView(QWidget):
         super().__init__(parent)
         self.config = config
         self._setup_ui()
+        self._apply_style()
         self._load_settings()
     
     def _setup_ui(self):
@@ -32,11 +33,17 @@ class SettingsView(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(20)
         
-        # Titre
+        # Header simple
+        header_layout = QHBoxLayout()
+        
         title_label = QLabel("⚙️ Paramètres")
         title_label.setObjectName("page-title")
         title_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        layout.addWidget(title_label)
+        header_layout.addWidget(title_label)
+        
+        header_layout.addStretch()
+        
+        layout.addLayout(header_layout)
         
         # Zone de scroll
         scroll_area = QScrollArea()
@@ -60,23 +67,17 @@ class SettingsView(QWidget):
         auto_respond_group = self._create_auto_respond_settings()
         main_layout.addWidget(auto_respond_group)
         
-        # Paramètres d'email
-        email_group = self._create_email_settings()
-        main_layout.addWidget(email_group)
-        
         # Paramètres d'interface
         ui_group = self._create_ui_settings()
         main_layout.addWidget(ui_group)
         
         main_layout.addStretch()
         
+        scroll_area.setWidget(main_widget)
+        layout.addWidget(scroll_area)
+        
         # Boutons d'action
         buttons_layout = QHBoxLayout()
-        
-        save_btn = QPushButton("💾 Sauvegarder")
-        save_btn.setObjectName("save-button")
-        save_btn.clicked.connect(self._save_settings)
-        buttons_layout.addWidget(save_btn)
         
         reset_btn = QPushButton("🔄 Réinitialiser")
         reset_btn.setObjectName("reset-button")
@@ -85,12 +86,12 @@ class SettingsView(QWidget):
         
         buttons_layout.addStretch()
         
-        main_layout.addLayout(buttons_layout)
+        save_btn = QPushButton("💾 Sauvegarder")
+        save_btn.setObjectName("save-button")
+        save_btn.clicked.connect(self._save_settings)
+        buttons_layout.addWidget(save_btn)
         
-        scroll_area.setWidget(main_widget)
-        layout.addWidget(scroll_area)
-        
-        self._apply_style()
+        layout.addLayout(buttons_layout)
     
     def _create_general_settings(self) -> QGroupBox:
         """Crée les paramètres généraux."""
@@ -98,29 +99,39 @@ class SettingsView(QWidget):
         group.setObjectName("settings-group")
         
         form_layout = QFormLayout(group)
+        form_layout.setSpacing(15)
+        form_layout.setVerticalSpacing(10)
         
         # Nom d'utilisateur
         self.user_name_input = QLineEdit()
         self.user_name_input.setObjectName("settings-input")
-        form_layout.addRow("Nom d'utilisateur:", self.user_name_input)
+        self.user_name_input.setPlaceholderText("Votre nom complet")
+        form_layout.addRow("Nom d'utilisateur :", self.user_name_input)
         
         # Signature
         self.signature_input = QTextEdit()
         self.signature_input.setObjectName("settings-text")
-        self.signature_input.setMaximumHeight(100)
-        form_layout.addRow("Signature email:", self.signature_input)
+        self.signature_input.setMaximumHeight(80)
+        self.signature_input.setPlaceholderText("Votre signature email...")
+        form_layout.addRow("Signature :", self.signature_input)
         
         # Rafraîchissement automatique
-        self.auto_refresh_check = QCheckBox("Rafraîchissement automatique")
+        refresh_layout = QHBoxLayout()
+        self.auto_refresh_check = QCheckBox("Activé")
         self.auto_refresh_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.auto_refresh_check)
+        refresh_layout.addWidget(self.auto_refresh_check)
         
-        # Intervalle de rafraîchissement
         self.refresh_interval_spin = QSpinBox()
         self.refresh_interval_spin.setObjectName("settings-spin")
         self.refresh_interval_spin.setRange(1, 60)
         self.refresh_interval_spin.setSuffix(" min")
-        form_layout.addRow("Intervalle de rafraîchissement:", self.refresh_interval_spin)
+        refresh_layout.addWidget(QLabel("Intervalle :"))
+        refresh_layout.addWidget(self.refresh_interval_spin)
+        refresh_layout.addStretch()
+        
+        refresh_widget = QWidget()
+        refresh_widget.setLayout(refresh_layout)
+        form_layout.addRow("Rafraîchissement auto :", refresh_widget)
         
         return group
     
@@ -130,32 +141,28 @@ class SettingsView(QWidget):
         group.setObjectName("settings-group")
         
         form_layout = QFormLayout(group)
+        form_layout.setSpacing(15)
+        form_layout.setVerticalSpacing(10)
         
         # Classification automatique
-        self.ai_classification_check = QCheckBox("Classification automatique des emails")
+        self.ai_classification_check = QCheckBox("Classer automatiquement les emails")
         self.ai_classification_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.ai_classification_check)
+        form_layout.addRow("Classification :", self.ai_classification_check)
         
         # Détection de spam
-        self.spam_detection_check = QCheckBox("Détection de spam")
+        self.spam_detection_check = QCheckBox("Détecter les spams")
         self.spam_detection_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.spam_detection_check)
+        form_layout.addRow("Anti-spam :", self.spam_detection_check)
         
         # Analyse de sentiment
-        self.sentiment_analysis_check = QCheckBox("Analyse de sentiment")
+        self.sentiment_analysis_check = QCheckBox("Analyser le sentiment")
         self.sentiment_analysis_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.sentiment_analysis_check)
+        form_layout.addRow("Sentiment :", self.sentiment_analysis_check)
         
         # Extraction de rendez-vous
-        self.meeting_extraction_check = QCheckBox("Extraction automatique de rendez-vous")
+        self.meeting_extraction_check = QCheckBox("Extraire les rendez-vous")
         self.meeting_extraction_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.meeting_extraction_check)
-        
-        # Modèle de réponse
-        self.response_model_combo = QComboBox()
-        self.response_model_combo.setObjectName("settings-combo")
-        self.response_model_combo.addItems(["gpt-3.5-turbo", "gpt-4", "claude-3-sonnet"])
-        form_layout.addRow("Modèle de réponse:", self.response_model_combo)
+        form_layout.addRow("Calendrier :", self.meeting_extraction_check)
         
         return group
     
@@ -165,69 +172,51 @@ class SettingsView(QWidget):
         group.setObjectName("settings-group")
         
         form_layout = QFormLayout(group)
+        form_layout.setSpacing(15)
+        form_layout.setVerticalSpacing(10)
         
         # Activer les réponses automatiques
         self.auto_respond_check = QCheckBox("Activer les réponses automatiques")
         self.auto_respond_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.auto_respond_check)
+        form_layout.addRow("Activation :", self.auto_respond_check)
         
         # Délai avant réponse
+        delay_layout = QHBoxLayout()
         self.response_delay_spin = QSpinBox()
         self.response_delay_spin.setObjectName("settings-spin")
         self.response_delay_spin.setRange(0, 60)
         self.response_delay_spin.setSuffix(" min")
-        form_layout.addRow("Délai avant réponse:", self.response_delay_spin)
+        delay_layout.addWidget(self.response_delay_spin)
+        delay_layout.addStretch()
+        
+        delay_widget = QWidget()
+        delay_widget.setLayout(delay_layout)
+        form_layout.addRow("Délai :", delay_widget)
         
         # Types d'emails à traiter
-        self.auto_respond_cv_check = QCheckBox("Répondre aux candidatures")
+        types_layout = QVBoxLayout()
+        
+        self.auto_respond_cv_check = QCheckBox("Candidatures (CV)")
         self.auto_respond_cv_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.auto_respond_cv_check)
+        types_layout.addWidget(self.auto_respond_cv_check)
         
-        self.auto_respond_rdv_check = QCheckBox("Répondre aux demandes de rendez-vous")
+        self.auto_respond_rdv_check = QCheckBox("Demandes de rendez-vous")
         self.auto_respond_rdv_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.auto_respond_rdv_check)
+        types_layout.addWidget(self.auto_respond_rdv_check)
         
-        self.auto_respond_support_check = QCheckBox("Répondre aux demandes de support")
+        self.auto_respond_support_check = QCheckBox("Demandes de support")
         self.auto_respond_support_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.auto_respond_support_check)
+        types_layout.addWidget(self.auto_respond_support_check)
         
-        # Éviter les réponses en boucle
+        types_widget = QWidget()
+        types_widget.setLayout(types_layout)
+        form_layout.addRow("Types d'emails :", types_widget)
+        
+        # Éviter les boucles
         self.avoid_loops_check = QCheckBox("Éviter les réponses en boucle")
         self.avoid_loops_check.setObjectName("settings-checkbox")
         self.avoid_loops_check.setChecked(True)
-        form_layout.addRow("", self.avoid_loops_check)
-        
-        return group
-    
-    def _create_email_settings(self) -> QGroupBox:
-        """Crée les paramètres d'email."""
-        group = QGroupBox("📧 Paramètres email")
-        group.setObjectName("settings-group")
-        
-        form_layout = QFormLayout(group)
-        
-        # Nombre d'emails à charger
-        self.max_emails_spin = QSpinBox()
-        self.max_emails_spin.setObjectName("settings-spin")
-        self.max_emails_spin.setRange(10, 1000)
-        form_layout.addRow("Nombre d'emails à charger:", self.max_emails_spin)
-        
-        # Marquer comme lu automatiquement
-        self.auto_mark_read_check = QCheckBox("Marquer comme lu automatiquement")
-        self.auto_mark_read_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.auto_mark_read_check)
-        
-        # Délai avant marquage lu
-        self.mark_read_delay_spin = QSpinBox()
-        self.mark_read_delay_spin.setObjectName("settings-spin")
-        self.mark_read_delay_spin.setRange(1, 60)
-        self.mark_read_delay_spin.setSuffix(" sec")
-        form_layout.addRow("Délai avant marquage lu:", self.mark_read_delay_spin)
-        
-        # Archivage automatique
-        self.auto_archive_check = QCheckBox("Archivage automatique des emails traités")
-        self.auto_archive_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.auto_archive_check)
+        form_layout.addRow("Sécurité :", self.avoid_loops_check)
         
         return group
     
@@ -237,40 +226,63 @@ class SettingsView(QWidget):
         group.setObjectName("settings-group")
         
         form_layout = QFormLayout(group)
+        form_layout.setSpacing(15)
+        form_layout.setVerticalSpacing(10)
         
         # Thème
+        theme_layout = QHBoxLayout()
         self.theme_combo = QComboBox()
         self.theme_combo.setObjectName("settings-combo")
         self.theme_combo.addItems(["Clair", "Sombre", "Automatique"])
-        form_layout.addRow("Thème:", self.theme_combo)
+        theme_layout.addWidget(self.theme_combo)
+        theme_layout.addStretch()
+        
+        theme_widget = QWidget()
+        theme_widget.setLayout(theme_layout)
+        form_layout.addRow("Thème :", theme_widget)
         
         # Taille de police
+        font_layout = QHBoxLayout()
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setObjectName("settings-spin")
         self.font_size_spin.setRange(8, 24)
         self.font_size_spin.setSuffix(" pt")
-        form_layout.addRow("Taille de police:", self.font_size_spin)
+        font_layout.addWidget(self.font_size_spin)
+        font_layout.addStretch()
         
-        # Affichage du volet de prévisualisation
+        font_widget = QWidget()
+        font_widget.setLayout(font_layout)
+        form_layout.addRow("Taille de police :", font_widget)
+        
+        # Options d'affichage
+        display_layout = QVBoxLayout()
+        
         self.preview_pane_check = QCheckBox("Afficher le volet de prévisualisation")
         self.preview_pane_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.preview_pane_check)
+        display_layout.addWidget(self.preview_pane_check)
         
-        # Notifications
         self.notifications_check = QCheckBox("Notifications")
         self.notifications_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.notifications_check)
+        display_layout.addWidget(self.notifications_check)
         
-        # Minimiser dans la barre système
         self.minimize_to_tray_check = QCheckBox("Minimiser dans la barre système")
         self.minimize_to_tray_check.setObjectName("settings-checkbox")
-        form_layout.addRow("", self.minimize_to_tray_check)
+        display_layout.addWidget(self.minimize_to_tray_check)
+        
+        display_widget = QWidget()
+        display_widget.setLayout(display_layout)
+        form_layout.addRow("Affichage :", display_widget)
         
         return group
     
     def _apply_style(self):
-        """Applique le style aux paramètres."""
+        """Applique le style lisible aux paramètres."""
         self.setStyleSheet("""
+            QWidget {
+                background-color: #ffffff;
+                color: #000000;
+            }
+            
             QLabel#page-title {
                 color: #000000;
                 margin-bottom: 10px;
@@ -281,24 +293,28 @@ class SettingsView(QWidget):
                 font-weight: bold;
                 color: #000000;
                 border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
+                border-radius: 10px;
+                margin-top: 15px;
+                padding-top: 15px;
+                background-color: #f8f8f8;
             }
             
             QGroupBox#settings-group::title {
                 subcontrol-origin: margin;
-                left: 10px;
+                left: 15px;
                 padding: 0 10px 0 10px;
                 background-color: #ffffff;
+                border-radius: 5px;
             }
             
             QLineEdit#settings-input {
                 background-color: #ffffff;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                padding: 8px;
-                font-size: 12px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 10px 12px;
+                font-size: 13px;
+                color: #000000;
+                min-height: 20px;
             }
             
             QLineEdit#settings-input:focus {
@@ -307,10 +323,11 @@ class SettingsView(QWidget):
             
             QTextEdit#settings-text {
                 background-color: #ffffff;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                padding: 8px;
-                font-size: 12px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 10px;
+                font-size: 13px;
+                color: #000000;
             }
             
             QTextEdit#settings-text:focus {
@@ -319,15 +336,16 @@ class SettingsView(QWidget):
             
             QCheckBox#settings-checkbox {
                 color: #000000;
-                font-size: 12px;
-                spacing: 5px;
+                font-size: 13px;
+                spacing: 8px;
+                font-weight: normal;
             }
             
             QCheckBox#settings-checkbox::indicator {
-                width: 16px;
-                height: 16px;
-                border: 1px solid #e0e0e0;
-                border-radius: 3px;
+                width: 20px;
+                height: 20px;
+                border: 2px solid #e0e0e0;
+                border-radius: 4px;
                 background-color: #ffffff;
             }
             
@@ -336,12 +354,18 @@ class SettingsView(QWidget):
                 border-color: #000000;
             }
             
+            QCheckBox#settings-checkbox::indicator:hover {
+                border-color: #cccccc;
+            }
+            
             QSpinBox#settings-spin {
                 background-color: #ffffff;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                padding: 8px;
-                font-size: 12px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 8px 10px;
+                font-size: 13px;
+                color: #000000;
+                min-width: 80px;
             }
             
             QSpinBox#settings-spin:focus {
@@ -350,10 +374,12 @@ class SettingsView(QWidget):
             
             QComboBox#settings-combo {
                 background-color: #ffffff;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                padding: 8px;
-                font-size: 12px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 13px;
+                color: #000000;
+                min-width: 150px;
             }
             
             QComboBox#settings-combo:focus {
@@ -362,7 +388,7 @@ class SettingsView(QWidget):
             
             QComboBox#settings-combo::drop-down {
                 border: none;
-                width: 20px;
+                width: 25px;
             }
             
             QComboBox#settings-combo::down-arrow {
@@ -375,36 +401,76 @@ class SettingsView(QWidget):
                 transform: rotate(-45deg);
             }
             
+            QComboBox#settings-combo QAbstractItemView {
+                background-color: #ffffff;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                selection-background-color: #f0f0f0;
+                outline: none;
+            }
+            
             QPushButton#save-button {
                 background-color: #000000;
                 color: #ffffff;
-                border: 1px solid #000000;
-                border-radius: 4px;
-                padding: 10px 20px;
+                border: 2px solid #000000;
+                border-radius: 8px;
+                padding: 12px 24px;
                 font-size: 14px;
                 font-weight: bold;
+                min-width: 120px;
             }
             
             QPushButton#save-button:hover {
                 background-color: #333333;
             }
             
+            QPushButton#save-button:pressed {
+                background-color: #555555;
+            }
+            
             QPushButton#reset-button {
                 background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                padding: 10px 20px;
+                color: #666666;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 12px 24px;
                 font-size: 14px;
+                min-width: 120px;
             }
             
             QPushButton#reset-button:hover {
                 background-color: #f0f0f0;
+                color: #000000;
+                border-color: #cccccc;
             }
             
             QScrollArea {
                 border: none;
                 background-color: #ffffff;
+            }
+            
+            QScrollBar:vertical {
+                background-color: #f8f8f8;
+                width: 12px;
+                border-radius: 6px;
+            }
+            
+            QScrollBar::handle:vertical {
+                background-color: #cccccc;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            
+            QScrollBar::handle:vertical:hover {
+                background-color: #999999;
+            }
+            
+            QFormLayout QLabel {
+                color: #000000;
+                font-size: 13px;
+                font-weight: bold;
+                margin-right: 10px;
+                min-width: 120px;
             }
         """)
     
@@ -423,7 +489,6 @@ class SettingsView(QWidget):
             self.spam_detection_check.setChecked(ai_config.get('enable_spam_detection', True))
             self.sentiment_analysis_check.setChecked(ai_config.get('enable_sentiment_analysis', True))
             self.meeting_extraction_check.setChecked(ai_config.get('enable_meeting_extraction', True))
-            self.response_model_combo.setCurrentText(ai_config.get('response_model', 'gpt-3.5-turbo'))
             
             # Paramètres de réponse automatique
             auto_respond_config = self.config.get('auto_respond', {})
@@ -433,13 +498,6 @@ class SettingsView(QWidget):
             self.auto_respond_rdv_check.setChecked(auto_respond_config.get('respond_to_rdv', True))
             self.auto_respond_support_check.setChecked(auto_respond_config.get('respond_to_support', True))
             self.avoid_loops_check.setChecked(auto_respond_config.get('avoid_loops', True))
-            
-            # Paramètres email
-            email_config = self.config.get('email', {})
-            self.max_emails_spin.setValue(email_config.get('max_emails_to_load', 50))
-            self.auto_mark_read_check.setChecked(email_config.get('auto_mark_read', False))
-            self.mark_read_delay_spin.setValue(email_config.get('mark_read_delay_seconds', 3))
-            self.auto_archive_check.setChecked(email_config.get('auto_archive', False))
             
             # Paramètres UI
             ui_config = self.config.get('ui', {})
@@ -468,7 +526,6 @@ class SettingsView(QWidget):
             ai_config['enable_spam_detection'] = self.spam_detection_check.isChecked()
             ai_config['enable_sentiment_analysis'] = self.sentiment_analysis_check.isChecked()
             ai_config['enable_meeting_extraction'] = self.meeting_extraction_check.isChecked()
-            ai_config['response_model'] = self.response_model_combo.currentText()
             
             # Réponse automatique
             auto_respond_config = self.config.setdefault('auto_respond', {})
@@ -478,13 +535,6 @@ class SettingsView(QWidget):
             auto_respond_config['respond_to_rdv'] = self.auto_respond_rdv_check.isChecked()
             auto_respond_config['respond_to_support'] = self.auto_respond_support_check.isChecked()
             auto_respond_config['avoid_loops'] = self.avoid_loops_check.isChecked()
-            
-            # Email
-            email_config = self.config.setdefault('email', {})
-            email_config['max_emails_to_load'] = self.max_emails_spin.value()
-            email_config['auto_mark_read'] = self.auto_mark_read_check.isChecked()
-            email_config['mark_read_delay_seconds'] = self.mark_read_delay_spin.value()
-            email_config['auto_archive'] = self.auto_archive_check.isChecked()
             
             # UI
             ui_config = self.config.setdefault('ui', {})
@@ -500,15 +550,15 @@ class SettingsView(QWidget):
                 self.settings_changed.emit(self.config)
                 
                 from PyQt6.QtWidgets import QMessageBox
-                QMessageBox.information(self, "Paramètres", "Paramètres sauvegardés avec succès!")
+                QMessageBox.information(self, "Succès", "✅ Paramètres sauvegardés avec succès!")
             else:
                 from PyQt6.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "Erreur", "Impossible de sauvegarder les paramètres")
+                QMessageBox.warning(self, "Erreur", "❌ Impossible de sauvegarder les paramètres")
                 
         except Exception as e:
             logger.error(f"Erreur lors de la sauvegarde: {e}")
             from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Erreur", f"Erreur lors de la sauvegarde: {e}")
+            QMessageBox.critical(self, "Erreur", f"❌ Erreur lors de la sauvegarde: {e}")
     
     def _reset_settings(self):
         """Réinitialise les paramètres par défaut."""
@@ -516,7 +566,7 @@ class SettingsView(QWidget):
         
         reply = QMessageBox.question(
             self,
-            "Réinitialiser",
+            "⚠️ Réinitialiser",
             "Êtes-vous sûr de vouloir réinitialiser tous les paramètres ?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
@@ -529,4 +579,4 @@ class SettingsView(QWidget):
             self.config.update(DEFAULT_CONFIG)
             self._load_settings()
             
-            QMessageBox.information(self, "Réinitialisation", "Paramètres réinitialisés!")
+            QMessageBox.information(self, "Succès", "✅ Paramètres réinitialisés!")

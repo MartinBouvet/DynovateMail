@@ -1,5 +1,5 @@
 """
-Interface utilisateur principale moderne pour Gmail Assistant IA.
+Interface utilisateur principale corrigée pour Gmail Assistant IA.
 Design moderne noir et blanc avec UX/UI optimisée.
 """
 import logging
@@ -79,7 +79,7 @@ class EmailProcessorThread(QThread):
         self.is_running = False
 
 class ModernMainWindow(QMainWindow):
-    """Interface principale moderne avec design noir et blanc."""
+    """Interface principale moderne avec design noir et blanc corrigé."""
     
     def __init__(self, gmail_client: GmailClient, ai_processor: AIProcessor,
                  calendar_manager: CalendarManager, auto_responder: AutoResponder,
@@ -96,6 +96,7 @@ class ModernMainWindow(QMainWindow):
         self.filtered_emails = []
         self.current_filter = "all"
         self.processor_thread = None
+        self.selected_email = None
         
         self._setup_ui()
         self._setup_style()
@@ -129,26 +130,11 @@ class ModernMainWindow(QMainWindow):
         # Barre de statut moderne
         self._create_status_bar()
     
-    def _create_status_bar(self):
-        """Crée la barre de statut moderne."""
-        status_bar = self.statusBar()
-        status_bar.setStyleSheet("""
-            QStatusBar {
-                background-color: #f8f8f8;
-                border-top: 1px solid #e0e0e0;
-                color: #666666;
-                font-size: 12px;
-                padding: 5px;
-            }
-        """)
-        status_bar.showMessage("Prêt")
-    
-    
     def _create_sidebar(self) -> QWidget:
-        """Crée la barre latérale moderne."""
+        """Crée la barre latérale moderne et responsive."""
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(280)
+        sidebar.setFixedWidth(260)  # Réduit de 280 à 260
         
         layout = QVBoxLayout(sidebar)
         layout.setSpacing(0)
@@ -157,20 +143,20 @@ class ModernMainWindow(QMainWindow):
         # Header avec logo
         header = QFrame()
         header.setObjectName("sidebar-header")
-        header.setFixedHeight(80)
+        header.setFixedHeight(70)  # Réduit de 80 à 70
         
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(20, 20, 20, 20)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(15, 15, 15, 15)
         
         # Logo/Titre
         title_label = QLabel("Dynovate Mail")
         title_label.setObjectName("app-title")
-        title_label.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))  # Réduit de 18 à 16
         header_layout.addWidget(title_label)
         
         layout.addWidget(header)
         
-        # Boutons de navigation
+        # Boutons de navigation principaux
         nav_buttons = [
             ("📧", "Boîte de réception", "inbox"),
             ("📤", "Envoyés", "sent"),
@@ -184,13 +170,25 @@ class ModernMainWindow(QMainWindow):
         for icon, text, key in nav_buttons:
             btn = QPushButton(f"{icon}  {text}")
             btn.setObjectName("nav-button")
-            btn.setFixedHeight(50)
+            btn.setFixedHeight(45)  # Réduit de 50 à 45
             btn.clicked.connect(lambda checked, k=key: self._switch_view(k))
             layout.addWidget(btn)
             self.nav_buttons[key] = btn
         
+        # Séparateur
+        separator = QFrame()
+        separator.setObjectName("sidebar-separator")
+        separator.setFixedHeight(1)
+        layout.addWidget(separator)
+        
         # Filtres par catégorie
         layout.addWidget(self._create_category_filters())
+        
+        # Séparateur
+        separator2 = QFrame()
+        separator2.setObjectName("sidebar-separator")
+        separator2.setFixedHeight(1)
+        layout.addWidget(separator2)
         
         # Statistiques rapides
         layout.addWidget(self._create_quick_stats())
@@ -205,30 +203,29 @@ class ModernMainWindow(QMainWindow):
         filters_frame.setObjectName("category-filters")
         
         layout = QVBoxLayout(filters_frame)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(15, 15, 15, 15)
         
         # Titre
         title = QLabel("Catégories")
         title.setObjectName("section-title")
-        title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         layout.addWidget(title)
         
         # Filtres
         categories = [
-            ("📄", "CV/Candidatures", "cv"),
+            ("📄", "CV", "cv"),
             ("🤝", "Rendez-vous", "rdv"),
             ("🛡️", "Spam", "spam"),
             ("🧾", "Factures", "facture"),
             ("🔧", "Support", "support"),
-            ("📰", "Newsletters", "newsletter"),
-            ("⚡", "Général", "general")
+            ("📰", "Newsletters", "newsletter")
         ]
         
         self.category_buttons = {}
         for icon, text, key in categories:
             btn = QPushButton(f"{icon} {text}")
             btn.setObjectName("category-filter")
-            btn.setFixedHeight(35)
+            btn.setFixedHeight(32)  # Réduit de 35 à 32
             btn.clicked.connect(lambda checked, k=key: self._filter_by_category(k))
             layout.addWidget(btn)
             self.category_buttons[key] = btn
@@ -241,12 +238,12 @@ class ModernMainWindow(QMainWindow):
         stats_frame.setObjectName("quick-stats")
         
         layout = QVBoxLayout(stats_frame)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(15, 15, 15, 15)
         
         # Titre
         title = QLabel("Statistiques")
         title.setObjectName("section-title")
-        title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         layout.addWidget(title)
         
         # Stats
@@ -255,19 +252,22 @@ class ModernMainWindow(QMainWindow):
             ("unread", "Non lus", "0"),
             ("today", "Aujourd'hui", "0"),
             ("auto_responses", "Réponses auto", "0"),
-            ("meetings", "RDV cette semaine", "0")
+            ("meetings", "RDV semaine", "0")
         ]
         
         for key, text, value in stats:
             stat_widget = QFrame()
+            stat_widget.setObjectName("stat-item")
             stat_layout = QHBoxLayout(stat_widget)
-            stat_layout.setContentsMargins(10, 5, 10, 5)
+            stat_layout.setContentsMargins(8, 4, 8, 4)
             
             label = QLabel(text)
             label.setObjectName("stat-label")
+            label.setFont(QFont("Arial", 10))
             
             value_label = QLabel(value)
             value_label.setObjectName("stat-value")
+            value_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             value_label.setAlignment(Qt.AlignmentFlag.AlignRight)
             
             stat_layout.addWidget(label)
@@ -292,7 +292,7 @@ class ModernMainWindow(QMainWindow):
         # Zone de contenu avec onglets
         self.content_stack = QStackedWidget()
         
-        # Vue emails
+        # Vue emails avec splitter amélioré
         self.email_view = self._create_email_view()
         self.content_stack.addWidget(self.email_view)
         
@@ -300,12 +300,17 @@ class ModernMainWindow(QMainWindow):
         self.calendar_view = CalendarView(self.calendar_manager)
         self.content_stack.addWidget(self.calendar_view)
         
-        # Vue statistiques
-        self.stats_view = self._create_stats_view()
+        # Vue statistiques améliorée
+        self.stats_view = self._create_improved_stats_view()
         self.content_stack.addWidget(self.stats_view)
         
-        # Vue paramètres
-        self.settings_view = SettingsView(self.config)
+        # Vue paramètres améliorée - Import de la nouvelle version
+        try:
+            from ui.improved_settings_view import SettingsView as ImprovedSettingsView
+            self.settings_view = ImprovedSettingsView(self.config)
+        except ImportError:
+            # Fallback vers l'ancienne version si la nouvelle n'est pas disponible
+            self.settings_view = SettingsView(self.config)
         self.content_stack.addWidget(self.settings_view)
         
         layout.addWidget(self.content_stack)
@@ -316,7 +321,7 @@ class ModernMainWindow(QMainWindow):
         """Crée la barre d'outils moderne."""
         toolbar = QFrame()
         toolbar.setObjectName("toolbar")
-        toolbar.setFixedHeight(60)
+        toolbar.setFixedHeight(55)
         
         layout = QHBoxLayout(toolbar)
         layout.setContentsMargins(20, 10, 20, 10)
@@ -349,54 +354,173 @@ class ModernMainWindow(QMainWindow):
         return toolbar
     
     def _create_email_view(self) -> QWidget:
-        """Crée la vue des emails."""
+        """Crée la vue des emails avec splitter amélioré."""
         email_widget = QWidget()
         layout = QHBoxLayout(email_widget)
         layout.setSpacing(1)
         layout.setContentsMargins(0, 0, 0, 0)
         
+        # Splitter horizontal
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        
         # Liste des emails
         self.email_list = EmailListView()
         self.email_list.email_selected.connect(self._on_email_selected)
-        layout.addWidget(self.email_list)
+        self.email_list.setMinimumWidth(400)
+        splitter.addWidget(self.email_list)
         
-        # Détail de l'email
+        # Détail de l'email dans un container
+        detail_container = QWidget()
+        detail_layout = QVBoxLayout(detail_container)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.email_detail = EmailDetailView(self.gmail_client, self.ai_processor)
         self.email_detail.reply_requested.connect(self._reply_to_email)
         self.email_detail.forward_requested.connect(self._forward_email)
-        layout.addWidget(self.email_detail)
+        detail_layout.addWidget(self.email_detail)
+        
+        splitter.addWidget(detail_container)
+        
+        # Configuration du splitter
+        splitter.setSizes([400, 600])  # Proportion email list vs detail
+        splitter.setStretchFactor(0, 0)  # Liste ne s'étire pas
+        splitter.setStretchFactor(1, 1)  # Detail s'étire
+        
+        layout.addWidget(splitter)
         
         return email_widget
     
-    def _create_stats_view(self) -> QWidget:
-        """Crée la vue des statistiques."""
+    def _create_improved_stats_view(self) -> QWidget:
+        """Crée la vue des statistiques améliorée."""
         stats_widget = QWidget()
+        stats_widget.setObjectName("stats-page")
+        
         layout = QVBoxLayout(stats_widget)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(25)
         
-        # Titre
+        # Titre avec icône
+        title_layout = QHBoxLayout()
+        title_icon = QLabel("📊")
+        title_icon.setFont(QFont("Arial", 24))
+        title_layout.addWidget(title_icon)
+        
         title = QLabel("Statistiques détaillées")
-        title.setObjectName("page-title")
+        title.setObjectName("stats-title")
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
+        title_layout.addWidget(title)
+        title_layout.addStretch()
         
-        # Conteneur pour les statistiques
-        stats_container = QFrame()
-        stats_container.setObjectName("stats-container")
-        stats_layout = QVBoxLayout(stats_container)
+        layout.addLayout(title_layout)
         
-        # Graphiques et métriques détaillées
-        self.detailed_stats = QLabel("Statistiques en cours de chargement...")
-        self.detailed_stats.setObjectName("detailed-stats")
-        stats_layout.addWidget(self.detailed_stats)
+        # Cartes de statistiques
+        cards_layout = QHBoxLayout()
         
-        layout.addWidget(stats_container)
+        # Carte emails
+        email_card = self._create_stat_card("📧", "Emails", "0", "Total traités")
+        cards_layout.addWidget(email_card)
+        
+        # Carte non lus
+        unread_card = self._create_stat_card("📬", "Non lus", "0", "À traiter")
+        cards_layout.addWidget(unread_card)
+        
+        # Carte réponses auto
+        auto_card = self._create_stat_card("🤖", "Réponses auto", "0", "Cette semaine")
+        cards_layout.addWidget(auto_card)
+        
+        # Carte RDV
+        rdv_card = self._create_stat_card("🗓️", "Rendez-vous", "0", "Planifiés")
+        cards_layout.addWidget(rdv_card)
+        
+        layout.addLayout(cards_layout)
+        
+        # Graphiques et détails
+        details_frame = QFrame()
+        details_frame.setObjectName("stats-details")
+        details_layout = QVBoxLayout(details_frame)
+        details_layout.setContentsMargins(25, 25, 25, 25)
+        
+        # Section répartition par catégorie
+        category_title = QLabel("📁 Répartition par catégorie")
+        category_title.setObjectName("stats-section-title")
+        category_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        details_layout.addWidget(category_title)
+        
+        self.category_stats = QLabel("Chargement...")
+        self.category_stats.setObjectName("stats-content")
+        self.category_stats.setFont(QFont("Arial", 12))
+        details_layout.addWidget(self.category_stats)
+        
+        # Section activité récente
+        activity_title = QLabel("📈 Activité récente")
+        activity_title.setObjectName("stats-section-title")
+        activity_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        details_layout.addWidget(activity_title)
+        
+        self.activity_stats = QLabel("Chargement...")
+        self.activity_stats.setObjectName("stats-content")
+        self.activity_stats.setFont(QFont("Arial", 12))
+        details_layout.addWidget(self.activity_stats)
+        
+        layout.addWidget(details_frame)
         layout.addStretch()
         
         return stats_widget
     
+    def _create_stat_card(self, icon: str, title: str, value: str, subtitle: str) -> QWidget:
+        """Crée une carte de statistique."""
+        card = QFrame()
+        card.setObjectName("stat-card")
+        card.setFixedHeight(120)
+        
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 15, 20, 15)
+        
+        # Header avec icône et titre
+        header_layout = QHBoxLayout()
+        
+        icon_label = QLabel(icon)
+        icon_label.setFont(QFont("Arial", 20))
+        header_layout.addWidget(icon_label)
+        
+        title_label = QLabel(title)
+        title_label.setObjectName("card-title")
+        title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        header_layout.addWidget(title_label)
+        
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
+        
+        # Valeur
+        value_label = QLabel(value)
+        value_label.setObjectName("card-value")
+        value_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        layout.addWidget(value_label)
+        
+        # Sous-titre
+        subtitle_label = QLabel(subtitle)
+        subtitle_label.setObjectName("card-subtitle")
+        subtitle_label.setFont(QFont("Arial", 10))
+        layout.addWidget(subtitle_label)
+        
+        return card
+    
+    def _create_status_bar(self):
+        """Crée la barre de statut moderne."""
+        status_bar = self.statusBar()
+        status_bar.setStyleSheet("""
+            QStatusBar {
+                background-color: #f8f8f8;
+                border-top: 1px solid #e0e0e0;
+                color: #666666;
+                font-size: 11px;
+                padding: 3px 10px;
+            }
+        """)
+        status_bar.showMessage("Prêt")
+    
     def _setup_style(self):
-        """Configure le style moderne noir et blanc."""
+        """Configure le style moderne noir et blanc amélioré."""
         self.setStyleSheet("""
             /* Style général */
             QMainWindow {
@@ -420,18 +544,27 @@ class ModernMainWindow(QMainWindow):
                 font-weight: bold;
             }
             
+            /* Séparateurs */
+            QFrame#sidebar-separator {
+                background-color: #333333;
+                border: none;
+            }
+            
             /* Boutons de navigation */
             QPushButton#nav-button {
                 background-color: transparent;
-                color: #ffffff;
+                color: #cccccc;
                 border: none;
-                padding: 15px 20px;
+                padding: 12px 15px;
                 text-align: left;
-                font-size: 14px;
+                font-size: 13px;
+                border-radius: 6px;
+                margin: 2px 10px;
             }
             
             QPushButton#nav-button:hover {
                 background-color: #333333;
+                color: #ffffff;
             }
             
             QPushButton#nav-button:pressed {
@@ -441,16 +574,17 @@ class ModernMainWindow(QMainWindow):
             /* Filtres de catégorie */
             QFrame#category-filters {
                 background-color: #000000;
-                border-top: 1px solid #333333;
             }
             
             QPushButton#category-filter {
                 background-color: transparent;
-                color: #cccccc;
+                color: #999999;
                 border: none;
                 padding: 8px 10px;
                 text-align: left;
-                font-size: 12px;
+                font-size: 11px;
+                border-radius: 4px;
+                margin: 1px 0px;
             }
             
             QPushButton#category-filter:hover {
@@ -461,23 +595,32 @@ class ModernMainWindow(QMainWindow):
             /* Statistiques rapides */
             QFrame#quick-stats {
                 background-color: #000000;
-                border-top: 1px solid #333333;
             }
             
             QLabel#section-title {
                 color: #ffffff;
-                margin-bottom: 10px;
+                margin-bottom: 8px;
+            }
+            
+            QFrame#stat-item {
+                background-color: transparent;
+                border-radius: 4px;
+                margin: 2px 0px;
+            }
+            
+            QFrame#stat-item:hover {
+                background-color: #1a1a1a;
             }
             
             QLabel#stat-label {
                 color: #cccccc;
-                font-size: 11px;
+                font-size: 10px;
             }
             
             QLabel#stat-value {
                 color: #ffffff;
                 font-weight: bold;
-                font-size: 11px;
+                font-size: 10px;
             }
             
             /* Barre d'outils */
@@ -491,7 +634,7 @@ class ModernMainWindow(QMainWindow):
                 color: #000000;
                 border: 1px solid #e0e0e0;
                 padding: 8px 16px;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 13px;
             }
             
@@ -504,7 +647,7 @@ class ModernMainWindow(QMainWindow):
                 color: #ffffff;
                 border: 1px solid #000000;
                 padding: 8px 16px;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 13px;
                 font-weight: bold;
             }
@@ -519,7 +662,7 @@ class ModernMainWindow(QMainWindow):
                 color: #000000;
                 border: 1px solid #e0e0e0;
                 padding: 8px 12px;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 13px;
             }
             
@@ -533,30 +676,73 @@ class ModernMainWindow(QMainWindow):
                 border: 1px solid #e0e0e0;
                 border-radius: 4px;
                 text-align: center;
+                height: 4px;
             }
             
             QProgressBar#progress-bar::chunk {
                 background-color: #000000;
-                border-radius: 3px;
+                border-radius: 2px;
             }
             
-            /* Titre de page */
-            QLabel#page-title {
+            /* Page des statistiques */
+            QWidget#stats-page {
+                background-color: #ffffff;
+            }
+            
+            QLabel#stats-title {
                 color: #000000;
-                margin-bottom: 20px;
+                margin-bottom: 10px;
             }
             
-            /* Conteneur de statistiques */
-            QFrame#stats-container {
+            QFrame#stat-card {
                 background-color: #f8f8f8;
                 border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 20px;
+                border-radius: 10px;
+                margin: 5px;
             }
             
-            QLabel#detailed-stats {
+            QFrame#stat-card:hover {
+                border-color: #cccccc;
+            }
+            
+            QLabel#card-title {
                 color: #666666;
-                font-size: 14px;
+            }
+            
+            QLabel#card-value {
+                color: #000000;
+                margin: 5px 0px;
+            }
+            
+            QLabel#card-subtitle {
+                color: #999999;
+            }
+            
+            QFrame#stats-details {
+                background-color: #f8f8f8;
+                border: 1px solid #e0e0e0;
+                border-radius: 10px;
+                margin-top: 10px;
+            }
+            
+            QLabel#stats-section-title {
+                color: #000000;
+                margin: 10px 0px;
+            }
+            
+            QLabel#stats-content {
+                color: #333333;
+                line-height: 1.4;
+            }
+            
+            /* Splitter */
+            QSplitter::handle {
+                background-color: #e0e0e0;
+                width: 1px;
+            }
+            
+            QSplitter::handle:hover {
+                background-color: #cccccc;
             }
         """)
     
@@ -642,8 +828,48 @@ class ModernMainWindow(QMainWindow):
     
     def _filter_by_category(self, category: str):
         """Filtre les emails par catégorie."""
+        # Reset visual state of all category buttons
+        for btn in self.category_buttons.values():
+            btn.setStyleSheet("""
+                QPushButton#category-filter {
+                    background-color: transparent;
+                    color: #999999;
+                    border: none;
+                    padding: 8px 10px;
+                    text-align: left;
+                    font-size: 11px;
+                    border-radius: 4px;
+                    margin: 1px 0px;
+                }
+                QPushButton#category-filter:hover {
+                    background-color: #333333;
+                    color: #ffffff;
+                }
+            """)
+        
+        # Highlight selected category
+        if category in self.category_buttons:
+            self.category_buttons[category].setStyleSheet("""
+                QPushButton#category-filter {
+                    background-color: #333333;
+                    color: #ffffff;
+                    border: none;
+                    padding: 8px 10px;
+                    text-align: left;
+                    font-size: 11px;
+                    border-radius: 4px;
+                    margin: 1px 0px;
+                }
+            """)
+        
+        # Switch to email view if not already there
+        self.content_stack.setCurrentWidget(self.email_view)
+        
+        # Apply the filter
         self.current_filter = category
         self._apply_filters()
+        
+        logger.info(f"Filtrage par catégorie: {category}")
     
     def _apply_filters(self):
         """Applique les filtres actuels."""
@@ -725,6 +951,7 @@ class ModernMainWindow(QMainWindow):
     
     def _on_email_selected(self, email: Email):
         """Callback quand un email est sélectionné."""
+        self.selected_email = email
         self.email_detail.display_email(email)
     
     def _reply_to_email(self, email: Email):
@@ -795,30 +1022,30 @@ class ModernMainWindow(QMainWindow):
     def _update_detailed_stats(self):
         """Met à jour les statistiques détaillées."""
         if not self.emails:
-            self.detailed_stats.setText("Aucun email à analyser")
+            self.category_stats.setText("Aucun email à analyser")
+            self.activity_stats.setText("Aucune activité")
             return
         
         # Analyser les emails par catégorie
         categories = {}
         for email in self.emails:
             if hasattr(email, 'ai_info'):
-                category = email.ai_info.get('category', 'unknown')
+                category = email.ai_info.get('category', 'general')
                 categories[category] = categories.get(category, 0) + 1
         
-        # Créer le texte des statistiques
-        stats_text = f"""
-        📊 STATISTIQUES DÉTAILLÉES
-        
-        Total d'emails: {len(self.emails)}
-        Emails non lus: {len([e for e in self.emails if e.is_unread])}
-        Emails importants: {len([e for e in self.emails if e.is_important])}
-        
-        📁 RÉPARTITION PAR CATÉGORIE:
-        """
+        # Créer le texte des catégories
+        category_lines = []
+        total_categorized = sum(categories.values())
         
         for category, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
-            percentage = (count / len(self.emails)) * 100
-            stats_text += f"\n{category.upper()}: {count} emails ({percentage:.1f}%)"
+            percentage = (count / total_categorized) * 100 if total_categorized > 0 else 0
+            category_lines.append(f"• {category.upper()}: {count} emails ({percentage:.1f}%)")
+        
+        category_text = "\n".join(category_lines[:8])  # Top 8 catégories
+        if len(categories) > 8:
+            category_text += f"\n... et {len(categories) - 8} autres catégories"
+        
+        self.category_stats.setText(category_text or "Aucune catégorisation disponible")
         
         # Statistiques temporelles
         today = datetime.now().date()
@@ -829,18 +1056,21 @@ class ModernMainWindow(QMainWindow):
             if e.datetime.date() >= week_ago
         ]
         
-        stats_text += f"""
+        unread_count = len([e for e in self.emails if e.is_unread])
+        important_count = len([e for e in self.emails if e.is_important])
         
-        📅 ACTIVITÉ RÉCENTE:
-        Cette semaine: {len(recent_emails)} emails
-        Aujourd'hui: {len([e for e in self.emails if e.datetime.date() == today])}
+        activity_text = f"""📊 Résumé général:
+• Total d'emails: {len(self.emails)}
+• Emails non lus: {unread_count}
+• Emails importants: {important_count}
+• Cette semaine: {len(recent_emails)} emails
+• Aujourd'hui: {len([e for e in self.emails if e.datetime.date() == today])}
+
+🤖 Réponses automatiques:
+• Statut: {"Activé" if self.auto_responder.auto_respond_enabled else "Désactivé"}
+• Réponses envoyées: {self.auto_responder.get_response_stats().get("total_responses", 0)}"""
         
-        🤖 RÉPONSES AUTOMATIQUES:
-        Statut: {"Activé" if self.auto_responder.auto_respond_enabled else "Désactivé"}
-        Réponses envoyées: {self.auto_responder.get_response_stats().get("total_responses", 0)}
-        """
-        
-        self.detailed_stats.setText(stats_text)
+        self.activity_stats.setText(activity_text)
     
     def _tray_icon_activated(self, reason):
         """Callback pour l'icône de la barre système."""
