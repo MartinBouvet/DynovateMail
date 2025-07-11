@@ -1,5 +1,5 @@
 """
-Système de réponse automatique intelligent.
+Système de réponse automatique intelligent avec configuration dynamique.
 """
 import logging
 from typing import Dict, Any, Optional
@@ -10,14 +10,15 @@ from models.email_model import Email
 from gmail_client import GmailClient
 from ai_processor import AIProcessor
 from calendar_manager import CalendarManager
+from utils.config import get_config_manager
 
 logger = logging.getLogger(__name__)
 
 class AutoResponder:
-    """Système de réponse automatique pour les emails."""
+    """Système de réponse automatique pour les emails avec configuration en temps réel."""
     
     def __init__(self, gmail_client: GmailClient, ai_processor: AIProcessor, 
-                 calendar_manager: CalendarManager, config: Dict[str, Any]):
+                 calendar_manager: CalendarManager):
         """
         Initialise le répondeur automatique.
         
@@ -25,21 +26,51 @@ class AutoResponder:
             gmail_client: Client Gmail pour l'envoi d'emails.
             ai_processor: Processeur IA pour l'analyse des emails.
             calendar_manager: Gestionnaire de calendrier.
-            config: Configuration de l'application.
         """
         self.gmail_client = gmail_client
         self.ai_processor = ai_processor
         self.calendar_manager = calendar_manager
-        self.config = config
         
-        # Configuration du répondeur
-        self.auto_respond_enabled = config.get('auto_respond', {}).get('enabled', False)
-        self.response_delay = config.get('auto_respond', {}).get('delay_minutes', 5)
-        self.user_name = config.get('user', {}).get('name', 'Assistant')
-        self.user_signature = config.get('user', {}).get('signature', '')
+        # Gestionnaire de configuration
+        self.config_manager = get_config_manager()
+        
+        # Configuration actuelle (mise à jour en temps réel)
+        self._update_config()
+        
+        # S'abonner aux changements de configuration
+        self.config_manager.add_observer(self._on_config_changed)
         
         # Historique des réponses pour éviter les doublons
         self.response_history = {}
+        
+        logger.info("AutoResponder initialisé avec configuration dynamique")
+    
+    def _update_config(self):
+        """Met à jour la configuration interne."""
+        config = self.config_manager.get_config()
+        
+        auto_respond_config = config.get('auto_respond', {})
+        user_config = config.get('user', {})
+        
+        # Configuration du répondeur
+        self.auto_respond_enabled = auto_respond_config.get('enabled', False)
+        self.response_delay = auto_respond_config.get('delay_minutes', 5)
+        self.respond_to_cv = auto_respond_config.get('respond_to_cv', True)
+        self.respond_to_rdv = auto_respond_config.get('respond_to_rdv', True)
+        self.respond_to_support = auto_respond_config.get('respond_to_support', True)
+        self.respond_to_partenariat = auto_respond_config.get('respond_to_partenariat', True)
+        self.avoid_loops = auto_respond_config.get('avoid_loops', True)
+        
+        # Informations utilisateur
+        self.user_name = user_config.get('name', 'Assistant')
+        self.user_signature = user_config.get('signature', '')
+        
+        logger.info(f"Configuration mise à jour - Auto-réponse: {'activée' if self.auto_respond_enabled else 'désactivée'}")
+    
+    def _on_config_changed(self, new_config: Dict[str, Any]):
+        """Callback appelé quand la configuration change."""
+        logger.info("Configuration changée, mise à jour de l'auto-répondeur")
+        self._update_config()
     
     def process_email(self, email: Email) -> bool:
         """
@@ -52,10 +83,11 @@ class AutoResponder:
             True si une réponse a été envoyée, False sinon.
         """
         if not self.auto_respond_enabled:
+            logger.debug("Réponse automatique désactivée")
             return False
         
         # Vérifier si on doit répondre automatiquement
-        if not self.ai_processor.should_auto_respond(email):
+        if not self.should_auto_respond(email):
             return False
         
         # Vérifier si on a déjà répondu récemment
@@ -91,6 +123,49 @@ class AutoResponder:
             logger.error(f"Erreur lors du traitement de l'email {email.id}: {e}")
         
         return False
+    
+    def should_auto_respond(self, email: Email) -> bool:
+        """
+        Détermine si un email doit recevoir une réponse automatique.
+        
+        Args:
+            email: L'email à analyser.
+            
+        Returns:
+            True si une réponse automatique doit être envoyée.
+        """
+        try:
+            # Ne pas répondre aux emails envoyés par l'utilisateur
+            if email.is_sent:
+                return False
+            
+            # Vérifier la catégorie de l'email
+            if hasattr(email, 'ai_info') and email.ai_info:
+                category = email.ai_info.get('category', 'general')
+                
+                # Vérifier si on doit répondre à cette catégorie
+                if category == 'cv' and not self.respond_to_cv:
+                    return False
+                elif category == 'rdv' and not self.respond_to_rdv:
+                    return False
+                elif category == 'support' and not self.respond_to_support:
+                    return False
+                elif category == 'partenariat' and not self.respond_to_partenariat:
+                    return False
+                elif category == 'newsletter':
+                    return False  # Ne jamais répondre aux newsletters
+                elif category == 'spam':
+                    return False  # Ne jamais répondre aux spams
+                
+                # Si l'IA recommande une réponse
+                return email.ai_info.get('should_auto_respond', False)
+            
+            # Fallback sur l'analyse simple
+            return self.ai_processor.should_auto_respond(email)
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de la vérification de réponse automatique: {e}")
+            return False
     
     def _generate_response(self, email: Email, email_info: Dict[str, Any]) -> Optional[str]:
         """
@@ -143,10 +218,11 @@ Service des Ressources Humaines
         
         if meeting_info:
             # Vérifier les conflits de planning
-            conflicts = self.calendar_manager.get_conflicting_events(meeting_info)
-            
-            if conflicts:
-                return f"""Bonjour {sender_name},
+            try:
+                conflicts = self.calendar_manager.get_conflicting_events(meeting_info)
+                
+                if conflicts:
+                    return f"""Bonjour {sender_name},
 
 Merci pour votre demande de rendez-vous.
 
@@ -158,8 +234,11 @@ Cordialement,
 {self.user_name}
 
 {self.user_signature}"""
-            else:
-                return f"""Bonjour {sender_name},
+                else:
+                    # Ajouter automatiquement au calendrier
+                    self.calendar_manager.add_event(meeting_info)
+                    
+                    return f"""Bonjour {sender_name},
 
 Merci pour votre demande de rendez-vous.
 
@@ -169,8 +248,10 @@ Cordialement,
 {self.user_name}
 
 {self.user_signature}"""
-        else:
-            return f"""Bonjour {sender_name},
+            except Exception as e:
+                logger.error(f"Erreur lors de la vérification du calendrier: {e}")
+        
+        return f"""Bonjour {sender_name},
 
 Merci pour votre demande de rendez-vous.
 
@@ -250,6 +331,9 @@ Cordialement,
         Returns:
             True si une réponse récente existe, False sinon.
         """
+        if not self.avoid_loops:
+            return False
+        
         sender_email = email.get_sender_email()
         
         if sender_email in self.response_history:
@@ -285,8 +369,8 @@ Cordialement,
         Args:
             enabled: True pour activer, False pour désactiver.
         """
-        self.auto_respond_enabled = enabled
-        logger.info(f"Réponses automatiques {'activées' if enabled else 'désactivées'}")
+        self.config_manager.set('auto_respond.enabled', enabled)
+        logger.info(f"Réponses automatiques {'activées' if enabled else 'désactivées'} via API")
     
     def set_response_delay(self, delay_minutes: int):
         """
@@ -295,8 +379,20 @@ Cordialement,
         Args:
             delay_minutes: Délai en minutes.
         """
-        self.response_delay = delay_minutes
-        logger.info(f"Délai de réponse défini à {delay_minutes} minutes")
+        self.config_manager.set('auto_respond.delay_minutes', delay_minutes)
+        logger.info(f"Délai de réponse défini à {delay_minutes} minutes via API")
+    
+    def set_category_response(self, category: str, enabled: bool):
+        """
+        Active/désactive la réponse automatique pour une catégorie.
+        
+        Args:
+            category: Catégorie (cv, rdv, support, partenariat).
+            enabled: True pour activer, False pour désactiver.
+        """
+        config_key = f'auto_respond.respond_to_{category}'
+        self.config_manager.set(config_key, enabled)
+        logger.info(f"Réponse automatique pour {category}: {'activée' if enabled else 'désactivée'}")
     
     def get_response_stats(self) -> Dict[str, Any]:
         """
@@ -312,5 +408,19 @@ Cordialement,
             'recent_responses': len([
                 timestamp for timestamp in self.response_history.values()
                 if datetime.now() - timestamp < timedelta(days=7)
-            ])
+            ]),
+            'categories': {
+                'cv': self.respond_to_cv,
+                'rdv': self.respond_to_rdv,
+                'support': self.respond_to_support,
+                'partenariat': self.respond_to_partenariat
+            },
+            'avoid_loops': self.avoid_loops
         }
+    
+    def __del__(self):
+        """Nettoie les observers lors de la destruction."""
+        try:
+            self.config_manager.remove_observer(self._on_config_changed)
+        except:
+            pass

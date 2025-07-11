@@ -1,5 +1,5 @@
 """
-Interface utilisateur principale corrigée pour Gmail Assistant IA.
+Interface utilisateur principale avec configuration réactive.
 Design moderne noir et blanc avec UX/UI optimisée.
 """
 import logging
@@ -25,6 +25,7 @@ from ui.email_detail_view import EmailDetailView
 from ui.calendar_view import CalendarView
 from ui.compose_view import ComposeView
 from ui.settings_view import SettingsView
+from utils.config import get_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -79,18 +80,19 @@ class EmailProcessorThread(QThread):
         self.is_running = False
 
 class ModernMainWindow(QMainWindow):
-    """Interface principale moderne avec design noir et blanc corrigé."""
+    """Interface principale moderne avec configuration réactive."""
     
     def __init__(self, gmail_client: GmailClient, ai_processor: AIProcessor,
-                 calendar_manager: CalendarManager, auto_responder: AutoResponder,
-                 config: Dict[str, Any]):
+                 calendar_manager: CalendarManager, auto_responder: AutoResponder):
         super().__init__()
         
         self.gmail_client = gmail_client
         self.ai_processor = ai_processor
         self.calendar_manager = calendar_manager
         self.auto_responder = auto_responder
-        self.config = config
+        
+        # Gestionnaire de configuration réactif
+        self.config_manager = get_config_manager()
         
         self.emails = []
         self.filtered_emails = []
@@ -102,7 +104,77 @@ class ModernMainWindow(QMainWindow):
         self._setup_style()
         self._setup_system_tray()
         self._setup_timers()
+        self._connect_config_signals()
         self._load_initial_data()
+        
+        logger.info("Interface principale initialisée avec configuration réactive")
+    
+    def _connect_config_signals(self):
+        """Connecte les signaux de configuration."""
+        # S'abonner aux changements de configuration
+        self.config_manager.config_changed.connect(self._on_config_changed)
+        
+        # Connecter le signal des paramètres
+        if hasattr(self, 'settings_view'):
+            self.settings_view.settings_applied.connect(self._on_settings_applied)
+    
+    def _on_config_changed(self, new_config: Dict[str, Any]):
+        """Callback appelé quand la configuration change."""
+        logger.info("Configuration changée, application des nouveaux paramètres")
+        
+        # Mettre à jour les timers
+        self._update_timers(new_config)
+        
+        # Mettre à jour l'auto-responder (déjà fait automatiquement via son observer)
+        
+        # Mettre à jour l'interface si nécessaire
+        self._update_ui_from_config(new_config)
+    
+    def _on_settings_applied(self, config: Dict[str, Any]):
+        """Callback appelé quand les paramètres sont appliqués."""
+        logger.info("Paramètres appliqués, mise à jour de l'interface")
+        # Les changements sont déjà propagés via le config_manager
+    
+    def _update_timers(self, config: Dict[str, Any]):
+        """Met à jour les timers selon la configuration."""
+        # Timer de rafraîchissement
+        auto_refresh = config.get('app', {}).get('auto_refresh', True)
+        refresh_interval = config.get('email', {}).get('refresh_interval_minutes', 5)
+        
+        if hasattr(self, 'refresh_timer'):
+            self.refresh_timer.stop()
+            
+            if auto_refresh:
+                self.refresh_timer.start(refresh_interval * 60 * 1000)  # Convertir en ms
+                logger.info(f"Timer de rafraîchissement mis à jour: {refresh_interval} minutes")
+            else:
+                logger.info("Rafraîchissement automatique désactivé")
+    
+    def _update_ui_from_config(self, config: Dict[str, Any]):
+        """Met à jour l'interface selon la configuration."""
+        ui_config = config.get('ui', {})
+        
+        # Mettre à jour la taille de police si nécessaire
+        font_size = ui_config.get('font_size', 12)
+        if hasattr(self, '_current_font_size') and self._current_font_size != font_size:
+            self._apply_font_size(font_size)
+            self._current_font_size = font_size
+        
+        # Mettre à jour les notifications
+        notifications_enabled = ui_config.get('notifications', True)
+        if hasattr(self, 'tray_icon'):
+            # Activer/désactiver les notifications de la barre système
+            pass
+    
+    def _apply_font_size(self, font_size: int):
+        """Applique une nouvelle taille de police à l'interface."""
+        # Mettre à jour la police de l'application
+        font = self.font()
+        font.setPointSize(font_size)
+        self.setFont(font)
+        
+        # Forcer la mise à jour de tous les widgets enfants
+        self.update()
     
     def _setup_ui(self):
         """Configure l'interface utilisateur moderne."""
@@ -134,7 +206,7 @@ class ModernMainWindow(QMainWindow):
         """Crée la barre latérale moderne et responsive."""
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(260)  # Réduit de 280 à 260
+        sidebar.setFixedWidth(260)
         
         layout = QVBoxLayout(sidebar)
         layout.setSpacing(0)
@@ -143,7 +215,7 @@ class ModernMainWindow(QMainWindow):
         # Header avec logo
         header = QFrame()
         header.setObjectName("sidebar-header")
-        header.setFixedHeight(70)  # Réduit de 80 à 70
+        header.setFixedHeight(70)
         
         header_layout = QVBoxLayout(header)
         header_layout.setContentsMargins(15, 15, 15, 15)
@@ -151,7 +223,7 @@ class ModernMainWindow(QMainWindow):
         # Logo/Titre
         title_label = QLabel("Dynovate Mail")
         title_label.setObjectName("app-title")
-        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))  # Réduit de 18 à 16
+        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         header_layout.addWidget(title_label)
         
         layout.addWidget(header)
@@ -170,7 +242,7 @@ class ModernMainWindow(QMainWindow):
         for icon, text, key in nav_buttons:
             btn = QPushButton(f"{icon}  {text}")
             btn.setObjectName("nav-button")
-            btn.setFixedHeight(45)  # Réduit de 50 à 45
+            btn.setFixedHeight(45)
             btn.clicked.connect(lambda checked, k=key: self._switch_view(k))
             layout.addWidget(btn)
             self.nav_buttons[key] = btn
@@ -225,7 +297,7 @@ class ModernMainWindow(QMainWindow):
         for icon, text, key in categories:
             btn = QPushButton(f"{icon} {text}")
             btn.setObjectName("category-filter")
-            btn.setFixedHeight(32)  # Réduit de 35 à 32
+            btn.setFixedHeight(32)
             btn.clicked.connect(lambda checked, k=key: self._filter_by_category(k))
             layout.addWidget(btn)
             self.category_buttons[key] = btn
@@ -246,7 +318,7 @@ class ModernMainWindow(QMainWindow):
         title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         layout.addWidget(title)
         
-        # Stats
+        # Stats avec indicateur de réponse automatique
         self.stats_labels = {}
         stats = [
             ("unread", "Non lus", "0"),
@@ -276,6 +348,23 @@ class ModernMainWindow(QMainWindow):
             layout.addWidget(stat_widget)
             self.stats_labels[key] = value_label
         
+        # Indicateur d'état de la réponse automatique
+        self.auto_respond_indicator = QFrame()
+        self.auto_respond_indicator.setObjectName("auto-respond-indicator")
+        indicator_layout = QHBoxLayout(self.auto_respond_indicator)
+        indicator_layout.setContentsMargins(8, 6, 8, 6)
+        
+        self.auto_respond_icon = QLabel("🤖")
+        self.auto_respond_icon.setFont(QFont("Arial", 12))
+        indicator_layout.addWidget(self.auto_respond_icon)
+        
+        self.auto_respond_status = QLabel("Désactivé")
+        self.auto_respond_status.setObjectName("auto-respond-status")
+        self.auto_respond_status.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        indicator_layout.addWidget(self.auto_respond_status)
+        
+        layout.addWidget(self.auto_respond_indicator)
+        
         return stats_frame
     
     def _create_main_area(self) -> QWidget:
@@ -304,13 +393,9 @@ class ModernMainWindow(QMainWindow):
         self.stats_view = self._create_improved_stats_view()
         self.content_stack.addWidget(self.stats_view)
         
-        # Vue paramètres améliorée - Import de la nouvelle version
-        try:
-            from ui.improved_settings_view import SettingsView as ImprovedSettingsView
-            self.settings_view = ImprovedSettingsView(self.config)
-        except ImportError:
-            # Fallback vers l'ancienne version si la nouvelle n'est pas disponible
-            self.settings_view = SettingsView(self.config)
+        # Vue paramètres réactive
+        self.settings_view = SettingsView()
+        self.settings_view.settings_applied.connect(self._on_settings_applied)
         self.content_stack.addWidget(self.settings_view)
         
         layout.addWidget(self.content_stack)
@@ -326,11 +411,18 @@ class ModernMainWindow(QMainWindow):
         layout = QHBoxLayout(toolbar)
         layout.setContentsMargins(20, 10, 20, 10)
         
-        # Bouton de rafraîchissement
-        refresh_btn = QPushButton("🔄 Actualiser")
-        refresh_btn.setObjectName("toolbar-button")
-        refresh_btn.clicked.connect(self._refresh_emails)
-        layout.addWidget(refresh_btn)
+        # Bouton de rafraîchissement avec indicateur auto
+        self.refresh_btn = QPushButton("🔄 Actualiser")
+        self.refresh_btn.setObjectName("toolbar-button")
+        self.refresh_btn.clicked.connect(self._refresh_emails)
+        layout.addWidget(self.refresh_btn)
+        
+        # Indicateur de rafraîchissement automatique
+        self.auto_refresh_indicator = QLabel("⚡ Auto")
+        self.auto_refresh_indicator.setObjectName("auto-refresh-indicator")
+        self.auto_refresh_indicator.setFont(QFont("Arial", 10))
+        self.auto_refresh_indicator.setVisible(False)
+        layout.addWidget(self.auto_refresh_indicator)
         
         # Barre de recherche
         self.search_input = QLineEdit()
@@ -382,9 +474,9 @@ class ModernMainWindow(QMainWindow):
         splitter.addWidget(detail_container)
         
         # Configuration du splitter
-        splitter.setSizes([400, 600])  # Proportion email list vs detail
-        splitter.setStretchFactor(0, 0)  # Liste ne s'étire pas
-        splitter.setStretchFactor(1, 1)  # Detail s'étire
+        splitter.setSizes([400, 600])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
         
         layout.addWidget(splitter)
         
@@ -399,7 +491,7 @@ class ModernMainWindow(QMainWindow):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(25)
         
-        # Titre avec icône
+        # Titre avec statut de configuration
         title_layout = QHBoxLayout()
         title_icon = QLabel("📊")
         title_icon.setFont(QFont("Arial", 24))
@@ -409,11 +501,18 @@ class ModernMainWindow(QMainWindow):
         title.setObjectName("stats-title")
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
         title_layout.addWidget(title)
+        
         title_layout.addStretch()
+        
+        # Indicateur de statut global
+        self.global_status = QLabel("🟢 Système opérationnel")
+        self.global_status.setObjectName("global-status")
+        self.global_status.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        title_layout.addWidget(self.global_status)
         
         layout.addLayout(title_layout)
         
-        # Cartes de statistiques
+        # Cartes de statistiques avec auto-responder
         cards_layout = QHBoxLayout()
         
         # Carte emails
@@ -424,9 +523,9 @@ class ModernMainWindow(QMainWindow):
         unread_card = self._create_stat_card("📬", "Non lus", "0", "À traiter")
         cards_layout.addWidget(unread_card)
         
-        # Carte réponses auto
-        auto_card = self._create_stat_card("🤖", "Réponses auto", "0", "Cette semaine")
-        cards_layout.addWidget(auto_card)
+        # Carte réponses auto avec statut
+        self.auto_card = self._create_stat_card("🤖", "Réponses auto", "0", "Cette semaine")
+        cards_layout.addWidget(self.auto_card)
         
         # Carte RDV
         rdv_card = self._create_stat_card("🗓️", "Rendez-vous", "0", "Planifiés")
@@ -434,7 +533,26 @@ class ModernMainWindow(QMainWindow):
         
         layout.addLayout(cards_layout)
         
-        # Graphiques et détails
+        # Section de configuration active
+        config_frame = QFrame()
+        config_frame.setObjectName("config-frame")
+        config_layout = QVBoxLayout(config_frame)
+        config_layout.setContentsMargins(25, 25, 25, 25)
+        
+        config_title = QLabel("⚙️ Configuration active")
+        config_title.setObjectName("config-section-title")
+        config_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        config_layout.addWidget(config_title)
+        
+        self.config_summary = QLabel("Chargement...")
+        self.config_summary.setObjectName("config-content")
+        self.config_summary.setFont(QFont("Arial", 12))
+        self.config_summary.setWordWrap(True)
+        config_layout.addWidget(self.config_summary)
+        
+        layout.addWidget(config_frame)
+        
+        # Graphiques et détails existants
         details_frame = QFrame()
         details_frame.setObjectName("stats-details")
         details_layout = QVBoxLayout(details_frame)
@@ -517,7 +635,11 @@ class ModernMainWindow(QMainWindow):
                 padding: 3px 10px;
             }
         """)
-        status_bar.showMessage("Prêt")
+        
+        # Message initial avec configuration
+        config = self.config_manager.get_config()
+        auto_respond_status = "activée" if config.get('auto_respond', {}).get('enabled', False) else "désactivée"
+        status_bar.showMessage(f"Prêt - Réponse automatique: {auto_respond_status}")
     
     def _setup_style(self):
         """Configure le style moderne noir et blanc amélioré."""
@@ -623,6 +745,19 @@ class ModernMainWindow(QMainWindow):
                 font-size: 10px;
             }
             
+            /* Indicateur de réponse automatique */
+            QFrame#auto-respond-indicator {
+                background-color: #1a1a1a;
+                border-radius: 6px;
+                border: 1px solid #333333;
+                margin-top: 5px;
+            }
+            
+            QLabel#auto-respond-status {
+                color: #ffffff;
+                font-size: 10px;
+            }
+            
             /* Barre d'outils */
             QFrame#toolbar {
                 background-color: #f8f8f8;
@@ -654,6 +789,12 @@ class ModernMainWindow(QMainWindow):
             
             QPushButton#compose-button:hover {
                 background-color: #333333;
+            }
+            
+            QLabel#auto-refresh-indicator {
+                color: #4caf50;
+                font-weight: bold;
+                margin-left: 5px;
             }
             
             /* Barre de recherche */
@@ -694,6 +835,13 @@ class ModernMainWindow(QMainWindow):
                 margin-bottom: 10px;
             }
             
+            QLabel#global-status {
+                color: #4caf50;
+                padding: 8px 16px;
+                background-color: #e8f5e8;
+                border-radius: 20px;
+            }
+            
             QFrame#stat-card {
                 background-color: #f8f8f8;
                 border: 1px solid #e0e0e0;
@@ -718,6 +866,13 @@ class ModernMainWindow(QMainWindow):
                 color: #999999;
             }
             
+            QFrame#config-frame {
+                background-color: #f0f8ff;
+                border: 1px solid #cce0ff;
+                border-radius: 10px;
+                margin-top: 10px;
+            }
+            
             QFrame#stats-details {
                 background-color: #f8f8f8;
                 border: 1px solid #e0e0e0;
@@ -725,12 +880,12 @@ class ModernMainWindow(QMainWindow):
                 margin-top: 10px;
             }
             
-            QLabel#stats-section-title {
+            QLabel#stats-section-title, QLabel#config-section-title {
                 color: #000000;
                 margin: 10px 0px;
             }
             
-            QLabel#stats-content {
+            QLabel#stats-content, QLabel#config-content {
                 color: #333333;
                 line-height: 1.4;
             }
@@ -759,6 +914,13 @@ class ModernMainWindow(QMainWindow):
             
             tray_menu.addSeparator()
             
+            # Action pour activer/désactiver les réponses automatiques
+            self.auto_respond_action = tray_menu.addAction("Activer réponses auto")
+            self.auto_respond_action.setCheckable(True)
+            self.auto_respond_action.triggered.connect(self._toggle_auto_respond_from_tray)
+            
+            tray_menu.addSeparator()
+            
             quit_action = tray_menu.addAction("Quitter")
             quit_action.triggered.connect(QApplication.instance().quit)
             
@@ -771,23 +933,101 @@ class ModernMainWindow(QMainWindow):
             self.tray_icon.setIcon(QIcon(pixmap))
             
             self.tray_icon.show()
+            
+            # Mettre à jour l'état initial
+            self._update_tray_auto_respond_state()
+    
+    def _toggle_auto_respond_from_tray(self):
+        """Active/désactive les réponses automatiques depuis la barre système."""
+        current_state = self.config_manager.get('auto_respond.enabled', False)
+        new_state = not current_state
+        self.config_manager.set('auto_respond.enabled', new_state)
+        
+        # Afficher une notification
+        if self.tray_icon:
+            status = "activées" if new_state else "désactivées"
+            self.tray_icon.showMessage(
+                "Dynovate Mail",
+                f"Réponses automatiques {status}",
+                QSystemTrayIcon.MessageIcon.Information,
+                3000
+            )
+    
+    def _update_tray_auto_respond_state(self):
+        """Met à jour l'état de la réponse automatique dans le menu de la barre système."""
+        if hasattr(self, 'auto_respond_action'):
+            enabled = self.config_manager.get('auto_respond.enabled', False)
+            self.auto_respond_action.setChecked(enabled)
+            self.auto_respond_action.setText(
+                "Désactiver réponses auto" if enabled else "Activer réponses auto"
+            )
     
     def _setup_timers(self):
         """Configure les timers pour les mises à jour automatiques."""
         # Timer pour rafraîchir les emails
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self._auto_refresh)
-        self.refresh_timer.start(300000)  # 5 minutes
         
         # Timer pour mettre à jour les statistiques
         self.stats_timer = QTimer()
         self.stats_timer.timeout.connect(self._update_stats)
         self.stats_timer.start(60000)  # 1 minute
+        
+        # Timer pour mettre à jour l'indicateur de status
+        self.status_timer = QTimer()
+        self.status_timer.timeout.connect(self._update_status_indicators)
+        self.status_timer.start(5000)  # 5 secondes
+        
+        # Appliquer la configuration initiale des timers
+        config = self.config_manager.get_config()
+        self._update_timers(config)
+    
+    def _update_status_indicators(self):
+        """Met à jour les indicateurs de statut."""
+        config = self.config_manager.get_config()
+        
+        # Indicateur de réponse automatique dans la sidebar
+        auto_respond_enabled = config.get('auto_respond', {}).get('enabled', False)
+        if auto_respond_enabled:
+            self.auto_respond_status.setText("Activé")
+            self.auto_respond_status.setStyleSheet("color: #4caf50; font-weight: bold;")
+            self.auto_respond_indicator.setStyleSheet("""
+                QFrame#auto-respond-indicator {
+                    background-color: #e8f5e8;
+                    border: 1px solid #4caf50;
+                    border-radius: 6px;
+                }
+            """)
+        else:
+            self.auto_respond_status.setText("Désactivé")
+            self.auto_respond_status.setStyleSheet("color: #f44336; font-weight: bold;")
+            self.auto_respond_indicator.setStyleSheet("""
+                QFrame#auto-respond-indicator {
+                    background-color: #1a1a1a;
+                    border: 1px solid #333333;
+                    border-radius: 6px;
+                }
+            """)
+        
+        # Indicateur de rafraîchissement automatique
+        auto_refresh_enabled = config.get('app', {}).get('auto_refresh', True)
+        self.auto_refresh_indicator.setVisible(auto_refresh_enabled)
+        
+        # Mettre à jour la barre de statut
+        auto_respond_status = "activée" if auto_respond_enabled else "désactivée"
+        refresh_status = "activé" if auto_refresh_enabled else "désactivé"
+        self.statusBar().showMessage(
+            f"Réponse automatique: {auto_respond_status} | Rafraîchissement: {refresh_status}"
+        )
+        
+        # Mettre à jour le menu de la barre système
+        self._update_tray_auto_respond_state()
     
     def _load_initial_data(self):
         """Charge les données initiales."""
         self._switch_view("inbox")
         self._refresh_emails()
+        self._update_status_indicators()
     
     def _switch_view(self, view_name: str):
         """Change la vue active."""
@@ -1021,6 +1261,80 @@ class ModernMainWindow(QMainWindow):
     
     def _update_detailed_stats(self):
         """Met à jour les statistiques détaillées."""
+        # Mettre à jour le résumé de configuration
+        config = self.config_manager.get_config()
+        auto_respond = config.get('auto_respond', {})
+        ai_config = config.get('ai', {})
+        
+        config_summary = f"""🤖 Réponse automatique: {"✅ Activée" if auto_respond.get('enabled', False) else "❌ Désactivée"}
+• Délai: {auto_respond.get('delay_minutes', 5)} minutes
+• CV: {"✅" if auto_respond.get('respond_to_cv', True) else "❌"}
+• RDV: {"✅" if auto_respond.get('respond_to_rdv', True) else "❌"}
+• Support: {"✅" if auto_respond.get('respond_to_support', True) else "❌"}
+• Partenariat: {"✅" if auto_respond.get('respond_to_partenariat', True) else "❌"}
+
+🧠 Intelligence artificielle:
+• Classification: {"✅" if ai_config.get('enable_classification', True) else "❌"}
+• Détection spam: {"✅" if ai_config.get('enable_spam_detection', True) else "❌"}
+• Analyse sentiment: {"✅" if ai_config.get('enable_sentiment_analysis', True) else "❌"}
+• Extraction RDV: {"✅" if ai_config.get('enable_meeting_extraction', True) else "❌"}
+
+⏰ Rafraîchissement: {"✅ Automatique" if config.get('app', {}).get('auto_refresh', True) else "❌ Manuel"} ({config.get('email', {}).get('refresh_interval_minutes', 5)} min)"""
+        
+        self.config_summary.setText(config_summary)
+        
+        # Mettre à jour le statut global
+        auto_respond_ok = auto_respond.get('enabled', False)
+        ai_ok = ai_config.get('enable_classification', True)
+        
+        if auto_respond_ok and ai_ok:
+            self.global_status.setText("🟢 Système opérationnel")
+            self.global_status.setStyleSheet("""
+                QLabel#global-status {
+                    color: #4caf50;
+                    background-color: #e8f5e8;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-weight: bold;
+                }
+            """)
+        elif ai_ok:
+            self.global_status.setText("🟡 IA active, auto-réponse désactivée")
+            self.global_status.setStyleSheet("""
+                QLabel#global-status {
+                    color: #ff9800;
+                    background-color: #fff8e1;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-weight: bold;
+                }
+            """)
+        else:
+            self.global_status.setText("🔴 Fonctionnalités limitées")
+            self.global_status.setStyleSheet("""
+                QLabel#global-status {
+                    color: #f44336;
+                    background-color: #ffebee;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-weight: bold;
+                }
+            """)
+        
+        # Mettre à jour la carte auto-responder
+        auto_card_value = self.auto_card.findChild(QLabel, "card-value")
+        auto_card_subtitle = self.auto_card.findChild(QLabel, "card-subtitle")
+        if auto_card_value and auto_card_subtitle:
+            if auto_respond.get('enabled', False):
+                auto_card_value.setText(str(auto_stats.get("recent_responses", 0)))
+                auto_card_subtitle.setText("🟢 Activé")
+                auto_card_subtitle.setStyleSheet("color: #4caf50; font-weight: bold;")
+            else:
+                auto_card_value.setText("--")
+                auto_card_subtitle.setText("🔴 Désactivé")
+                auto_card_subtitle.setStyleSheet("color: #f44336; font-weight: bold;")
+        
+        # Appel des statistiques existantes
         if not self.emails:
             self.category_stats.setText("Aucun email à analyser")
             self.activity_stats.setText("Aucune activité")
@@ -1067,8 +1381,9 @@ class ModernMainWindow(QMainWindow):
 • Aujourd'hui: {len([e for e in self.emails if e.datetime.date() == today])}
 
 🤖 Réponses automatiques:
-• Statut: {"Activé" if self.auto_responder.auto_respond_enabled else "Désactivé"}
-• Réponses envoyées: {self.auto_responder.get_response_stats().get("total_responses", 0)}"""
+• Statut: {"✅ Activé" if auto_respond.get('enabled', False) else "❌ Désactivé"}
+• Réponses envoyées: {auto_stats.get("total_responses", 0)}
+• Cette semaine: {auto_stats.get("recent_responses", 0)}"""
         
         self.activity_stats.setText(activity_text)
     
@@ -1081,7 +1396,10 @@ class ModernMainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Événement de fermeture."""
-        if self.tray_icon and self.tray_icon.isVisible():
+        config = self.config_manager.get_config()
+        minimize_to_tray = config.get('ui', {}).get('minimize_to_tray', True)
+        
+        if self.tray_icon and self.tray_icon.isVisible() and minimize_to_tray:
             self.hide()
             event.ignore()
         else:
@@ -1092,5 +1410,8 @@ class ModernMainWindow(QMainWindow):
     
     def show_notification(self, title: str, message: str):
         """Affiche une notification."""
-        if self.tray_icon and self.tray_icon.isVisible():
+        config = self.config_manager.get_config()
+        notifications_enabled = config.get('ui', {}).get('notifications', True)
+        
+        if self.tray_icon and self.tray_icon.isVisible() and notifications_enabled:
             self.tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 3000)
