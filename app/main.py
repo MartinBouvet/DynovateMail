@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Point d'entrée principal pour Dynovate Mail Assistant IA.
-Solution complète de gestion d'emails avec IA et configuration réactive.
+Solution complète de gestion d'emails avec IA, configuration réactive et validation des réponses automatiques.
 """
 import sys
 import os
@@ -23,6 +23,7 @@ from gmail_client import GmailClient
 from ai_processor import AIProcessor
 from calendar_manager import CalendarManager
 from auto_responder import AutoResponder
+from pending_response_manager import PendingResponseManager
 
 # Configurer le logging
 logger = setup_logger()
@@ -97,13 +98,18 @@ def main():
         update_splash("Initialisation du calendrier...")
         calendar_manager = CalendarManager()
         
-        update_splash("Initialisation du répondeur automatique...")
-        # Le répondeur automatique utilise maintenant le gestionnaire de configuration directement
+        update_splash("Initialisation du gestionnaire de réponses en attente...")
+        # Le PendingResponseManager est créé automatiquement dans AutoResponder
+        # mais on peut l'initialiser séparément si besoin
+        pending_response_manager = PendingResponseManager()
+        
+        update_splash("Initialisation du répondeur automatique avec validation...")
+        # Le répondeur automatique utilise maintenant le système de validation
         auto_responder = AutoResponder(gmail_client, ai_processor, calendar_manager)
         
         update_splash("Chargement de l'interface...")
         
-        # Créer la fenêtre principale avec configuration réactive
+        # Créer la fenêtre principale avec configuration réactive et validation des réponses
         window = ModernMainWindow(
             gmail_client,
             ai_processor,
@@ -121,7 +127,7 @@ def main():
         # Notification de démarrage avec statut de configuration
         auto_respond_enabled = config.get('auto_respond', {}).get('enabled', False)
         if hasattr(window, 'tray_icon') and window.tray_icon and window.tray_icon.isVisible():
-            status_msg = "Réponse automatique activée" if auto_respond_enabled else "Réponse automatique désactivée"
+            status_msg = "Réponse automatique activée (avec validation)" if auto_respond_enabled else "Réponse automatique désactivée"
             window.show_notification(
                 "Dynovate Mail Assistant IA",
                 f"Application démarrée avec succès!\n{status_msg}"
@@ -130,22 +136,28 @@ def main():
         # Log du statut de configuration au démarrage
         logger.info(f"Configuration au démarrage:")
         logger.info(f"- Réponse automatique: {'activée' if auto_respond_enabled else 'désactivée'}")
+        logger.info(f"- Mode validation: Réponses en attente de validation manuelle")
         logger.info(f"- Rafraîchissement auto: {'activé' if config.get('app', {}).get('auto_refresh', True) else 'désactivé'}")
         logger.info(f"- Classification IA: {'activée' if config.get('ai', {}).get('enable_classification', True) else 'désactivée'}")
         logger.info(f"- Détection spam: {'activée' if config.get('ai', {}).get('enable_spam_detection', True) else 'désactivée'}")
         logger.info(f"- Analyse sentiment: {'activée' if config.get('ai', {}).get('enable_sentiment_analysis', True) else 'désactivée'}")
         logger.info(f"- Extraction RDV: {'activée' if config.get('ai', {}).get('enable_meeting_extraction', True) else 'désactivée'}")
         
-        # Log des paramètres de réponse automatique
+        # Log des paramètres de réponse automatique avec validation
         auto_config = config.get('auto_respond', {})
         if auto_respond_enabled:
-            logger.info(f"Paramètres de réponse automatique:")
-            logger.info(f"- Délai: {auto_config.get('delay_minutes', 5)} minutes")
+            logger.info(f"Paramètres de réponse automatique (avec validation):")
+            logger.info(f"- Mode: Validation manuelle requise")
+            logger.info(f"- Délai: {auto_config.get('delay_minutes', 5)} minutes (pour l'analyse)")
             logger.info(f"- Répondre aux CV: {'oui' if auto_config.get('respond_to_cv', True) else 'non'}")
             logger.info(f"- Répondre aux RDV: {'oui' if auto_config.get('respond_to_rdv', True) else 'non'}")
             logger.info(f"- Répondre au support: {'oui' if auto_config.get('respond_to_support', True) else 'non'}")
             logger.info(f"- Répondre aux partenariats: {'oui' if auto_config.get('respond_to_partenariat', True) else 'non'}")
             logger.info(f"- Éviter les boucles: {'oui' if auto_config.get('avoid_loops', True) else 'non'}")
+        
+        # Initialisation des composants de validation
+        logger.info("Gestionnaire de réponses en attente initialisé")
+        logger.info("Mode de validation: Les réponses automatiques nécessitent une validation manuelle")
         
         # Log des paramètres utilisateur
         user_config = config.get('user', {})
@@ -171,18 +183,20 @@ def main():
         logger.info(f"- Minimiser en barre système: {'oui' if ui_config.get('minimize_to_tray', True) else 'non'}")
         
         # Afficher un message de démarrage dans la console
-        print("\n" + "="*60)
+        print("\n" + "="*70)
         print("🚀 DYNOVATE MAIL ASSISTANT IA - DÉMARRÉ AVEC SUCCÈS")
-        print("="*60)
+        print("="*70)
         print(f"📧 Client Gmail: Connecté")
         print(f"🤖 IA locale: Initialisée")
         print(f"📅 Calendrier: Disponible")
-        print(f"⚙️  Réponse auto: {'✅ Activée' if auto_respond_enabled else '❌ Désactivée'}")
+        print(f"⚙️  Réponse auto: {'✅ Activée (avec validation)' if auto_respond_enabled else '❌ Désactivée'}")
+        print(f"🔔 Validation: Réponses en attente de validation manuelle")
         print(f"🔄 Refresh auto: {'✅ Activé' if config.get('app', {}).get('auto_refresh', True) else '❌ Désactivé'}")
-        print("="*60)
+        print("="*70)
         print("💡 Conseil: Allez dans Paramètres pour configurer votre nom et signature")
         print("🎯 Pour activer la réponse automatique: Paramètres → Réponse automatique")
-        print("="*60)
+        print("🔔 Nouveau: Consultez l'onglet 'Réponses en attente' pour valider les réponses IA")
+        print("="*70)
         
         # Exécuter l'application
         exit_code = app.exec()
@@ -190,6 +204,13 @@ def main():
         # Nettoyage avant fermeture
         logger.info("Fermeture de l'application")
         logger.info("Nettoyage des ressources...")
+        
+        # Nettoyage des données de validation
+        try:
+            auto_responder.cleanup_old_data()
+            logger.info("Données de validation nettoyées")
+        except Exception as e:
+            logger.error(f"Erreur lors du nettoyage des données de validation: {e}")
         
         # Sauvegarder la configuration finale
         try:
@@ -202,8 +223,10 @@ def main():
         if hasattr(auto_responder, 'get_response_stats'):
             final_stats = auto_responder.get_response_stats()
             logger.info(f"Statistiques finales des réponses automatiques:")
-            logger.info(f"- Total réponses envoyées: {final_stats.get('total_responses', 0)}")
-            logger.info(f"- Réponses récentes: {final_stats.get('recent_responses', 0)}")
+            logger.info(f"- Total réponses proposées: {final_stats.get('total_responses', 0)}")
+            logger.info(f"- En attente de validation: {final_stats.get('pending_count', 0)}")
+            logger.info(f"- Approuvées et envoyées: {final_stats.get('sent_count', 0)}")
+            logger.info(f"- Rejetées: {final_stats.get('rejected_count', 0)}")
         
         logger.info("Application fermée proprement")
         sys.exit(exit_code)
@@ -290,7 +313,7 @@ def check_config_files():
     return True
 
 if __name__ == "__main__":
-    print("🚀 Démarrage de Dynovate Mail Assistant IA...")
+    print("🚀 Démarrage de Dynovate Mail Assistant IA avec validation des réponses...")
     
     # Vérifications préliminaires
     if not check_dependencies():

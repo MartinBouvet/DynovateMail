@@ -1,5 +1,6 @@
+#!/usr/bin/env python3
 """
-Interface utilisateur principale avec configuration réactive.
+Interface utilisateur principale avec configuration réactive et gestion des réponses en attente.
 Design moderne noir et blanc avec UX/UI optimisée.
 """
 import logging
@@ -25,6 +26,7 @@ from ui.email_detail_view import EmailDetailView
 from ui.calendar_view import CalendarView
 from ui.compose_view import ComposeView
 from ui.settings_view import SettingsView
+from ui.pending_responses_view import PendingResponsesView
 from utils.config import get_config_manager
 
 logger = logging.getLogger(__name__)
@@ -63,7 +65,7 @@ class EmailProcessorThread(QThread):
                 email_info = self.ai_processor.extract_key_information(email)
                 email.ai_info = email_info
                 
-                # Vérifier si une réponse automatique est nécessaire
+                # Vérifier si une réponse automatique est nécessaire (créer en attente maintenant)
                 if email_info.get('should_auto_respond', False):
                     self.auto_responder.process_email(email)
                 
@@ -80,7 +82,7 @@ class EmailProcessorThread(QThread):
         self.is_running = False
 
 class ModernMainWindow(QMainWindow):
-    """Interface principale moderne avec configuration réactive."""
+    """Interface principale moderne avec configuration réactive et validation des réponses."""
     
     def __init__(self, gmail_client: GmailClient, ai_processor: AIProcessor,
                  calendar_manager: CalendarManager, auto_responder: AutoResponder):
@@ -100,6 +102,9 @@ class ModernMainWindow(QMainWindow):
         self.processor_thread = None
         self.selected_email = None
         
+        # Compteur pour les notifications de réponses en attente
+        self._last_pending_count = 0
+        
         self._setup_ui()
         self._setup_style()
         self._setup_system_tray()
@@ -107,7 +112,7 @@ class ModernMainWindow(QMainWindow):
         self._connect_config_signals()
         self._load_initial_data()
         
-        logger.info("Interface principale initialisée avec configuration réactive")
+        logger.info("Interface principale initialisée avec validation des réponses")
     
     def _connect_config_signals(self):
         """Connecte les signaux de configuration."""
@@ -206,7 +211,7 @@ class ModernMainWindow(QMainWindow):
         """Crée la barre latérale moderne et responsive."""
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(260)
+        sidebar.setFixedWidth(280)
         
         layout = QVBoxLayout(sidebar)
         layout.setSpacing(0)
@@ -233,6 +238,7 @@ class ModernMainWindow(QMainWindow):
             ("📧", "Boîte de réception", "inbox"),
             ("📤", "Envoyés", "sent"),
             ("⭐", "Importants", "important"),
+            ("🔔", "Réponses en attente", "pending_responses"),
             ("🗓️", "Calendrier", "calendar"),
             ("📊", "Statistiques", "stats"),
             ("⚙️", "Paramètres", "settings")
@@ -323,6 +329,7 @@ class ModernMainWindow(QMainWindow):
         stats = [
             ("unread", "Non lus", "0"),
             ("today", "Aujourd'hui", "0"),
+            ("pending_responses", "En attente", "0"),
             ("auto_responses", "Réponses auto", "0"),
             ("meetings", "RDV semaine", "0")
         ]
@@ -397,6 +404,10 @@ class ModernMainWindow(QMainWindow):
         self.settings_view = SettingsView()
         self.settings_view.settings_applied.connect(self._on_settings_applied)
         self.content_stack.addWidget(self.settings_view)
+        
+        # Vue des réponses en attente
+        self.pending_responses_view = PendingResponsesView(self.auto_responder)
+        self.content_stack.addWidget(self.pending_responses_view)
         
         layout.addWidget(self.content_stack)
         
@@ -523,6 +534,10 @@ class ModernMainWindow(QMainWindow):
         unread_card = self._create_stat_card("📬", "Non lus", "0", "À traiter")
         cards_layout.addWidget(unread_card)
         
+        # Carte réponses en attente
+        self.pending_card = self._create_stat_card("🔔", "En attente", "0", "À valider")
+        cards_layout.addWidget(self.pending_card)
+        
         # Carte réponses auto avec statut
         self.auto_card = self._create_stat_card("🤖", "Réponses auto", "0", "Cette semaine")
         cards_layout.addWidget(self.auto_card)
@@ -639,7 +654,7 @@ class ModernMainWindow(QMainWindow):
         # Message initial avec configuration
         config = self.config_manager.get_config()
         auto_respond_status = "activée" if config.get('auto_respond', {}).get('enabled', False) else "désactivée"
-        status_bar.showMessage(f"Prêt - Réponse automatique: {auto_respond_status}")
+        status_bar.showMessage(f"Prêt - Réponse automatique: {auto_respond_status} - Mode validation activé")
     
     def _setup_style(self):
         """Configure le style moderne noir et blanc amélioré."""
@@ -746,672 +761,743 @@ class ModernMainWindow(QMainWindow):
             }
             
             /* Indicateur de réponse automatique */
-            QFrame#auto-respond-indicator {
-                background-color: #1a1a1a;
-                border-radius: 6px;
-                border: 1px solid #333333;
-                margin-top: 5px;
-            }
-            
-            QLabel#auto-respond-status {
-                color: #ffffff;
-                font-size: 10px;
-            }
-            
-            /* Barre d'outils */
-            QFrame#toolbar {
-                background-color: #f8f8f8;
-                border-bottom: 1px solid #e0e0e0;
-            }
-            
-            QPushButton#toolbar-button {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #e0e0e0;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-size: 13px;
-            }
-            
-            QPushButton#toolbar-button:hover {
-                background-color: #f0f0f0;
-            }
-            
-            QPushButton#compose-button {
-                background-color: #000000;
-                color: #ffffff;
-                border: 1px solid #000000;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            
-            QPushButton#compose-button:hover {
-                background-color: #333333;
-            }
-            
-            QLabel#auto-refresh-indicator {
-                color: #4caf50;
-                font-weight: bold;
-                margin-left: 5px;
-            }
-            
-            /* Barre de recherche */
-            QLineEdit#search-input {
-                background-color: #ffffff;
-                color: #000000;
-                border: 1px solid #e0e0e0;
-                padding: 8px 12px;
-                border-radius: 6px;
-                font-size: 13px;
-            }
-            
-            QLineEdit#search-input:focus {
-                border-color: #000000;
-            }
-            
-            /* Barre de progression */
-            QProgressBar#progress-bar {
-                background-color: #f0f0f0;
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
-                text-align: center;
-                height: 4px;
-            }
-            
-            QProgressBar#progress-bar::chunk {
-                background-color: #000000;
-                border-radius: 2px;
-            }
-            
-            /* Page des statistiques */
-            QWidget#stats-page {
-                background-color: #ffffff;
-            }
-            
-            QLabel#stats-title {
-                color: #000000;
-                margin-bottom: 10px;
-            }
-            
-            QLabel#global-status {
-                color: #4caf50;
-                padding: 8px 16px;
-                background-color: #e8f5e8;
-                border-radius: 20px;
-            }
-            
-            QFrame#stat-card {
-                background-color: #f8f8f8;
-                border: 1px solid #e0e0e0;
-                border-radius: 10px;
-                margin: 5px;
-            }
-            
-            QFrame#stat-card:hover {
-                border-color: #cccccc;
-            }
-            
-            QLabel#card-title {
-                color: #666666;
-            }
-            
-            QLabel#card-value {
-                color: #000000;
-                margin: 5px 0px;
-            }
-            
-            QLabel#card-subtitle {
-                color: #999999;
-            }
-            
-            QFrame#config-frame {
-                background-color: #f0f8ff;
-                border: 1px solid #cce0ff;
-                border-radius: 10px;
-                margin-top: 10px;
-            }
-            
-            QFrame#stats-details {
-                background-color: #f8f8f8;
-                border: 1px solid #e0e0e0;
-                border-radius: 10px;
-                margin-top: 10px;
-            }
-            
-            QLabel#stats-section-title, QLabel#config-section-title {
-                color: #000000;
-                margin: 10px 0px;
-            }
-            
-            QLabel#stats-content, QLabel#config-content {
-                color: #333333;
-                line-height: 1.4;
-            }
-            
-            /* Splitter */
-            QSplitter::handle {
-                background-color: #e0e0e0;
-                width: 1px;
-            }
-            
-            QSplitter::handle:hover {
-                background-color: #cccccc;
-            }
-        """)
-    
+                           QFrame#auto-respond-indicator {
+               background-color: #1a1a1a;
+               border-radius: 6px;
+               border: 1px solid #333333;
+               margin-top: 5px;
+           }
+           
+           QLabel#auto-respond-status {
+               color: #ffffff;
+               font-size: 10px;
+           }
+           
+           /* Barre d'outils */
+           QFrame#toolbar {
+               background-color: #f8f8f8;
+               border-bottom: 1px solid #e0e0e0;
+           }
+           
+           QPushButton#toolbar-button {
+               background-color: #ffffff;
+               color: #000000;
+               border: 1px solid #e0e0e0;
+               padding: 8px 16px;
+               border-radius: 6px;
+               font-size: 13px;
+           }
+           
+           QPushButton#toolbar-button:hover {
+               background-color: #f0f0f0;
+           }
+           
+           QPushButton#compose-button {
+               background-color: #000000;
+               color: #ffffff;
+               border: 1px solid #000000;
+               padding: 8px 16px;
+               border-radius: 6px;
+               font-size: 13px;
+               font-weight: bold;
+           }
+           
+           QPushButton#compose-button:hover {
+               background-color: #333333;
+           }
+           
+           QLabel#auto-refresh-indicator {
+               color: #4caf50;
+               font-weight: bold;
+               margin-left: 5px;
+           }
+           
+           /* Barre de recherche */
+           QLineEdit#search-input {
+               background-color: #ffffff;
+               color: #000000;
+               border: 1px solid #e0e0e0;
+               padding: 8px 12px;
+               border-radius: 6px;
+               font-size: 13px;
+           }
+           
+           QLineEdit#search-input:focus {
+               border-color: #000000;
+           }
+           
+           /* Barre de progression */
+           QProgressBar#progress-bar {
+               background-color: #f0f0f0;
+               border: 1px solid #e0e0e0;
+               border-radius: 4px;
+               text-align: center;
+               height: 4px;
+           }
+           
+           QProgressBar#progress-bar::chunk {
+               background-color: #000000;
+               border-radius: 2px;
+           }
+           
+           /* Page des statistiques */
+           QWidget#stats-page {
+               background-color: #ffffff;
+           }
+           
+           QLabel#stats-title {
+               color: #000000;
+               margin-bottom: 10px;
+           }
+           
+           QLabel#global-status {
+               color: #4caf50;
+               padding: 8px 16px;
+               background-color: #e8f5e8;
+               border-radius: 20px;
+           }
+           
+           QFrame#stat-card {
+               background-color: #f8f8f8;
+               border: 1px solid #e0e0e0;
+               border-radius: 10px;
+               margin: 5px;
+           }
+           
+           QFrame#stat-card:hover {
+               border-color: #cccccc;
+           }
+           
+           QLabel#card-title {
+               color: #666666;
+           }
+           
+           QLabel#card-value {
+               color: #000000;
+               margin: 5px 0px;
+           }
+           
+           QLabel#card-subtitle {
+               color: #999999;
+           }
+           
+           QFrame#config-frame {
+               background-color: #f0f8ff;
+               border: 1px solid #cce0ff;
+               border-radius: 10px;
+               margin-top: 10px;
+           }
+           
+           QFrame#stats-details {
+               background-color: #f8f8f8;
+               border: 1px solid #e0e0e0;
+               border-radius: 10px;
+               margin-top: 10px;
+           }
+           
+           QLabel#stats-section-title, QLabel#config-section-title {
+               color: #000000;
+               margin: 10px 0px;
+           }
+           
+           QLabel#stats-content, QLabel#config-content {
+               color: #333333;
+               line-height: 1.4;
+           }
+           
+           /* Splitter */
+           QSplitter::handle {
+               background-color: #e0e0e0;
+               width: 1px;
+           }
+           
+           QSplitter::handle:hover {
+               background-color: #cccccc;
+           }
+       """)
+   
     def _setup_system_tray(self):
-        """Configure l'icône de la barre système."""
-        if QSystemTrayIcon.isSystemTrayAvailable():
-            self.tray_icon = QSystemTrayIcon(self)
-            
-            # Menu contextuel
-            tray_menu = QMenu()
-            
-            show_action = tray_menu.addAction("Afficher")
-            show_action.triggered.connect(self.show)
-            
-            tray_menu.addSeparator()
-            
-            # Action pour activer/désactiver les réponses automatiques
-            self.auto_respond_action = tray_menu.addAction("Activer réponses auto")
-            self.auto_respond_action.setCheckable(True)
-            self.auto_respond_action.triggered.connect(self._toggle_auto_respond_from_tray)
-            
-            tray_menu.addSeparator()
-            
-            quit_action = tray_menu.addAction("Quitter")
-            quit_action.triggered.connect(QApplication.instance().quit)
-            
-            self.tray_icon.setContextMenu(tray_menu)
-            self.tray_icon.activated.connect(self._tray_icon_activated)
-            
-            # Icône (à remplacer par une vraie icône)
-            pixmap = QPixmap(16, 16)
-            pixmap.fill(QColor('#000000'))
-            self.tray_icon.setIcon(QIcon(pixmap))
-            
-            self.tray_icon.show()
-            
-            # Mettre à jour l'état initial
-            self._update_tray_auto_respond_state()
-    
+       """Configure l'icône de la barre système."""
+       if QSystemTrayIcon.isSystemTrayAvailable():
+           self.tray_icon = QSystemTrayIcon(self)
+           
+           # Menu contextuel
+           tray_menu = QMenu()
+           
+           show_action = tray_menu.addAction("Afficher")
+           show_action.triggered.connect(self.show)
+           
+           tray_menu.addSeparator()
+           
+           # Action pour activer/désactiver les réponses automatiques
+           self.auto_respond_action = tray_menu.addAction("Activer réponses auto")
+           self.auto_respond_action.setCheckable(True)
+           self.auto_respond_action.triggered.connect(self._toggle_auto_respond_from_tray)
+           
+           # Action pour voir les réponses en attente
+           pending_action = tray_menu.addAction("Voir réponses en attente")
+           pending_action.triggered.connect(lambda: self._switch_view("pending_responses"))
+           
+           tray_menu.addSeparator()
+           
+           quit_action = tray_menu.addAction("Quitter")
+           quit_action.triggered.connect(QApplication.instance().quit)
+           
+           self.tray_icon.setContextMenu(tray_menu)
+           self.tray_icon.activated.connect(self._tray_icon_activated)
+           
+           # Icône (à remplacer par une vraie icône)
+           pixmap = QPixmap(16, 16)
+           pixmap.fill(QColor('#000000'))
+           self.tray_icon.setIcon(QIcon(pixmap))
+           
+           self.tray_icon.show()
+           
+           # Mettre à jour l'état initial
+           self._update_tray_auto_respond_state()
+   
     def _toggle_auto_respond_from_tray(self):
-        """Active/désactive les réponses automatiques depuis la barre système."""
-        current_state = self.config_manager.get('auto_respond.enabled', False)
-        new_state = not current_state
-        self.config_manager.set('auto_respond.enabled', new_state)
-        
-        # Afficher une notification
-        if self.tray_icon:
-            status = "activées" if new_state else "désactivées"
-            self.tray_icon.showMessage(
-                "Dynovate Mail",
-                f"Réponses automatiques {status}",
-                QSystemTrayIcon.MessageIcon.Information,
-                3000
-            )
-    
+       """Active/désactive les réponses automatiques depuis la barre système."""
+       current_state = self.config_manager.get('auto_respond.enabled', False)
+       new_state = not current_state
+       self.config_manager.set('auto_respond.enabled', new_state)
+       
+       # Afficher une notification
+       if self.tray_icon:
+           status = "activées" if new_state else "désactivées"
+           self.tray_icon.showMessage(
+               "Dynovate Mail",
+               f"Réponses automatiques {status}",
+               QSystemTrayIcon.MessageIcon.Information,
+               3000
+           )
+   
     def _update_tray_auto_respond_state(self):
-        """Met à jour l'état de la réponse automatique dans le menu de la barre système."""
-        if hasattr(self, 'auto_respond_action'):
-            enabled = self.config_manager.get('auto_respond.enabled', False)
-            self.auto_respond_action.setChecked(enabled)
-            self.auto_respond_action.setText(
-                "Désactiver réponses auto" if enabled else "Activer réponses auto"
-            )
-    
+       """Met à jour l'état de la réponse automatique dans le menu de la barre système."""
+       if hasattr(self, 'auto_respond_action'):
+           enabled = self.config_manager.get('auto_respond.enabled', False)
+           self.auto_respond_action.setChecked(enabled)
+           self.auto_respond_action.setText(
+               "Désactiver réponses auto" if enabled else "Activer réponses auto"
+           )
+   
     def _setup_timers(self):
-        """Configure les timers pour les mises à jour automatiques."""
-        # Timer pour rafraîchir les emails
-        self.refresh_timer = QTimer()
-        self.refresh_timer.timeout.connect(self._auto_refresh)
-        
-        # Timer pour mettre à jour les statistiques
-        self.stats_timer = QTimer()
-        self.stats_timer.timeout.connect(self._update_stats)
-        self.stats_timer.start(60000)  # 1 minute
-        
-        # Timer pour mettre à jour l'indicateur de status
-        self.status_timer = QTimer()
-        self.status_timer.timeout.connect(self._update_status_indicators)
-        self.status_timer.start(5000)  # 5 secondes
-        
-        # Appliquer la configuration initiale des timers
-        config = self.config_manager.get_config()
-        self._update_timers(config)
-    
+       """Configure les timers pour les mises à jour automatiques."""
+       # Timer pour rafraîchir les emails
+       self.refresh_timer = QTimer()
+       self.refresh_timer.timeout.connect(self._auto_refresh)
+       
+       # Timer pour mettre à jour les statistiques
+       self.stats_timer = QTimer()
+       self.stats_timer.timeout.connect(self._update_stats)
+       self.stats_timer.start(60000)  # 1 minute
+       
+       # Timer pour mettre à jour l'indicateur de status
+       self.status_timer = QTimer()
+       self.status_timer.timeout.connect(self._update_status_indicators)
+       self.status_timer.start(5000)  # 5 secondes
+       
+       # Timer pour vérifier les réponses en attente
+       self.pending_check_timer = QTimer()
+       self.pending_check_timer.timeout.connect(self._check_pending_responses)
+       self.pending_check_timer.start(15000)  # Vérifier toutes les 15 secondes
+       
+       # Appliquer la configuration initiale des timers
+       config = self.config_manager.get_config()
+       self._update_timers(config)
+   
+    def _check_pending_responses(self):
+       """Vérifie s'il y a de nouvelles réponses en attente."""
+       try:
+           if hasattr(self, 'pending_responses_view'):
+               pending_count = self.pending_responses_view.get_pending_count()
+               
+               # Vérifier si le nombre a augmenté
+               if not hasattr(self, '_last_pending_count'):
+                   self._last_pending_count = 0
+               
+               if pending_count > self._last_pending_count:
+                   new_count = pending_count - self._last_pending_count
+                   self.show_notification(
+                       "Nouvelle réponse en attente",
+                       f"{new_count} nouvelle(s) réponse(s) automatique(s) en attente de validation"
+                   )
+               
+               self._last_pending_count = pending_count
+               
+               # Mettre à jour l'indicateur dans la sidebar
+               if "pending_responses" in self.nav_buttons:
+                   button_text = f"🔔  Réponses en attente"
+                   if pending_count > 0:
+                       button_text += f" ({pending_count})"
+                   self.nav_buttons["pending_responses"].setText(button_text)
+                   
+       except Exception as e:
+           logger.error(f"Erreur lors de la vérification des réponses en attente: {e}")
+   
     def _update_status_indicators(self):
-        """Met à jour les indicateurs de statut."""
-        config = self.config_manager.get_config()
-        
-        # Indicateur de réponse automatique dans la sidebar
-        auto_respond_enabled = config.get('auto_respond', {}).get('enabled', False)
-        if auto_respond_enabled:
-            self.auto_respond_status.setText("Activé")
-            self.auto_respond_status.setStyleSheet("color: #4caf50; font-weight: bold;")
-            self.auto_respond_indicator.setStyleSheet("""
-                QFrame#auto-respond-indicator {
-                    background-color: #e8f5e8;
-                    border: 1px solid #4caf50;
-                    border-radius: 6px;
-                }
-            """)
-        else:
-            self.auto_respond_status.setText("Désactivé")
-            self.auto_respond_status.setStyleSheet("color: #f44336; font-weight: bold;")
-            self.auto_respond_indicator.setStyleSheet("""
-                QFrame#auto-respond-indicator {
-                    background-color: #1a1a1a;
-                    border: 1px solid #333333;
-                    border-radius: 6px;
-                }
-            """)
-        
-        # Indicateur de rafraîchissement automatique
-        auto_refresh_enabled = config.get('app', {}).get('auto_refresh', True)
-        self.auto_refresh_indicator.setVisible(auto_refresh_enabled)
-        
-        # Mettre à jour la barre de statut
-        auto_respond_status = "activée" if auto_respond_enabled else "désactivée"
-        refresh_status = "activé" if auto_refresh_enabled else "désactivé"
-        self.statusBar().showMessage(
-            f"Réponse automatique: {auto_respond_status} | Rafraîchissement: {refresh_status}"
-        )
-        
-        # Mettre à jour le menu de la barre système
-        self._update_tray_auto_respond_state()
-    
+       """Met à jour les indicateurs de statut."""
+       config = self.config_manager.get_config()
+       
+       # Indicateur de réponse automatique dans la sidebar
+       auto_respond_enabled = config.get('auto_respond', {}).get('enabled', False)
+       if auto_respond_enabled:
+           self.auto_respond_status.setText("Activé")
+           self.auto_respond_status.setStyleSheet("color: #4caf50; font-weight: bold;")
+           self.auto_respond_indicator.setStyleSheet("""
+               QFrame#auto-respond-indicator {
+                   background-color: #e8f5e8;
+                   border: 1px solid #4caf50;
+                   border-radius: 6px;
+               }
+           """)
+       else:
+           self.auto_respond_status.setText("Désactivé")
+           self.auto_respond_status.setStyleSheet("color: #f44336; font-weight: bold;")
+           self.auto_respond_indicator.setStyleSheet("""
+               QFrame#auto-respond-indicator {
+                   background-color: #1a1a1a;
+                   border: 1px solid #333333;
+                   border-radius: 6px;
+               }
+           """)
+       
+       # Indicateur de rafraîchissement automatique
+       auto_refresh_enabled = config.get('app', {}).get('auto_refresh', True)
+       self.auto_refresh_indicator.setVisible(auto_refresh_enabled)
+       
+       # Mettre à jour la barre de statut
+       auto_respond_status = "activée" if auto_respond_enabled else "désactivée"
+       refresh_status = "activé" if auto_refresh_enabled else "désactivé"
+       self.statusBar().showMessage(
+           f"Réponse automatique: {auto_respond_status} | Rafraîchissement: {refresh_status} | Mode validation activé"
+       )
+       
+       # Mettre à jour le menu de la barre système
+       self._update_tray_auto_respond_state()
+   
     def _load_initial_data(self):
-        """Charge les données initiales."""
-        self._switch_view("inbox")
-        self._refresh_emails()
-        self._update_status_indicators()
-    
+       """Charge les données initiales."""
+       self._switch_view("inbox")
+       self._refresh_emails()
+       self._update_status_indicators()
+   
     def _switch_view(self, view_name: str):
-        """Change la vue active."""
-        # Reset des boutons
-        for btn in self.nav_buttons.values():
-            btn.setStyleSheet("")
-        
-        # Highlight du bouton actif
-        if view_name in self.nav_buttons:
-            self.nav_buttons[view_name].setStyleSheet("""
-                QPushButton#nav-button {
-                    background-color: #333333;
-                    color: #ffffff;
-                }
-            """)
-        
-        # Changer la vue
-        if view_name == "inbox":
-            self.current_filter = "inbox"
-            self.content_stack.setCurrentWidget(self.email_view)
-            self._refresh_emails()
-        elif view_name == "sent":
-            self.current_filter = "sent"
-            self.content_stack.setCurrentWidget(self.email_view)
-            self._refresh_emails()
-        elif view_name == "important":
-            self.current_filter = "important"
-            self.content_stack.setCurrentWidget(self.email_view)
-            self._refresh_emails()
-        elif view_name == "calendar":
-            self.content_stack.setCurrentWidget(self.calendar_view)
-            self.calendar_view.refresh_events()
-        elif view_name == "stats":
-            self.content_stack.setCurrentWidget(self.stats_view)
-            self._update_detailed_stats()
-        elif view_name == "settings":
-            self.content_stack.setCurrentWidget(self.settings_view)
-    
+       """Change la vue active."""
+       # Reset des boutons
+       for btn in self.nav_buttons.values():
+           btn.setStyleSheet("")
+       
+       # Highlight du bouton actif
+       if view_name in self.nav_buttons:
+           self.nav_buttons[view_name].setStyleSheet("""
+               QPushButton#nav-button {
+                   background-color: #333333;
+                   color: #ffffff;
+               }
+           """)
+       
+       # Changer la vue
+       if view_name == "inbox":
+           self.current_filter = "inbox"
+           self.content_stack.setCurrentWidget(self.email_view)
+           self._refresh_emails()
+       elif view_name == "sent":
+           self.current_filter = "sent"
+           self.content_stack.setCurrentWidget(self.email_view)
+           self._refresh_emails()
+       elif view_name == "important":
+           self.current_filter = "important"
+           self.content_stack.setCurrentWidget(self.email_view)
+           self._refresh_emails()
+       elif view_name == "pending_responses":
+           self.content_stack.setCurrentWidget(self.pending_responses_view)
+           self.pending_responses_view._refresh_responses()
+       elif view_name == "calendar":
+           self.content_stack.setCurrentWidget(self.calendar_view)
+           self.calendar_view.refresh_events()
+       elif view_name == "stats":
+           self.content_stack.setCurrentWidget(self.stats_view)
+           self._update_detailed_stats()
+       elif view_name == "settings":
+           self.content_stack.setCurrentWidget(self.settings_view)
+   
     def _filter_by_category(self, category: str):
-        """Filtre les emails par catégorie."""
-        # Reset visual state of all category buttons
-        for btn in self.category_buttons.values():
-            btn.setStyleSheet("""
-                QPushButton#category-filter {
-                    background-color: transparent;
-                    color: #999999;
-                    border: none;
-                    padding: 8px 10px;
-                    text-align: left;
-                    font-size: 11px;
-                    border-radius: 4px;
-                    margin: 1px 0px;
-                }
-                QPushButton#category-filter:hover {
-                    background-color: #333333;
-                    color: #ffffff;
-                }
-            """)
-        
-        # Highlight selected category
-        if category in self.category_buttons:
-            self.category_buttons[category].setStyleSheet("""
-                QPushButton#category-filter {
-                    background-color: #333333;
-                    color: #ffffff;
-                    border: none;
-                    padding: 8px 10px;
-                    text-align: left;
-                    font-size: 11px;
-                    border-radius: 4px;
-                    margin: 1px 0px;
-                }
-            """)
-        
-        # Switch to email view if not already there
-        self.content_stack.setCurrentWidget(self.email_view)
-        
-        # Apply the filter
-        self.current_filter = category
-        self._apply_filters()
-        
-        logger.info(f"Filtrage par catégorie: {category}")
-    
+       """Filtre les emails par catégorie."""
+       # Reset visual state of all category buttons
+       for btn in self.category_buttons.values():
+           btn.setStyleSheet("""
+               QPushButton#category-filter {
+                   background-color: transparent;
+                   color: #999999;
+                   border: none;
+                   padding: 8px 10px;
+                   text-align: left;
+                   font-size: 11px;
+                   border-radius: 4px;
+                   margin: 1px 0px;
+               }
+               QPushButton#category-filter:hover {
+                   background-color: #333333;
+                   color: #ffffff;
+               }
+           """)
+       
+       # Highlight selected category
+       if category in self.category_buttons:
+           self.category_buttons[category].setStyleSheet("""
+               QPushButton#category-filter {
+                   background-color: #333333;
+                   color: #ffffff;
+                   border: none;
+                   padding: 8px 10px;
+                   text-align: left;
+                   font-size: 11px;
+                   border-radius: 4px;
+                   margin: 1px 0px;
+               }
+           """)
+       
+       # Switch to email view if not already there
+       self.content_stack.setCurrentWidget(self.email_view)
+       
+       # Apply the filter
+       self.current_filter = category
+       self._apply_filters()
+       
+       logger.info(f"Filtrage par catégorie: {category}")
+   
     def _apply_filters(self):
-        """Applique les filtres actuels."""
-        if self.current_filter == "all":
-            self.filtered_emails = self.emails
-        elif self.current_filter == "inbox":
-            self.filtered_emails = [e for e in self.emails if not e.is_sent]
-        elif self.current_filter == "sent":
-            self.filtered_emails = [e for e in self.emails if e.is_sent]
-        elif self.current_filter == "important":
-            self.filtered_emails = [e for e in self.emails if e.is_important]
-        else:
-            # Filtrer par catégorie IA
-            self.filtered_emails = [
-                e for e in self.emails
-                if hasattr(e, 'ai_info') and e.ai_info.get('category') == self.current_filter
-            ]
-        
-        self.email_list.update_emails(self.filtered_emails)
-        self._update_stats()
-    
+       """Applique les filtres actuels."""
+       if self.current_filter == "all":
+           self.filtered_emails = self.emails
+       elif self.current_filter == "inbox":
+           self.filtered_emails = [e for e in self.emails if not e.is_sent]
+       elif self.current_filter == "sent":
+           self.filtered_emails = [e for e in self.emails if e.is_sent]
+       elif self.current_filter == "important":
+           self.filtered_emails = [e for e in self.emails if e.is_important]
+       else:
+           # Filtrer par catégorie IA
+           self.filtered_emails = [
+               e for e in self.emails
+               if hasattr(e, 'ai_info') and e.ai_info.get('category') == self.current_filter
+           ]
+       
+       self.email_list.update_emails(self.filtered_emails)
+       self._update_stats()
+   
     def _refresh_emails(self):
-        """Rafraîchit la liste des emails."""
-        if self.processor_thread and self.processor_thread.isRunning():
-            return
-        
-        self.processing_indicator.setVisible(True)
-        self.processing_indicator.setRange(0, 0)  # Indéterminé
-        
-        query = ""
-        if self.current_filter == "sent":
-            query = "in:sent"
-        elif self.current_filter == "important":
-            query = "is:important"
-        
-        self.processor_thread = EmailProcessorThread(
-            self.gmail_client,
-            self.ai_processor,
-            self.auto_responder,
-            query
-        )
-        
-        self.processor_thread.emails_processed.connect(self._on_emails_processed)
-        self.processor_thread.processing_progress.connect(self._on_processing_progress)
-        self.processor_thread.error_occurred.connect(self._on_processing_error)
-        self.processor_thread.finished.connect(self._on_processing_finished)
-        
-        self.processor_thread.start()
-    
+       """Rafraîchit la liste des emails."""
+       if self.processor_thread and self.processor_thread.isRunning():
+           return
+       
+       self.processing_indicator.setVisible(True)
+       self.processing_indicator.setRange(0, 0)  # Indéterminé
+       
+       query = ""
+       if self.current_filter == "sent":
+           query = "in:sent"
+       elif self.current_filter == "important":
+           query = "is:important"
+       
+       self.processor_thread = EmailProcessorThread(
+           self.gmail_client,
+           self.ai_processor,
+           self.auto_responder,
+           query
+       )
+       
+       self.processor_thread.emails_processed.connect(self._on_emails_processed)
+       self.processor_thread.processing_progress.connect(self._on_processing_progress)
+       self.processor_thread.error_occurred.connect(self._on_processing_error)
+       self.processor_thread.finished.connect(self._on_processing_finished)
+       
+       self.processor_thread.start()
+   
     def _on_emails_processed(self, emails: List[Email]):
-        """Callback quand les emails sont traités."""
-        self.emails = emails
-        self._apply_filters()
-    
+       """Callback quand les emails sont traités."""
+       self.emails = emails
+       self._apply_filters()
+   
     def _on_processing_progress(self, current: int, total: int):
-        """Callback pour le progrès du traitement."""
-        self.processing_indicator.setRange(0, total)
-        self.processing_indicator.setValue(current)
-    
+       """Callback pour le progrès du traitement."""
+       self.processing_indicator.setRange(0, total)
+       self.processing_indicator.setValue(current)
+   
     def _on_processing_error(self, error: str):
-        """Callback en cas d'erreur."""
-        QMessageBox.critical(self, "Erreur", f"Erreur lors du traitement: {error}")
-    
+       """Callback en cas d'erreur."""
+       QMessageBox.critical(self, "Erreur", f"Erreur lors du traitement: {error}")
+   
     def _on_processing_finished(self):
-        """Callback quand le traitement est terminé."""
-        self.processing_indicator.setVisible(False)
-    
+       """Callback quand le traitement est terminé."""
+       self.processing_indicator.setVisible(False)
+   
     def _search_emails(self):
-        """Recherche des emails."""
-        query = self.search_input.text().strip()
-        if query:
-            self._refresh_emails()
-    
+       """Recherche des emails."""
+       query = self.search_input.text().strip()
+       if query:
+           self._refresh_emails()
+   
     def _compose_email(self):
-        """Ouvre la fenêtre de composition."""
-        compose_dialog = ComposeView(self.gmail_client, self)
-        compose_dialog.email_sent.connect(self._on_email_sent)
-        compose_dialog.exec()
-    
+       """Ouvre la fenêtre de composition."""
+       compose_dialog = ComposeView(self.gmail_client, self)
+       compose_dialog.email_sent.connect(self._on_email_sent)
+       compose_dialog.exec()
+   
     def _on_email_selected(self, email: Email):
-        """Callback quand un email est sélectionné."""
-        self.selected_email = email
-        self.email_detail.display_email(email)
-    
+       """Callback quand un email est sélectionné."""
+       self.selected_email = email
+       self.email_detail.display_email(email)
+   
     def _reply_to_email(self, email: Email):
-        """Répond à un email."""
-        reply_subject = f"Re: {email.subject}"
-        reply_body = f"\n\n--- Message original ---\nDe: {email.sender}\nDate: {email.date}\nSujet: {email.subject}\n\n{email.body}"
-        
-        compose_dialog = ComposeView(
-            self.gmail_client,
-            self,
-            to=email.get_sender_email(),
-            subject=reply_subject,
-            body=reply_body,
-            is_reply=True
-        )
-        compose_dialog.email_sent.connect(self._on_email_sent)
-        compose_dialog.exec()
-    
+       """Répond à un email."""
+       reply_subject = f"Re: {email.subject}"
+       reply_body = f"\n\n--- Message original ---\nDe: {email.sender}\nDate: {email.date}\nSujet: {email.subject}\n\n{email.body}"
+       
+       compose_dialog = ComposeView(
+           self.gmail_client,
+           self,
+           to=email.get_sender_email(),
+           subject=reply_subject,
+           body=reply_body,
+           is_reply=True
+       )
+       compose_dialog.email_sent.connect(self._on_email_sent)
+       compose_dialog.exec()
+   
     def _forward_email(self, email: Email):
-        """Transfère un email."""
-        forward_subject = f"Fwd: {email.subject}"
-        forward_body = f"\n\n--- Message transféré ---\nDe: {email.sender}\nDate: {email.date}\nSujet: {email.subject}\n\n{email.body}"
-        
-        compose_dialog = ComposeView(
-            self.gmail_client,
-            self,
-            subject=forward_subject,
-            body=forward_body,
-            is_forward=True
-        )
-        compose_dialog.email_sent.connect(self._on_email_sent)
-        compose_dialog.exec()
-    
+       """Transfère un email."""
+       forward_subject = f"Fwd: {email.subject}"
+       forward_body = f"\n\n--- Message transféré ---\nDe: {email.sender}\nDate: {email.date}\nSujet: {email.subject}\n\n{email.body}"
+       
+       compose_dialog = ComposeView(
+           self.gmail_client,
+           self,
+           subject=forward_subject,
+           body=forward_body,
+           is_forward=True
+       )
+       compose_dialog.email_sent.connect(self._on_email_sent)
+       compose_dialog.exec()
+   
     def _on_email_sent(self):
-        """Callback quand un email est envoyé."""
-        self._refresh_emails()
-    
+       """Callback quand un email est envoyé."""
+       self._refresh_emails()
+   
     def _auto_refresh(self):
-        """Rafraîchissement automatique."""
-        if not self.processor_thread or not self.processor_thread.isRunning():
-            self._refresh_emails()
-    
+       """Rafraîchissement automatique."""
+       if not self.processor_thread or not self.processor_thread.isRunning():
+           self._refresh_emails()
+   
     def _update_stats(self):
-        """Met à jour les statistiques rapides."""
-        if not self.emails:
-            return
-        
-        # Compter les emails non lus
-        unread_count = len([e for e in self.emails if e.is_unread])
-        self.stats_labels["unread"].setText(str(unread_count))
-        
-        # Compter les emails d'aujourd'hui
-        today = datetime.now().date()
-        today_count = len([
-            e for e in self.emails
-            if e.datetime.date() == today
-        ])
-        self.stats_labels["today"].setText(str(today_count))
-        
-        # Statistiques des réponses automatiques
-        auto_stats = self.auto_responder.get_response_stats()
-        self.stats_labels["auto_responses"].setText(str(auto_stats.get("recent_responses", 0)))
-        
-        # Rendez-vous cette semaine
-        week_events = self.calendar_manager.get_events_for_week()
-        self.stats_labels["meetings"].setText(str(len(week_events)))
-    
+       """Met à jour les statistiques rapides."""
+       if not self.emails:
+           return
+       
+       # Compter les emails non lus
+       unread_count = len([e for e in self.emails if e.is_unread])
+       self.stats_labels["unread"].setText(str(unread_count))
+       
+       # Compter les emails d'aujourd'hui
+       today = datetime.now().date()
+       today_count = len([
+           e for e in self.emails
+           if e.datetime.date() == today
+       ])
+       self.stats_labels["today"].setText(str(today_count))
+       
+       # Statistiques des réponses automatiques
+       auto_stats = self.auto_responder.get_response_stats()
+       self.stats_labels["auto_responses"].setText(str(auto_stats.get("sent_count", 0)))
+       
+       # Statistiques des réponses en attente
+       if hasattr(self, 'pending_responses_view'):
+           pending_count = self.pending_responses_view.get_pending_count()
+           self.stats_labels["pending_responses"].setText(str(pending_count))
+       
+       # Rendez-vous cette semaine
+       week_events = self.calendar_manager.get_events_for_week()
+       self.stats_labels["meetings"].setText(str(len(week_events)))
+   
     def _update_detailed_stats(self):
-        """Met à jour les statistiques détaillées."""
-        # Mettre à jour le résumé de configuration
-        config = self.config_manager.get_config()
-        auto_respond = config.get('auto_respond', {})
-        ai_config = config.get('ai', {})
-        
-        config_summary = f"""🤖 Réponse automatique: {"✅ Activée" if auto_respond.get('enabled', False) else "❌ Désactivée"}
-• Délai: {auto_respond.get('delay_minutes', 5)} minutes
-• CV: {"✅" if auto_respond.get('respond_to_cv', True) else "❌"}
-• RDV: {"✅" if auto_respond.get('respond_to_rdv', True) else "❌"}
-• Support: {"✅" if auto_respond.get('respond_to_support', True) else "❌"}
-• Partenariat: {"✅" if auto_respond.get('respond_to_partenariat', True) else "❌"}
+       """Met à jour les statistiques détaillées."""
+       # Mettre à jour le résumé de configuration
+       config = self.config_manager.get_config()
+       auto_respond = config.get('auto_respond', {})
+       ai_config = config.get('ai', {})
+       
+       config_summary = f"""🤖 Réponse automatique: {"✅ Activée" if auto_respond.get('enabled', False) else "❌ Désactivée"} (avec validation)
+- Délai: {auto_respond.get('delay_minutes', 5)} minutes
+- CV: {"✅" if auto_respond.get('respond_to_cv', True) else "❌"}
+- RDV: {"✅" if auto_respond.get('respond_to_rdv', True) else "❌"}
+- Support: {"✅" if auto_respond.get('respond_to_support', True) else "❌"}
+- Partenariat: {"✅" if auto_respond.get('respond_to_partenariat', True) else "❌"}
 
 🧠 Intelligence artificielle:
-• Classification: {"✅" if ai_config.get('enable_classification', True) else "❌"}
-• Détection spam: {"✅" if ai_config.get('enable_spam_detection', True) else "❌"}
-• Analyse sentiment: {"✅" if ai_config.get('enable_sentiment_analysis', True) else "❌"}
-• Extraction RDV: {"✅" if ai_config.get('enable_meeting_extraction', True) else "❌"}
+- Classification: {"✅" if ai_config.get('enable_classification', True) else "❌"}
+- Détection spam: {"✅" if ai_config.get('enable_spam_detection', True) else "❌"}
+- Analyse sentiment: {"✅" if ai_config.get('enable_sentiment_analysis', True) else "❌"}
+- Extraction RDV: {"✅" if ai_config.get('enable_meeting_extraction', True) else "❌"}
+
+🔔 Validation des réponses: ✅ Activée (toutes les réponses nécessitent une validation)
 
 ⏰ Rafraîchissement: {"✅ Automatique" if config.get('app', {}).get('auto_refresh', True) else "❌ Manuel"} ({config.get('email', {}).get('refresh_interval_minutes', 5)} min)"""
-        
-        self.config_summary.setText(config_summary)
-        
-        # Mettre à jour le statut global
-        auto_respond_ok = auto_respond.get('enabled', False)
-        ai_ok = ai_config.get('enable_classification', True)
-        
-        if auto_respond_ok and ai_ok:
-            self.global_status.setText("🟢 Système opérationnel")
-            self.global_status.setStyleSheet("""
-                QLabel#global-status {
-                    color: #4caf50;
-                    background-color: #e8f5e8;
-                    padding: 8px 16px;
-                    border-radius: 20px;
-                    font-weight: bold;
-                }
-            """)
-        elif ai_ok:
-            self.global_status.setText("🟡 IA active, auto-réponse désactivée")
-            self.global_status.setStyleSheet("""
-                QLabel#global-status {
-                    color: #ff9800;
-                    background-color: #fff8e1;
-                    padding: 8px 16px;
-                    border-radius: 20px;
-                    font-weight: bold;
-                }
-            """)
-        else:
-            self.global_status.setText("🔴 Fonctionnalités limitées")
-            self.global_status.setStyleSheet("""
-                QLabel#global-status {
-                    color: #f44336;
-                    background-color: #ffebee;
-                    padding: 8px 16px;
-                    border-radius: 20px;
-                    font-weight: bold;
-                }
-            """)
-        
-        # Mettre à jour la carte auto-responder
-        auto_card_value = self.auto_card.findChild(QLabel, "card-value")
-        auto_card_subtitle = self.auto_card.findChild(QLabel, "card-subtitle")
-        if auto_card_value and auto_card_subtitle:
-            if auto_respond.get('enabled', False):
-                auto_card_value.setText(str(auto_stats.get("recent_responses", 0)))
-                auto_card_subtitle.setText("🟢 Activé")
-                auto_card_subtitle.setStyleSheet("color: #4caf50; font-weight: bold;")
-            else:
-                auto_card_value.setText("--")
-                auto_card_subtitle.setText("🔴 Désactivé")
-                auto_card_subtitle.setStyleSheet("color: #f44336; font-weight: bold;")
-        
-        # Appel des statistiques existantes
-        if not self.emails:
-            self.category_stats.setText("Aucun email à analyser")
-            self.activity_stats.setText("Aucune activité")
-            return
-        
-        # Analyser les emails par catégorie
-        categories = {}
-        for email in self.emails:
-            if hasattr(email, 'ai_info'):
-                category = email.ai_info.get('category', 'general')
-                categories[category] = categories.get(category, 0) + 1
-        
-        # Créer le texte des catégories
-        category_lines = []
-        total_categorized = sum(categories.values())
-        
-        for category, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
-            percentage = (count / total_categorized) * 100 if total_categorized > 0 else 0
-            category_lines.append(f"• {category.upper()}: {count} emails ({percentage:.1f}%)")
-        
-        category_text = "\n".join(category_lines[:8])  # Top 8 catégories
-        if len(categories) > 8:
-            category_text += f"\n... et {len(categories) - 8} autres catégories"
-        
-        self.category_stats.setText(category_text or "Aucune catégorisation disponible")
-        
-        # Statistiques temporelles
-        today = datetime.now().date()
-        week_ago = today - timedelta(days=7)
-        
-        recent_emails = [
-            e for e in self.emails
-            if e.datetime.date() >= week_ago
-        ]
-        
-        unread_count = len([e for e in self.emails if e.is_unread])
-        important_count = len([e for e in self.emails if e.is_important])
-        
-        activity_text = f"""📊 Résumé général:
-• Total d'emails: {len(self.emails)}
-• Emails non lus: {unread_count}
-• Emails importants: {important_count}
-• Cette semaine: {len(recent_emails)} emails
-• Aujourd'hui: {len([e for e in self.emails if e.datetime.date() == today])}
+       
+       self.config_summary.setText(config_summary)
+       
+       # Mettre à jour le statut global
+       auto_respond_ok = auto_respond.get('enabled', False)
+       ai_ok = ai_config.get('enable_classification', True)
+       
+       if auto_respond_ok and ai_ok:
+           self.global_status.setText("🟢 Système opérationnel avec validation")
+           self.global_status.setStyleSheet("""
+               QLabel#global-status {
+                   color: #4caf50;
+                   background-color: #e8f5e8;
+                   padding: 8px 16px;
+                   border-radius: 20px;
+                   font-weight: bold;
+               }
+           """)
+       elif ai_ok:
+           self.global_status.setText("🟡 IA active, auto-réponse désactivée")
+           self.global_status.setStyleSheet("""
+               QLabel#global-status {
+                   color: #ff9800;
+                   background-color: #fff8e1;
+                   padding: 8px 16px;
+                   border-radius: 20px;
+                   font-weight: bold;
+               }
+           """)
+       else:
+           self.global_status.setText("🔴 Fonctionnalités limitées")
+           self.global_status.setStyleSheet("""
+               QLabel#global-status {
+                   color: #f44336;
+                   background-color: #ffebee;
+                   padding: 8px 16px;
+                   border-radius: 20px;
+                   font-weight: bold;
+               }
+           """)
+       
+       # Mettre à jour la carte des réponses en attente
+       pending_stats = self.auto_responder.get_response_stats()
+       pending_card_value = self.pending_card.findChild(QLabel, "card-value")
+       pending_card_subtitle = self.pending_card.findChild(QLabel, "card-subtitle")
+       if pending_card_value and pending_card_subtitle:
+           pending_count = pending_stats.get("pending_count", 0)
+           pending_card_value.setText(str(pending_count))
+           if pending_count > 0:
+               pending_card_subtitle.setText("🔔 En attente")
+               pending_card_subtitle.setStyleSheet("color: #ff9800; font-weight: bold;")
+           else:
+               pending_card_subtitle.setText("✅ Aucune")
+               pending_card_subtitle.setStyleSheet("color: #4caf50; font-weight: bold;")
+       
+       # Mettre à jour la carte auto-responder
+       auto_card_value = self.auto_card.findChild(QLabel, "card-value")
+       auto_card_subtitle = self.auto_card.findChild(QLabel, "card-subtitle")
+       if auto_card_value and auto_card_subtitle:
+           if auto_respond.get('enabled', False):
+               auto_card_value.setText(str(pending_stats.get("sent_count", 0)))
+               auto_card_subtitle.setText("🟢 Activé")
+               auto_card_subtitle.setStyleSheet("color: #4caf50; font-weight: bold;")
+           else:
+               auto_card_value.setText("--")
+               auto_card_subtitle.setText("🔴 Désactivé")
+               auto_card_subtitle.setStyleSheet("color: #f44336; font-weight: bold;")
+       
+       # Appel des statistiques existantes
+       if not self.emails:
+           self.category_stats.setText("Aucun email à analyser")
+           self.activity_stats.setText("Aucune activité")
+           return
+       
+       # Analyser les emails par catégorie
+       categories = {}
+       for email in self.emails:
+           if hasattr(email, 'ai_info'):
+               category = email.ai_info.get('category', 'general')
+               categories[category] = categories.get(category, 0) + 1
+       
+       # Créer le texte des catégories
+       category_lines = []
+       total_categorized = sum(categories.values())
+       
+       for category, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+           percentage = (count / total_categorized) * 100 if total_categorized > 0 else 0
+           category_lines.append(f"• {category.upper()}: {count} emails ({percentage:.1f}%)")
+       
+       category_text = "\n".join(category_lines[:8])  # Top 8 catégories
+       if len(categories) > 8:
+           category_text += f"\n... et {len(categories) - 8} autres catégories"
+       
+       self.category_stats.setText(category_text or "Aucune catégorisation disponible")
+       
+       # Statistiques temporelles
+       today = datetime.now().date()
+       week_ago = today - timedelta(days=7)
+       
+       recent_emails = [
+           e for e in self.emails
+           if e.datetime.date() >= week_ago
+       ]
+       
+       unread_count = len([e for e in self.emails if e.is_unread])
+       important_count = len([e for e in self.emails if e.is_important])
+       
+       # Statistiques des réponses en attente
+       pending_text = f"""
+
+🔔 Réponses en attente:
+- En attente de validation: {pending_stats.get('pending_count', 0)}
+- Approuvées aujourd'hui: {pending_stats.get('approved_count', 0)}
+- Rejetées: {pending_stats.get('rejected_count', 0)}
+- Envoyées au total: {pending_stats.get('sent_count', 0)}"""
+       
+       activity_text = f"""📊 Résumé général:
+- Total d'emails: {len(self.emails)}
+- Emails non lus: {unread_count}
+- Emails importants: {important_count}
+- Cette semaine: {len(recent_emails)} emails
+- Aujourd'hui: {len([e for e in self.emails if e.datetime.date() == today])}
 
 🤖 Réponses automatiques:
-• Statut: {"✅ Activé" if auto_respond.get('enabled', False) else "❌ Désactivé"}
-• Réponses envoyées: {auto_stats.get("total_responses", 0)}
-• Cette semaine: {auto_stats.get("recent_responses", 0)}"""
-        
-        self.activity_stats.setText(activity_text)
-    
+- Statut: {"✅ Activé avec validation" if auto_respond.get('enabled', False) else "❌ Désactivé"}
+- Réponses envoyées: {pending_stats.get("sent_count", 0)}
+- Cette semaine: {pending_stats.get("approved_count", 0)}{pending_text}"""
+       
+       self.activity_stats.setText(activity_text)
+   
     def _tray_icon_activated(self, reason):
-        """Callback pour l'icône de la barre système."""
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            self.show()
-            self.raise_()
-            self.activateWindow()
-    
+       """Callback pour l'icône de la barre système."""
+       if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+           self.show()
+           self.raise_()
+           self.activateWindow()
+   
     def closeEvent(self, event):
-        """Événement de fermeture."""
-        config = self.config_manager.get_config()
-        minimize_to_tray = config.get('ui', {}).get('minimize_to_tray', True)
-        
-        if self.tray_icon and self.tray_icon.isVisible() and minimize_to_tray:
-            self.hide()
-            event.ignore()
-        else:
-            if self.processor_thread and self.processor_thread.isRunning():
-                self.processor_thread.stop()
-                self.processor_thread.wait()
-            event.accept()
-    
+       """Événement de fermeture."""
+       config = self.config_manager.get_config()
+       minimize_to_tray = config.get('ui', {}).get('minimize_to_tray', True)
+       
+       if self.tray_icon and self.tray_icon.isVisible() and minimize_to_tray:
+           self.hide()
+           event.ignore()
+       else:
+           if self.processor_thread and self.processor_thread.isRunning():
+               self.processor_thread.stop()
+               self.processor_thread.wait()
+           event.accept()
+   
     def show_notification(self, title: str, message: str):
-        """Affiche une notification."""
-        config = self.config_manager.get_config()
-        notifications_enabled = config.get('ui', {}).get('notifications', True)
-        
-        if self.tray_icon and self.tray_icon.isVisible() and notifications_enabled:
-            self.tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 3000)
+       """Affiche une notification."""
+       config = self.config_manager.get_config()
+       notifications_enabled = config.get('ui', {}).get('notifications', True)
+       
+       if self.tray_icon and self.tray_icon.isVisible() and notifications_enabled:
+           self.tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 3000)
