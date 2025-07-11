@@ -1,9 +1,9 @@
 """
-Système de réponse automatique avec validation utilisateur.
+Système de réponse automatique avec validation utilisateur - VERSION CORRIGÉE.
 """
 import logging
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta  # <-- Ajoutez timedelta ici
+from datetime import datetime, timedelta
 import json
 
 from models.email_model import Email
@@ -124,7 +124,9 @@ class AutoResponder:
                     proposed_response=proposed_response,
                     reason=self._get_response_reason(email_info),
                     confidence_score=self._calculate_confidence(email_info),
-                    status=ResponseStatus.PENDING
+                    status=ResponseStatus.PENDING,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now()
                 )
                 
                 # Ajouter à la base de données
@@ -194,8 +196,12 @@ class AutoResponder:
         Returns:
             True si une réponse est déjà en attente.
         """
-        pending_responses = self.pending_manager.get_pending_responses()
-        return any(response.email_id == email.id for response in pending_responses)
+        try:
+            pending_responses = self.pending_manager.get_pending_responses()
+            return any(response.email_id == email.id for response in pending_responses)
+        except Exception as e:
+            logger.error(f"Erreur lors de la vérification des réponses en attente: {e}")
+            return False
     
     def approve_and_send_response(self, response_id: int, 
                                  modified_content: Optional[str] = None,
@@ -221,6 +227,12 @@ class AutoResponder:
             # Utiliser le contenu modifié si fourni
             final_content = modified_content if modified_content else response.proposed_response
             
+            # Ajouter la signature si configurée
+            if self.user_signature:
+                if not final_content.endswith('\n'):
+                    final_content += '\n'
+                final_content += f"\n{self.user_signature}"
+            
             # Envoyer l'email
             subject = f"Re: {response.original_subject}"
             success = self.gmail_client.send_email(
@@ -230,10 +242,11 @@ class AutoResponder:
             )
             
             if success:
-                # Mettre à jour le statut
+                # Mettre à jour le contenu si modifié
                 if modified_content:
                     self.pending_manager.update_response_content(response_id, modified_content)
                 
+                # Mettre à jour le statut
                 self.pending_manager.update_response_status(
                     response_id, 
                     ResponseStatus.SENT, 
@@ -241,16 +254,16 @@ class AutoResponder:
                 )
                 
                 # Enregistrer dans l'historique
-                self._record_response_from_pending(response)
+                self._record_response_history(response.original_sender_email)
                 
-                logger.info(f"Réponse {response_id} approuvée et envoyée")
+                logger.info(f"Réponse {response_id} approuvée et envoyée avec succès")
                 return True
             else:
                 logger.error(f"Échec de l'envoi de la réponse {response_id}")
                 return False
                 
         except Exception as e:
-            logger.error(f"Erreur lors de l'approbation de la réponse: {e}")
+            logger.error(f"Erreur lors de l'approbation de la réponse {response_id}: {e}")
             return False
     
     def reject_response(self, response_id: int, user_notes: str = "") -> bool:
@@ -273,16 +286,22 @@ class AutoResponder:
             
             if success:
                 logger.info(f"Réponse {response_id} rejetée: {user_notes}")
-            
-            return success
+                return True
+            else:
+                logger.error(f"Échec du rejet de la réponse {response_id}")
+                return False
             
         except Exception as e:
-            logger.error(f"Erreur lors du rejet de la réponse: {e}")
+            logger.error(f"Erreur lors du rejet de la réponse {response_id}: {e}")
             return False
     
     def get_pending_responses(self) -> list:
         """Récupère toutes les réponses en attente."""
-        return self.pending_manager.get_pending_responses()
+        try:
+            return self.pending_manager.get_pending_responses()
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des réponses en attente: {e}")
+            return []
     
     def get_response_stats(self) -> Dict[str, Any]:
         """
@@ -291,25 +310,45 @@ class AutoResponder:
         Returns:
             Dictionnaire des statistiques.
         """
-        db_stats = self.pending_manager.get_stats()
-        
-        return {
-            'enabled': self.auto_respond_enabled,
-            'delay_minutes': self.response_delay,
-            'total_responses': len(self.response_history),
-            'pending_count': db_stats['pending'],
-            'approved_count': db_stats['approved'],
-            'rejected_count': db_stats['rejected'],
-            'sent_count': db_stats['sent'],
-            'today_count': db_stats['today'],
-            'categories': {
-                'cv': self.respond_to_cv,
-                'rdv': self.respond_to_rdv,
-                'support': self.respond_to_support,
-                'partenariat': self.respond_to_partenariat
-            },
-            'avoid_loops': self.avoid_loops
-        }
+        try:
+            db_stats = self.pending_manager.get_stats()
+            
+            return {
+                'enabled': self.auto_respond_enabled,
+                'delay_minutes': self.response_delay,
+                'total_responses': len(self.response_history),
+                'pending_count': db_stats['pending'],
+                'approved_count': db_stats['approved'],
+                'rejected_count': db_stats['rejected'],
+                'sent_count': db_stats['sent'],
+                'today_count': db_stats['today'],
+                'categories': {
+                    'cv': self.respond_to_cv,
+                    'rdv': self.respond_to_rdv,
+                    'support': self.respond_to_support,
+                    'partenariat': self.respond_to_partenariat
+                },
+                'avoid_loops': self.avoid_loops
+            }
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des statistiques: {e}")
+            return {
+                'enabled': self.auto_respond_enabled,
+                'delay_minutes': self.response_delay,
+                'total_responses': 0,
+                'pending_count': 0,
+                'approved_count': 0,
+                'rejected_count': 0,
+                'sent_count': 0,
+                'today_count': 0,
+                'categories': {
+                    'cv': self.respond_to_cv,
+                    'rdv': self.respond_to_rdv,
+                    'support': self.respond_to_support,
+                    'partenariat': self.respond_to_partenariat
+                },
+                'avoid_loops': self.avoid_loops
+            }
     
     def _generate_response(self, email: Email, email_info: Dict[str, Any]) -> Optional[str]:
         """
@@ -322,22 +361,26 @@ class AutoResponder:
         Returns:
             La réponse générée ou None.
         """
-        category = email_info.get('category', 'general')
-        sender_name = email.get_sender_name()
-        
-        # Générer des réponses spécialisées par catégorie
-        if category == 'cv':
-            return self._generate_cv_response(email, sender_name)
-        elif category == 'rdv':
-            return self._generate_meeting_response(email, sender_name, email_info)
-        elif category == 'support':
-            return self._generate_support_response(email, sender_name)
-        elif category == 'facture':
-            return self._generate_invoice_response(email, sender_name)
-        elif category == 'partenariat':
-            return self._generate_partnership_response(email, sender_name)
-        else:
-            return self._generate_general_response(email, sender_name)
+        try:
+            category = email_info.get('category', 'general')
+            sender_name = email.get_sender_name()
+            
+            # Générer des réponses spécialisées par catégorie
+            if category == 'cv':
+                return self._generate_cv_response(email, sender_name)
+            elif category == 'rdv':
+                return self._generate_meeting_response(email, sender_name, email_info)
+            elif category == 'support':
+                return self._generate_support_response(email, sender_name)
+            elif category == 'facture':
+                return self._generate_invoice_response(email, sender_name)
+            elif category == 'partenariat':
+                return self._generate_partnership_response(email, sender_name)
+            else:
+                return self._generate_general_response(email, sender_name)
+        except Exception as e:
+            logger.error(f"Erreur lors de la génération de réponse: {e}")
+            return self._generate_general_response(email, email.get_sender_name())
     
     def _get_response_reason(self, email_info: Dict[str, Any]) -> str:
         """Génère une explication de pourquoi l'IA propose cette réponse."""
@@ -356,23 +399,27 @@ class AutoResponder:
     
     def _calculate_confidence(self, email_info: Dict[str, Any]) -> float:
         """Calcule un score de confiance pour la réponse."""
-        confidence = 0.5  # Base
-        
-        # Bonus selon la catégorie
-        category = email_info.get('category', 'general')
-        if category in ['cv', 'rdv', 'support']:
-            confidence += 0.3
-        
-        # Bonus selon la priorité
-        priority = email_info.get('priority', 1)
-        if priority >= 2:
-            confidence += 0.1
-        
-        # Bonus si l'email est professionnel
-        if email_info.get('is_professional', False):
-            confidence += 0.1
-        
-        return min(confidence, 1.0)
+        try:
+            confidence = 0.5  # Base
+            
+            # Bonus selon la catégorie
+            category = email_info.get('category', 'general')
+            if category in ['cv', 'rdv', 'support']:
+                confidence += 0.3
+            
+            # Bonus selon la priorité
+            priority = email_info.get('priority', 1)
+            if priority >= 2:
+                confidence += 0.1
+            
+            # Bonus si l'email est professionnel
+            if email_info.get('is_professional', False):
+                confidence += 0.1
+            
+            return min(confidence, 1.0)
+        except Exception as e:
+            logger.error(f"Erreur lors du calcul de confiance: {e}")
+            return 0.5
     
     def _generate_cv_response(self, email: Email, sender_name: str) -> str:
         """Génère une réponse pour une candidature."""
@@ -386,9 +433,7 @@ Nous vous remercions pour l'intérêt que vous portez à notre entreprise.
 
 Cordialement,
 {self.user_name}
-Service des Ressources Humaines
-
-{self.user_signature}"""
+Service des Ressources Humaines"""
     
     def _generate_meeting_response(self, email: Email, sender_name: str, 
                                   email_info: Dict[str, Any]) -> str:
@@ -410,9 +455,7 @@ Malheureusement, le créneau que vous proposez n'est pas disponible. Pouvez-vous
 Je vous recontacterai rapidement pour convenir d'un moment qui nous convient à tous les deux.
 
 Cordialement,
-{self.user_name}
-
-{self.user_signature}"""
+{self.user_name}"""
                 else:
                     return f"""Bonjour {sender_name},
 
@@ -421,9 +464,7 @@ Merci pour votre demande de rendez-vous.
 Le créneau que vous proposez me convient parfaitement. Je vais ajouter cet événement à mon calendrier et vous enverrai une confirmation détaillée prochainement.
 
 Cordialement,
-{self.user_name}
-
-{self.user_signature}"""
+{self.user_name}"""
             except Exception as e:
                 logger.error(f"Erreur lors de la vérification du calendrier: {e}")
         
@@ -434,9 +475,7 @@ Merci pour votre demande de rendez-vous.
 Je vais vérifier mes disponibilités et vous recontacterai rapidement avec plusieurs créneaux possibles.
 
 Cordialement,
-{self.user_name}
-
-{self.user_signature}"""
+{self.user_name}"""
     
     def _generate_support_response(self, email: Email, sender_name: str) -> str:
         """Génère une réponse pour une demande de support."""
@@ -450,9 +489,7 @@ Si votre demande est urgente, n'hésitez pas à me contacter directement.
 
 Cordialement,
 {self.user_name}
-Service Support
-
-{self.user_signature}"""
+Service Support"""
     
     def _generate_invoice_response(self, email: Email, sender_name: str) -> str:
         """Génère une réponse pour une facture."""
@@ -464,9 +501,7 @@ Elle va être transmise à notre service comptable pour traitement. Le règlemen
 
 Cordialement,
 {self.user_name}
-Service Comptabilité
-
-{self.user_signature}"""
+Service Comptabilité"""
     
     def _generate_partnership_response(self, email: Email, sender_name: str) -> str:
         """Génère une réponse pour une proposition de partenariat."""
@@ -480,9 +515,7 @@ Nous vous recontacterons prochainement pour discuter des possibilités de collab
 
 Cordialement,
 {self.user_name}
-Direction Commerciale
-
-{self.user_signature}"""
+Direction Commerciale"""
     
     def _generate_general_response(self, email: Email, sender_name: str) -> str:
         """Génère une réponse générale."""
@@ -493,9 +526,7 @@ Merci pour votre email.
 J'ai bien reçu votre message et je vous répondrai dans les plus brefs délais.
 
 Cordialement,
-{self.user_name}
-
-{self.user_signature}"""
+{self.user_name}"""
     
     def _has_recent_response(self, email: Email) -> bool:
         """
@@ -510,33 +541,39 @@ Cordialement,
         if not self.avoid_loops:
             return False
         
-        sender_email = email.get_sender_email()
-        
-        if sender_email in self.response_history:
-            last_response = self.response_history[sender_email]
-            time_diff = datetime.now() - last_response
+        try:
+            sender_email = email.get_sender_email()
             
-            # Éviter les réponses trop fréquentes (dans les 24h)
-            return time_diff < timedelta(hours=24)
-        
-        return False
+            if sender_email in self.response_history:
+                last_response = self.response_history[sender_email]
+                time_diff = datetime.now() - last_response
+                
+                # Éviter les réponses trop fréquentes (dans les 24h)
+                return time_diff < timedelta(hours=24)
+            
+            return False
+        except Exception as e:
+            logger.error(f"Erreur lors de la vérification des réponses récentes: {e}")
+            return False
     
-    def _record_response_from_pending(self, response: PendingResponse):
+    def _record_response_history(self, sender_email: str):
         """
-        Enregistre qu'une réponse a été envoyée depuis une réponse en attente.
+        Enregistre qu'une réponse a été envoyée.
         
         Args:
-            response: La réponse qui a été envoyée.
+            sender_email: L'adresse email de l'expéditeur.
         """
-        sender_email = response.original_sender_email
-        self.response_history[sender_email] = datetime.now()
-        
-        # Nettoyer l'historique (garder seulement les 30 derniers jours)
-        cutoff_date = datetime.now() - timedelta(days=30)
-        self.response_history = {
-            email: timestamp for email, timestamp in self.response_history.items()
-            if timestamp > cutoff_date
-        }
+        try:
+            self.response_history[sender_email] = datetime.now()
+            
+            # Nettoyer l'historique (garder seulement les 30 derniers jours)
+            cutoff_date = datetime.now() - timedelta(days=30)
+            self.response_history = {
+                email: timestamp for email, timestamp in self.response_history.items()
+                if timestamp > cutoff_date
+            }
+        except Exception as e:
+            logger.error(f"Erreur lors de l'enregistrement de l'historique: {e}")
     
     def set_auto_respond_enabled(self, enabled: bool):
         """
@@ -545,8 +582,11 @@ Cordialement,
         Args:
             enabled: True pour activer, False pour désactiver.
         """
-        self.config_manager.set('auto_respond.enabled', enabled)
-        logger.info(f"Réponses automatiques {'activées' if enabled else 'désactivées'} via API")
+        try:
+            self.config_manager.set('auto_respond.enabled', enabled)
+            logger.info(f"Réponses automatiques {'activées' if enabled else 'désactivées'} via API")
+        except Exception as e:
+            logger.error(f"Erreur lors du changement d'état des réponses automatiques: {e}")
     
     def set_response_delay(self, delay_minutes: int):
         """
@@ -555,8 +595,11 @@ Cordialement,
         Args:
             delay_minutes: Délai en minutes.
         """
-        self.config_manager.set('auto_respond.delay_minutes', delay_minutes)
-        logger.info(f"Délai de réponse défini à {delay_minutes} minutes via API")
+        try:
+            self.config_manager.set('auto_respond.delay_minutes', delay_minutes)
+            logger.info(f"Délai de réponse défini à {delay_minutes} minutes via API")
+        except Exception as e:
+            logger.error(f"Erreur lors du changement de délai: {e}")
     
     def set_category_response(self, category: str, enabled: bool):
         """
@@ -566,9 +609,12 @@ Cordialement,
             category: Catégorie (cv, rdv, support, partenariat).
             enabled: True pour activer, False pour désactiver.
         """
-        config_key = f'auto_respond.respond_to_{category}'
-        self.config_manager.set(config_key, enabled)
-        logger.info(f"Réponse automatique pour {category}: {'activée' if enabled else 'désactivée'}")
+        try:
+            config_key = f'auto_respond.respond_to_{category}'
+            self.config_manager.set(config_key, enabled)
+            logger.info(f"Réponse automatique pour {category}: {'activée' if enabled else 'désactivée'}")
+        except Exception as e:
+            logger.error(f"Erreur lors du changement de catégorie {category}: {e}")
     
     def cleanup_old_data(self):
         """Nettoie les anciennes données."""
@@ -595,6 +641,7 @@ Cordialement,
     def __del__(self):
         """Nettoie les observers lors de la destruction."""
         try:
-            self.config_manager.remove_observer(self._on_config_changed)
-        except:
+            if hasattr(self, 'config_manager'):
+                self.config_manager.remove_observer(self._on_config_changed)
+        except Exception:
             pass
