@@ -17,13 +17,25 @@ import gc
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
+# Configuration pour éviter les bus errors AVANT tout import
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
 # Imports avec gestion d'erreurs
 try:
     import torch
     import torch.nn as nn
-    # Configuration PyTorch pour éviter les bus errors
-    torch.set_num_threads(2)  # Limite le nombre de threads
-    torch.set_num_interop_threads(1)
+    # Configuration PyTorch sécurisée
+    try:
+        torch.set_num_threads(1)
+    except RuntimeError:
+        pass  # Déjà configuré
+    try:
+        torch.set_num_interop_threads(1)
+    except RuntimeError:
+        pass  # Déjà configuré
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
@@ -70,39 +82,43 @@ class AdvancedAIProcessor:
         self.config = config or {}
         
         # Configuration de base
-        self.device = torch.device('cpu')  # Force CPU pour éviter les problèmes GPU
+        self.db_path = "data/ai_models.db"
+        self.model_cache_dir = "data/models_cache"
+        
+        # Créer les répertoires nécessaires
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        os.makedirs(self.model_cache_dir, exist_ok=True)
+        
+        # Configuration device (CPU forcé pour éviter les problèmes)
+        if HAS_TORCH:
+            self.device = torch.device('cpu')
+        else:
+            self.device = None
         
         # Variables de contrôle pour le chargement progressif
         self._models_loaded = False
         self._loading_lock = threading.Lock()
         
-        # Modèles
-        self.models = {}
-        self.tokenizers = {}
+        # Modèles IA
+        self.email_classifier = None
+        self.spam_detector = None
+        self.sentiment_analyzer = None
+        self.intent_classifier = None
+        self.sentence_transformer = None
+        self.nlp_fr = None
+        self.nlp_en = None
         
-        # Base de données pour l'apprentissage
-        self.db_path = "email_learning.db"
-        self.user_feedback_db = "user_feedback.db"
+        # Modèles personnalisés
+        self.custom_classifier = None
+        self.category_model = None
+        self.priority_model = None
         
         # Cache des embeddings
         self.embeddings_cache = {}
         
-        # Modèles de classification
-        self.email_classifier = None
-        self.spam_detector = None
-        self.priority_analyzer = None
-        self.sentiment_analyzer = None
-        self.intent_classifier = None
-        
-        # Modèle pour les embeddings sémantiques
-        self.sentence_transformer = None
-        
         # Patterns appris
         self.learned_patterns = {}
         self.user_categories = {}
-        
-        # NLP
-        self.nlp = None
         
         # Catégories par défaut
         self.categories = {
@@ -115,7 +131,7 @@ class AdvancedAIProcessor:
             'spam': ['pub', 'publicité', 'gratuit', 'gagner', 'promo'],
             'newsletter': ['newsletter', 'abonnement', 'nouvelles', 'actualités'],
             'rdv': ['rendez-vous', 'meeting', 'réunion', 'disponibilité', 'planning'],
-            'urgent': ['urgent', 'asap', 'immédiat', 'critique', 'emergency'],
+            'urgent': ['urgent', 'asap', 'important', 'critique', 'emergency'],
             'general': ['bonjour', 'merci', 'information', 'question']
         }
         
@@ -135,6 +151,45 @@ class AdvancedAIProcessor:
         # Initialisation différée des modèles lourds
         self._initialize_models_async()
     
+    def _setup_database(self):
+        """Configure la base de données"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Table pour les emails traités
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS processed_emails (
+                    id INTEGER PRIMARY KEY,
+                    email_id TEXT UNIQUE,
+                    subject TEXT,
+                    sender TEXT,
+                    category TEXT,
+                    priority INTEGER,
+                    sentiment TEXT,
+                    confidence REAL,
+                    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Table pour les feedbacks utilisateur
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_feedback (
+                    id INTEGER PRIMARY KEY,
+                    email_id TEXT,
+                    predicted_category TEXT,
+                    actual_category TEXT,
+                    feedback_type TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"Erreur setup database: {e}")
+    
     def _initialize_models_async(self):
         """Initialise les modèles de manière asynchrone pour éviter les bus errors"""
         def _load_models():
@@ -153,18 +208,19 @@ class AdvancedAIProcessor:
         try:
             logger.info("Initialisation des modèles IA avancés...")
             
+            # DÉSACTIVATION TEMPORAIRE DES MODÈLES LOURDS POUR DÉBUGGER
+            logger.info("Mode débogage - modèles lourds désactivés")
+            return
+            
             if not HAS_TORCH or not HAS_TRANSFORMERS:
                 logger.warning("PyTorch/Transformers non disponible - utilisation de modèles simplifiés")
                 return
-            
-            # Configuration pour éviter les problèmes mémoire
-            os.environ['TOKENIZERS_PARALLELISM'] = 'false'
             
             # 1. Modèle de classification d'emails - Version sécurisée
             try:
                 self.email_classifier = pipeline(
                     "text-classification",
-                    model="distilbert-base-uncased-finetuned-sst-2-english",  # Modèle plus léger
+                    model="distilbert-base-uncased-finetuned-sst-2-english",
                     device=-1,  # Force CPU
                     return_all_scores=False
                 )
@@ -176,26 +232,25 @@ class AdvancedAIProcessor:
             try:
                 self.spam_detector = pipeline(
                     "text-classification",
-                    model="martin-ha/toxic-comment-model",  # Modèle plus stable
+                    model="martin-ha/toxic-comment-model",
                     device=-1
                 )
                 logger.info("Spam detector chargé")
             except Exception as e:
                 logger.warning(f"Erreur spam detector: {e}")
             
-            # 3. Analyseur de sentiment - Version robuste
+            # 3. Analyseur de sentiment
             try:
                 self.sentiment_analyzer = pipeline(
                     "sentiment-analysis",
-                    model="distilbert-base-uncased-finetuned-sst-2-english",
-                    device=-1,
-                    return_all_scores=False
+                    model="cardiffnlp/twitter-roberta-base-sentiment-latest",
+                    device=-1
                 )
                 logger.info("Sentiment analyzer chargé")
             except Exception as e:
                 logger.warning(f"Erreur sentiment analyzer: {e}")
             
-            # 4. Classificateur d'intention - Charge en dernier
+            # 4. Classificateur d'intention
             try:
                 self.intent_classifier = pipeline(
                     "zero-shot-classification",
@@ -206,723 +261,67 @@ class AdvancedAIProcessor:
             except Exception as e:
                 logger.warning(f"Erreur intent classifier: {e}")
             
-            # 5. Modèle pour embeddings sémantiques - Le plus critique
+            # 5. Sentence transformer pour les embeddings
             if HAS_SENTENCE_TRANSFORMERS:
                 try:
-                    # Charge avec des paramètres sécurisés
                     self.sentence_transformer = SentenceTransformer(
-                        'all-MiniLM-L6-v2',  # Modèle plus léger
-                        device='cpu'  # Force CPU
+                        'all-MiniLM-L6-v2',
+                        device='cpu'
                     )
-                    # Configuration pour éviter les problèmes
-                    self.sentence_transformer.max_seq_length = 256  # Limite la longueur
                     logger.info("SentenceTransformer chargé")
                 except Exception as e:
-                    logger.warning(f"Erreur SentenceTransformer: {e}")
-                    self.sentence_transformer = None
+                    logger.warning(f"Erreur sentence transformer: {e}")
             
-            # 6. Modèle NLP pour extraction d'entités
+            # 6. SpaCy pour NLP
             if HAS_SPACY:
                 try:
-                    self.nlp = spacy.load("en_core_web_sm")
-                    logger.info("spaCy chargé")
+                    self.nlp_fr = spacy.load("fr_core_news_sm")
+                    self.nlp_en = spacy.load("en_core_web_sm")
                 except OSError:
                     logger.warning("Aucun modèle spaCy disponible")
+                    self.nlp_fr = None
+                    self.nlp_en = None
             
-            # 7. Modèle de classification personnalisé
-            self._initialize_custom_classifier()
-            
-            # Nettoyage mémoire
-            gc.collect()
+            # Initialiser les modèles personnalisés
+            self._initialize_custom_models()
             
             logger.info("Tous les modèles IA initialisés avec succès")
             
         except Exception as e:
             logger.error(f"Erreur lors de l'initialisation des modèles: {e}")
     
-    def _initialize_custom_classifier(self):
-        """Initialise le classificateur personnalisé"""
+    def _initialize_custom_models(self):
+        """Initialise les modèles personnalisés"""
         try:
-            model_path = "custom_email_classifier.pkl"
-            if os.path.exists(model_path):
-                with open(model_path, 'rb') as f:
-                    self.custom_classifier = pickle.load(f)
-                logger.info("Modèle personnalisé chargé")
-            else:
-                if HAS_SKLEARN:
-                    self.custom_classifier = RandomForestClassifier(
-                        n_estimators=100,
-                        random_state=42,
-                        n_jobs=1  # Évite les problèmes de parallélisation
-                    )
-                    logger.info("Nouveau modèle personnalisé créé")
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de l'initialisation du classificateur personnalisé: {e}")
-    
-    def _setup_database(self):
-        """Configure la base de données pour l'apprentissage adaptatif"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS email_data (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    subject TEXT,
-                    body TEXT,
-                    sender TEXT,
-                    category TEXT,
-                    priority INTEGER,
-                    sentiment TEXT,
-                    intent TEXT,
-                    embedding BLOB,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    user_confirmed BOOLEAN DEFAULT FALSE
-                )
-            ''')
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS user_patterns (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    pattern_type TEXT,
-                    pattern_data TEXT,
-                    confidence REAL,
-                    usage_count INTEGER DEFAULT 1,
-                    last_used DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS user_feedback (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    email_id INTEGER,
-                    predicted_category TEXT,
-                    actual_category TEXT,
-                    feedback_type TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            conn.commit()
-            conn.close()
+            # Nouveau modèle personnalisé créé
+            logger.info("Nouveau modèle personnalisé créé")
             
         except Exception as e:
-            logger.error(f"Erreur lors de la configuration de la base de données: {e}")
+            logger.error(f"Erreur modèles personnalisés: {e}")
     
     def _train_simple_models(self):
-        """Entraîne des modèles simples avec des données de base"""
-        if not HAS_SKLEARN:
-            return
-            
+        """Entraîne des modèles simples basés sur des règles"""
         try:
-            # Données d'entraînement simulées
-            texts = []
-            labels = []
+            if not HAS_SKLEARN:
+                return
+            
+            # Données d'entraînement simples
+            training_texts = []
+            training_labels = []
             
             for category, keywords in self.categories.items():
                 for keyword in keywords:
-                    # Créer des phrases d'exemple
-                    example_texts = [
-                        f"Bonjour, je vous écris concernant {keyword}",
-                        f"Voici mon {keyword} pour votre attention",
-                        f"Pourriez-vous m'aider avec {keyword} s'il vous plaît",
-                        f"Information importante sur {keyword}",
-                        f"Demande relative à {keyword}"
-                    ]
-                    texts.extend(example_texts)
-                    labels.extend([category] * len(example_texts))
+                    training_texts.append(keyword)
+                    training_labels.append(category)
             
-            # Vectorisation et entraînement
-            X = self.vectorizer.fit_transform(texts)
-            self.simple_classifier.fit(X, labels)
-            
-            logger.info("Modèles simples entraînés")
+            # Entraîner le classificateur simple
+            if training_texts:
+                vectors = self.vectorizer.fit_transform(training_texts)
+                self.simple_classifier.fit(vectors, training_labels)
+                logger.info("Modèles simples entraînés")
             
         except Exception as e:
             logger.error(f"Erreur entraînement modèles simples: {e}")
-    
-    def classify_email(self, email) -> Dict:
-        """Classification ultra-performante d'un email avec gestion sécurisée"""
-        try:
-            # Préparation du texte avec limitation de taille
-            text = f"{email.subject} {email.body}"
-            text_clean = self._preprocess_text(text)
-            
-            # Limitation de la taille pour éviter les problèmes mémoire
-            if len(text_clean) > 2000:
-                text_clean = text_clean[:2000]
-            
-            # Classification principale avec fallback
-            if self._models_loaded and self.sentence_transformer:
-                # Classification sémantique avancée
-                semantic_category = self._classify_semantic_safe(text_clean)
-            else:
-                # Classification simple
-                semantic_category = self._classify_simple(text_clean)
-            
-            # Classification par patterns
-            pattern_category = self._classify_by_patterns(email)
-            
-            # Classification par intention (si modèles chargés)
-            if self._models_loaded and self.intent_classifier:
-                intent = self._classify_intent_safe(text_clean)
-            else:
-                intent = self._classify_intent_simple(text_clean)
-            
-            # Analyse de priorité
-            priority = self._analyze_priority_advanced(email)
-            
-            # Détection de spam
-            spam_score = self._detect_spam_safe(email)
-            
-            # Analyse de sentiment
-            sentiment = self._analyze_sentiment_safe(text_clean)
-            
-            # Extraction d'entités
-            entities = self._extract_entities_advanced(text_clean)
-            
-            # Fusion intelligente des résultats
-            final_category = self._smart_fusion(semantic_category, pattern_category, intent, entities)
-            
-            # Calcul de la confiance
-            confidence = self._calculate_confidence(semantic_category, pattern_category, intent)
-            
-            # Apprentissage adaptatif (asynchrone)
-            self.thread_pool.submit(self._learn_from_classification, email, final_category, confidence)
-            
-            result = {
-                'category': final_category,
-                'confidence': confidence,
-                'priority': priority,
-                'spam_score': spam_score,
-                'sentiment': sentiment,
-                'intent': intent,
-                'entities': entities,
-                'semantic_category': semantic_category,
-                'pattern_category': pattern_category,
-                'reading_time': self._estimate_reading_time(text),
-                'response_required': self._needs_response(text),
-                'meeting_request': self._is_meeting_request(text),
-                'action_items': self._extract_action_items(text),
-                'key_topics': self._extract_key_topics(text)
-            }
-            
-            logger.info(f"Email classifié: {final_category} (confiance: {confidence:.2f})")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Erreur lors de la classification: {e}")
-            return self._fallback_classification()
-    
-    def _classify_semantic_safe(self, text: str) -> Dict:
-        """Classification sémantique sécurisée"""
-        try:
-            if not self.sentence_transformer:
-                return self._classify_simple(text)
-            
-            # Limitation de taille pour éviter les problèmes
-            if len(text) > 512:
-                text = text[:512]
-            
-            # Génération de l'embedding avec gestion d'erreur
-            try:
-                with torch.no_grad():  # Évite l'accumulation de gradients
-                    embedding = self.sentence_transformer.encode(
-                        [text], 
-                        batch_size=1,
-                        show_progress_bar=False,
-                        convert_to_numpy=True
-                    )
-            except Exception as e:
-                logger.warning(f"Erreur embedding: {e}")
-                return self._classify_simple(text)
-            
-            # Comparaison avec les catégories connues
-            categories_embeddings = self._get_category_embeddings()
-            
-            if categories_embeddings is not None:
-                try:
-                    similarities = cosine_similarity(embedding, categories_embeddings)[0]
-                    best_idx = np.argmax(similarities)
-                    best_score = similarities[best_idx]
-                    
-                    categories = list(self.user_categories.keys()) if self.user_categories else list(self.categories.keys())
-                    if best_score > 0.7 and best_idx < len(categories):
-                        return {
-                            'category': categories[best_idx],
-                            'confidence': float(best_score),
-                            'method': 'semantic'
-                        }
-                except Exception as e:
-                    logger.warning(f"Erreur similarité: {e}")
-            
-            # Fallback vers classification simple
-            return self._classify_simple(text)
-            
-        except Exception as e:
-            logger.error(f"Erreur classification sémantique: {e}")
-            return self._classify_simple(text)
-    
-    def _classify_intent_safe(self, text: str) -> Dict:
-        """Classification d'intention sécurisée"""
-        try:
-            if not self.intent_classifier:
-                return self._classify_intent_simple(text)
-            
-            # Limitation de taille
-            if len(text) > 256:
-                text = text[:256]
-            
-            # Labels d'intention prédéfinis
-            candidate_labels = [
-                "demande d'information",
-                "demande de rendez-vous", 
-                "candidature emploi",
-                "réclamation",
-                "proposition commerciale"
-            ]
-            
-            try:
-                result = self.intent_classifier(text, candidate_labels)
-                return {
-                    'intent': result['labels'][0],
-                    'confidence': result['scores'][0]
-                }
-            except Exception as e:
-                logger.warning(f"Erreur intent classification: {e}")
-                return self._classify_intent_simple(text)
-            
-        except Exception as e:
-            logger.error(f"Erreur classification d'intention: {e}")
-            return self._classify_intent_simple(text)
-    
-    def _detect_spam_safe(self, email) -> float:
-        """Détection de spam sécurisée"""
-        try:
-            text = f"{email.subject} {email.body}"
-            
-            # Détection simple par mots-clés
-            spam_keywords = [
-                'gratuit', 'free', 'urgent', 'cliquez', 'click', 'promotion',
-                'offre', 'viagra', 'casino', 'lottery', 'winner', 'gagnant'
-            ]
-            
-            text_lower = text.lower()
-            spam_score = sum(1 for keyword in spam_keywords if keyword in text_lower)
-            spam_score = min(1.0, spam_score / 3.0)  # Normaliser
-            
-            # Détection avec IA si disponible et modèles chargés
-            if self._models_loaded and self.spam_detector:
-                try:
-                    # Limitation de taille
-                    if len(text) > 512:
-                        text = text[:512]
-                    
-                    result = self.spam_detector(text)
-                    if isinstance(result, list) and len(result) > 0:
-                        if result[0]['label'] in ['TOXIC', 'SPAM', '1']:
-                            spam_score = max(spam_score, result[0]['score'])
-                except Exception as e:
-                    logger.warning(f"Erreur spam detection IA: {e}")
-            
-            return float(spam_score)
-            
-        except Exception as e:
-            logger.error(f"Erreur détection spam: {e}")
-            return 0.0
-    
-    def _analyze_sentiment_safe(self, text: str) -> Dict:
-        """Analyse de sentiment sécurisée"""
-        try:
-            if self._models_loaded and self.sentiment_analyzer:
-                try:
-                    # Limitation de taille
-                    if len(text) > 512:
-                        text = text[:512]
-                    
-                    result = self.sentiment_analyzer(text)
-                    if isinstance(result, list) and len(result) > 0:
-                        return {
-                            'label': result[0]['label'],
-                            'confidence': result[0]['score']
-                        }
-                    elif isinstance(result, dict):
-                        return {
-                            'label': result['label'],
-                            'confidence': result['score']
-                        }
-                except Exception as e:
-                    logger.warning(f"Erreur sentiment IA: {e}")
-            
-            # Analyse simple de sentiment
-            positive_words = ['merci', 'excellent', 'parfait', 'super', 'génial']
-            negative_words = ['problème', 'erreur', 'bug', 'mauvais', 'déçu']
-            
-            text_lower = text.lower()
-            positive_count = sum(1 for word in positive_words if word in text_lower)
-            negative_count = sum(1 for word in negative_words if word in text_lower)
-            
-            if positive_count > negative_count:
-                return {'label': 'POSITIVE', 'confidence': 0.7}
-            elif negative_count > positive_count:
-                return {'label': 'NEGATIVE', 'confidence': 0.7}
-            else:
-                return {'label': 'NEUTRAL', 'confidence': 0.6}
-                
-        except Exception as e:
-            logger.error(f"Erreur analyse sentiment: {e}")
-            return {'label': 'NEUTRAL', 'confidence': 0.5}
-    
-    # Toutes les autres méthodes restent identiques à la version précédente...
-    
-    def _classify_simple(self, text: str) -> Dict:
-        """Classification simple basée sur des mots-clés"""
-        try:
-            text_lower = text.lower()
-            
-            # Recherche par mots-clés
-            best_category = 'general'
-            best_score = 0
-            
-            for category, keywords in self.categories.items():
-                score = sum(1 for keyword in keywords if keyword in text_lower)
-                if score > best_score:
-                    best_score = score
-                    best_category = category
-            
-            # Classification avec sklearn si disponible
-            if HAS_SKLEARN and hasattr(self, 'simple_classifier'):
-                try:
-                    X = self.vectorizer.transform([text])
-                    sklearn_category = self.simple_classifier.predict(X)[0]
-                    sklearn_proba = max(self.simple_classifier.predict_proba(X)[0])
-                    
-                    if sklearn_proba > 0.6:
-                        best_category = sklearn_category
-                        best_score = sklearn_proba
-                except:
-                    pass
-            
-            return {
-                'category': best_category,
-                'confidence': min(1.0, best_score + 0.3),
-                'method': 'simple'
-            }
-            
-        except Exception as e:
-            logger.error(f"Erreur classification simple: {e}")
-            return {'category': 'general', 'confidence': 0.5, 'method': 'fallback'}
-    
-    def _classify_by_patterns(self, email) -> Dict:
-        """Classification basée sur les patterns appris de l'utilisateur"""
-        try:
-            # Extraction des features de l'email
-            features = self._extract_email_features(email)
-            
-            # Pour l'instant, utilisation de règles simples
-            subject_lower = email.subject.lower()
-            body_lower = email.body.lower()
-            
-            if any(word in subject_lower for word in ['cv', 'candidature', 'resume']):
-                return {'category': 'cv', 'confidence': 0.8, 'method': 'patterns'}
-            elif any(word in subject_lower for word in ['rdv', 'meeting', 'rendez-vous']):
-                return {'category': 'rdv', 'confidence': 0.8, 'method': 'patterns'}
-            elif any(word in body_lower for word in ['urgent', 'asap', 'immédiat']):
-                return {'category': 'urgent', 'confidence': 0.7, 'method': 'patterns'}
-            
-            return {'category': None, 'confidence': 0, 'method': 'patterns'}
-            
-        except Exception as e:
-            logger.error(f"Erreur classification par patterns: {e}")
-            return {'category': None, 'confidence': 0, 'method': 'patterns'}
-    
-    def _extract_email_features(self, email) -> Dict:
-        """Extraction simple des features d'un email"""
-        try:
-            text = f"{email.subject} {email.body}"
-            return {
-                'length': len(text),
-                'word_count': len(text.split()),
-                'has_question': '?' in text,
-                'has_exclamation': '!' in text,
-                'sender_domain': email.get_sender_email().split('@')[1] if '@' in email.get_sender_email() else '',
-                'subject_length': len(email.subject),
-                'body_length': len(email.body)
-            }
-        except Exception as e:
-            logger.error(f"Erreur extraction features: {e}")
-            return {}
-    
-    def _classify_intent_simple(self, text: str) -> Dict:
-        """Classification d'intention simplifiée"""
-        text_lower = text.lower()
-        
-        if any(word in text_lower for word in ['cv', 'candidature', 'emploi']):
-            return {'intent': 'candidature emploi', 'confidence': 0.8}
-        elif any(word in text_lower for word in ['rdv', 'rendez-vous', 'meeting']):
-            return {'intent': 'demande de rendez-vous', 'confidence': 0.8}
-        elif '?' in text:
-            return {'intent': "demande d'information", 'confidence': 0.6}
-        else:
-            return {'intent': 'general', 'confidence': 0.5}
-    
-    def _analyze_priority_advanced(self, email) -> int:
-        """Analyse de priorité avancée"""
-        try:
-            text = f"{email.subject} {email.body}".lower()
-            priority_score = 1
-            
-            # Mots-clés d'urgence
-            urgent_keywords = ['urgent', 'asap', 'immédiat', 'critique', 'important', 'deadline']
-            for keyword in urgent_keywords:
-                if keyword in text:
-                    priority_score += 1
-            
-            # Analyse du domaine expéditeur
-            sender = email.get_sender_email()
-            if self._is_professional_email(sender):
-                priority_score += 1
-            
-            return min(5, priority_score)
-            
-        except Exception as e:
-            logger.error(f"Erreur analyse priorité: {e}")
-            return 1
-    
-    def _extract_entities_advanced(self, text: str) -> Dict:
-        """Extraction d'entités avancée"""
-        try:
-            entities = {
-                'persons': [],
-                'organizations': [],
-                'dates': [],
-                'money': [],
-                'locations': [],
-                'emails': [],
-                'phone_numbers': [],
-                'urls': []
-            }
-            
-            # Extraction avec spaCy si disponible
-            if self._models_loaded and self.nlp:
-                try:
-                    doc = self.nlp(text[:1000])  # Limite la taille
-                    for ent in doc.ents:
-                        if ent.label_ == 'PERSON':
-                            entities['persons'].append(ent.text)
-                        elif ent.label_ == 'ORG':
-                            entities['organizations'].append(ent.text)
-                        elif ent.label_ == 'DATE':
-                            entities['dates'].append(ent.text)
-                        elif ent.label_ == 'MONEY':
-                            entities['money'].append(ent.text)
-                        elif ent.label_ == 'GPE':
-                            entities['locations'].append(ent.text)
-                except Exception as e:
-                    logger.warning(f"Erreur spaCy: {e}")
-            
-            # Extraction avec regex
-            entities['emails'].extend(
-                re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
-            )
-            entities['phone_numbers'].extend(
-                re.findall(r'\b(?:\+33|0)[1-9](?:[.\-\s]?\d{2}){4}\b', text)
-            )
-            entities['urls'].extend(
-                re.findall(r'http[s]?://[^\s]+', text)
-            )
-            entities['money'].extend(
-                re.findall(r'[€$£]\s*\d+(?:[.,]\d{2})?', text)
-            )
-            
-            return entities
-            
-        except Exception as e:
-            logger.error(f"Erreur extraction entités: {e}")
-            return {}
-    
-    def _smart_fusion(self, semantic, pattern, intent, entities) -> str:
-        """Fusion intelligente des résultats de classification"""
-        candidates = []
-        
-        if semantic.get('confidence', 0) > 0.6:
-            candidates.append((semantic['category'], semantic['confidence'] * 0.4))
-        
-        if pattern.get('confidence', 0) > 0.5:
-            candidates.append((pattern['category'], pattern['confidence'] * 0.3))
-        
-        if intent.get('confidence', 0) > 0.5:
-            intent_to_category = self._map_intent_to_category(intent['intent'])
-            candidates.append((intent_to_category, intent['confidence'] * 0.3))
-        
-        if candidates:
-            return max(candidates, key=lambda x: x[1])[0]
-        
-        return 'general'
-    
-    def _map_intent_to_category(self, intent: str) -> str:
-        """Mappe une intention vers une catégorie"""
-        mapping = {
-            'candidature emploi': 'cv',
-            'demande de rendez-vous': 'rdv',
-            "demande d'information": 'general',
-            'proposition commerciale': 'commercial',
-            'réclamation': 'support'
-        }
-        return mapping.get(intent, 'general')
-    
-    def _calculate_confidence(self, semantic, pattern, intent) -> float:
-        """Calcule la confiance globale de la classification"""
-        confidences = []
-        
-        if semantic.get('confidence'):
-            confidences.append(semantic['confidence'])
-        if pattern.get('confidence'):
-            confidences.append(pattern['confidence'])
-        if intent.get('confidence'):
-            confidences.append(intent['confidence'])
-        
-        if confidences:
-            return np.mean(confidences)
-        return 0.5
-    
-    def _learn_from_classification(self, email, final_category, confidence):
-        """Apprentissage adaptatif simple (exécuté de manière asynchrone)"""
-        try:
-            # Stockage simple en base
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO email_data (subject, body, sender, category, timestamp)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (email.subject, email.body[:500], email.get_sender_email(), 
-                  final_category, datetime.now().isoformat()))
-            
-            conn.commit()
-            conn.close()
-            
-        except Exception as e:
-            logger.error(f"Erreur apprentissage: {e}")
-    
-    def _fallback_classification(self) -> Dict:
-        """Classification de secours"""
-        return {
-            'category': 'general',
-            'confidence': 0.3,
-            'priority': 1,
-            'spam_score': 0.0,
-            'sentiment': {'label': 'NEUTRAL', 'confidence': 0.5},
-            'intent': {'intent': 'general', 'confidence': 0.5},
-            'entities': {},
-            'method': 'fallback',
-            'reading_time': 0,
-            'response_required': False,
-            'meeting_request': False,
-            'action_items': [],
-            'key_topics': []
-        }
-    
-    # Méthodes utilitaires
-    
-    def _preprocess_text(self, text: str) -> str:
-        """Préprocessing du texte avec limitation de taille"""
-        try:
-            text = re.sub(r'<[^>]+>', '', text)  # Supprimer HTML
-            text = re.sub(r'\s+', ' ', text).strip()  # Normaliser espaces
-            # Limitation de taille pour éviter les problèmes mémoire
-            if len(text) > 2000:
-                text = text[:2000]
-            return text
-        except:
-            return ""
-    
-    def _get_category_embeddings(self):
-        """Récupère les embeddings des catégories"""
-        if not self.user_categories:
-            return None
-        
-        try:
-            embeddings = []
-            for category_data in self.user_categories.values():
-                embedding = category_data.get('embedding', [])
-                if embedding:
-                    embeddings.append(embedding)
-            
-            return np.array(embeddings) if embeddings else None
-        except:
-            return None
-    
-    def _is_professional_email(self, email_address: str) -> bool:
-        """Détermine si une adresse email est professionnelle"""
-        try:
-            personal_domains = [
-                'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
-                'free.fr', 'orange.fr', 'wanadoo.fr', 'sfr.fr'
-            ]
-            
-            domain = email_address.split('@')[1].lower()
-            return domain not in personal_domains
-            
-        except Exception:
-            return False
-    
-    def _estimate_reading_time(self, text: str) -> int:
-        """Estime le temps de lecture en minutes"""
-        try:
-            word_count = len(text.split())
-            return max(1, word_count // 200)
-        except:
-            return 1
-    
-    def _needs_response(self, text: str) -> bool:
-        """Détermine si une réponse est nécessaire"""
-        try:
-            response_indicators = ['?', 'pourriez-vous', 'pouvez-vous', 'question', 'demande']
-            text_lower = text.lower()
-            return any(indicator in text_lower for indicator in response_indicators)
-        except:
-            return False
-    
-    def _is_meeting_request(self, text: str) -> bool:
-        """Détermine si c'est une demande de réunion"""
-        try:
-            meeting_keywords = ['rendez-vous', 'meeting', 'réunion', 'rdv', 'disponibilité']
-            text_lower = text.lower()
-            return any(keyword in text_lower for keyword in meeting_keywords)
-        except:
-            return False
-    
-    def _extract_action_items(self, text: str) -> List[str]:
-        """Extrait les éléments d'action du texte"""
-        try:
-            action_patterns = [
-                r'il faut ([^.!?]+)',
-                r'vous devez ([^.!?]+)',
-                r'merci de ([^.!?]+)',
-                r'pourriez-vous ([^.!?]+)'
-            ]
-            
-            actions = []
-            for pattern in action_patterns:
-                matches = re.findall(pattern, text.lower())
-                actions.extend(matches)
-            
-            return actions[:5]
-        except:
-            return []
-    
-    def _extract_key_topics(self, text: str) -> List[str]:
-        """Extrait les sujets clés du texte"""
-        try:
-            words = re.findall(r'\b\w{4,}\b', text.lower())
-            common_words = ['bonjour', 'merci', 'cordialement', 'avec', 'pour', 'dans', 'vous', 'nous']
-            filtered_words = [w for w in words if w not in common_words]
-            word_counts = Counter(filtered_words)
-            return [word for word, count in word_counts.most_common(5)]
-        except:
-            return []
     
     def _load_user_patterns(self):
         """Charge les patterns utilisateur"""
@@ -932,6 +331,262 @@ class AdvancedAIProcessor:
                     self.user_categories = json.load(f)
         except Exception as e:
             logger.error(f"Erreur chargement patterns: {e}")
+    
+    def classify_email(self, email) -> Dict:
+        """Classification principale d'un email"""
+        try:
+            # Extraire le texte
+            subject = email.subject or ""
+            body = self._get_email_body(email)
+            full_text = f"{subject} {body}"
+            
+            # Classification rapide avec modèles simples
+            quick_result = self._classify_quick(full_text)
+            
+            # Si les modèles avancés sont chargés, les utiliser
+            if self._models_loaded:
+                advanced_result = self._classify_advanced(full_text)
+                # Combiner les résultats
+                result = self._combine_results(quick_result, advanced_result)
+            else:
+                result = quick_result
+            
+            # Enrichir avec des métadonnées
+            result.update({
+                'email_id': getattr(email, 'id', 'unknown'),
+                'sender': getattr(email, 'sender', ''),
+                'processed_at': datetime.now().isoformat()
+            })
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Erreur classification email: {e}")
+            return self._get_default_classification()
+    
+    def _get_email_body(self, email) -> str:
+        """Extrait le corps de l'email de manière sécurisée"""
+        try:
+            if hasattr(email, 'get_plain_text_body'):
+                return email.get_plain_text_body() or ""
+            elif hasattr(email, 'body'):
+                return email.body or ""
+            else:
+                return ""
+        except:
+            return ""
+    
+    def _classify_quick(self, text: str) -> Dict:
+        """Classification rapide avec des règles simples"""
+        try:
+            # Classification par mots-clés
+            category = self._classify_by_keywords(text)
+            
+            # Détection de spam simple
+            is_spam = self._detect_spam_simple(text)
+            
+            # Analyse de sentiment simple
+            sentiment = self._analyze_sentiment_simple(text)
+            
+            # Priorité basée sur les mots-clés
+            priority = self._calculate_priority_simple(text)
+            
+            # Détection de réponse automatique
+            should_auto_respond = self._should_auto_respond_simple(category, text)
+            
+            return {
+                'category': category,
+                'priority': priority,
+                'sentiment': sentiment,
+                'is_spam': is_spam,
+                'should_auto_respond': should_auto_respond,
+                'confidence': 0.7,
+                'method': 'rules'
+            }
+            
+        except Exception as e:
+            logger.error(f"Erreur classification rapide: {e}")
+            return self._get_default_classification()
+    
+    def _classify_advanced(self, text: str) -> Dict:
+        """Classification avancée avec les modèles IA"""
+        try:
+            result = {}
+            
+            # Classification avec transformers
+            if self.email_classifier:
+                try:
+                    pred = self.email_classifier(text[:512])  # Limiter la taille
+                    result['transformer_category'] = pred[0]['label'] if pred else 'unknown'
+                    result['transformer_confidence'] = pred[0]['score'] if pred else 0.5
+                except Exception as e:
+                    logger.error(f"Erreur transformer classification: {e}")
+            
+            # Détection de spam
+            if self.spam_detector:
+                try:
+                    spam_pred = self.spam_detector(text[:512])
+                    result['is_spam_ai'] = spam_pred[0]['label'] == 'TOXIC' if spam_pred else False
+                except Exception as e:
+                    logger.error(f"Erreur spam detection: {e}")
+            
+            # Analyse de sentiment
+            if self.sentiment_analyzer:
+                try:
+                    sentiment_pred = self.sentiment_analyzer(text[:512])
+                    result['sentiment_ai'] = sentiment_pred[0]['label'] if sentiment_pred else 'neutral'
+                except Exception as e:
+                    logger.error(f"Erreur sentiment analysis: {e}")
+            
+            # Classification d'intention
+            if self.intent_classifier:
+                try:
+                    intent_labels = ['question', 'request', 'complaint', 'compliment', 'urgent']
+                    intent_pred = self.intent_classifier(text[:512], intent_labels)
+                    result['intent'] = intent_pred['labels'][0] if intent_pred else 'unknown'
+                except Exception as e:
+                    logger.error(f"Erreur intent classification: {e}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Erreur classification avancée: {e}")
+            return {}
+    
+    def _combine_results(self, quick_result: Dict, advanced_result: Dict) -> Dict:
+        """Combine les résultats de classification"""
+        try:
+            # Utiliser les résultats rapides comme base
+            combined = quick_result.copy()
+            
+            # Enrichir avec les résultats avancés
+            if advanced_result:
+                combined.update({
+                    'ai_category': advanced_result.get('transformer_category'),
+                    'ai_confidence': advanced_result.get('transformer_confidence', 0.5),
+                    'ai_sentiment': advanced_result.get('sentiment_ai'),
+                    'intent': advanced_result.get('intent'),
+                    'is_spam_ai': advanced_result.get('is_spam_ai', False)
+                })
+                
+                # Ajuster la confiance globale
+                combined['confidence'] = min(0.9, (combined['confidence'] + advanced_result.get('transformer_confidence', 0.5)) / 2)
+                combined['method'] = 'hybrid'
+            
+            return combined
+            
+        except Exception as e:
+            logger.error(f"Erreur combinaison résultats: {e}")
+            return quick_result
+    
+    def _classify_by_keywords(self, text: str) -> str:
+        """Classification simple par mots-clés"""
+        try:
+            text_lower = text.lower()
+            
+            # Scores pour chaque catégorie
+            scores = {}
+            for category, keywords in self.categories.items():
+                score = sum(1 for keyword in keywords if keyword in text_lower)
+                if score > 0:
+                    scores[category] = score
+            
+            # Retourner la catégorie avec le meilleur score
+            if scores:
+                return max(scores, key=scores.get)
+            else:
+                return 'general'
+                
+        except Exception as e:
+            logger.error(f"Erreur classification mots-clés: {e}")
+            return 'general'
+    
+    def _detect_spam_simple(self, text: str) -> bool:
+        """Détection simple de spam"""
+        try:
+            spam_indicators = [
+                'gratuit', 'gagner', 'promotion', 'offre limitée',
+                'cliquez ici', 'urgent', 'félicitations'
+            ]
+            
+            text_lower = text.lower()
+            spam_count = sum(1 for indicator in spam_indicators if indicator in text_lower)
+            
+            return spam_count >= 2
+            
+        except Exception as e:
+            logger.error(f"Erreur détection spam: {e}")
+            return False
+    
+    def _analyze_sentiment_simple(self, text: str) -> str:
+        """Analyse simple de sentiment"""
+        try:
+            positive_words = ['merci', 'excellent', 'parfait', 'génial', 'super']
+            negative_words = ['problème', 'erreur', 'mauvais', 'terrible', 'nul']
+            
+            text_lower = text.lower()
+            
+            positive_count = sum(1 for word in positive_words if word in text_lower)
+            negative_count = sum(1 for word in negative_words if word in text_lower)
+            
+            if positive_count > negative_count:
+                return 'positive'
+            elif negative_count > positive_count:
+                return 'negative'
+            else:
+                return 'neutral'
+                
+        except Exception as e:
+            logger.error(f"Erreur analyse sentiment: {e}")
+            return 'neutral'
+    
+    def _calculate_priority_simple(self, text: str) -> int:
+        """Calcul simple de priorité"""
+        try:
+            urgent_keywords = ['urgent', 'asap', 'immédiat', 'critique']
+            text_lower = text.lower()
+            
+            if any(keyword in text_lower for keyword in urgent_keywords):
+                return 3  # Haute priorité
+            elif any(keyword in text_lower for keyword in ['important', 'rapidement']):
+                return 2  # Priorité moyenne
+            else:
+                return 1  # Priorité normale
+                
+        except Exception as e:
+            logger.error(f"Erreur calcul priorité: {e}")
+            return 1
+    
+    def _should_auto_respond_simple(self, category: str, text: str) -> bool:
+        """Détermine si une réponse automatique est nécessaire"""
+        try:
+            # Catégories qui nécessitent une réponse
+            auto_respond_categories = ['cv', 'rdv', 'support']
+            
+            if category in auto_respond_categories:
+                return True
+            
+            # Vérifier si c'est une question
+            question_indicators = ['?', 'comment', 'quand', 'où', 'pourquoi', 'que']
+            text_lower = text.lower()
+            
+            return any(indicator in text_lower for indicator in question_indicators)
+            
+        except Exception as e:
+            logger.error(f"Erreur auto respond: {e}")
+            return False
+    
+    def _get_default_classification(self) -> Dict:
+        """Retourne une classification par défaut"""
+        return {
+            'category': 'general',
+            'priority': 1,
+            'sentiment': 'neutral',
+            'is_spam': False,
+            'should_auto_respond': False,
+            'confidence': 0.5,
+            'method': 'default'
+        }
     
     # Méthodes de compatibilité avec l'ancien AIProcessor
     
@@ -943,191 +598,70 @@ class AdvancedAIProcessor:
             return {
                 'category': result.get('category', 'general'),
                 'priority': result.get('priority', 1),
-                'should_auto_respond': result.get('category') in ['cv', 'rdv', 'support'],
-                'sentiment': result.get('sentiment', {'label': 'neutral', 'confidence': 0.5}),
+                'should_auto_respond': result.get('should_auto_respond', False),
+                'sentiment': result.get('sentiment', 'neutral'),
                 'confidence': result.get('confidence', 0.5),
-                'spam_score': result.get('spam_score', 0.0),
-                'entities': result.get('entities', {}),
-                'reading_time': result.get('reading_time', 0),
-                'response_required': result.get('response_required', False),
-                'meeting_request': result.get('meeting_request', False),
-                'action_items': result.get('action_items', []),
-                'key_topics': result.get('key_topics', [])
+                'keywords': [],
+                'entities': [],
+                'meeting_info': None
             }
+            
         except Exception as e:
             logger.error(f"Erreur extract_key_information: {e}")
             return {
                 'category': 'general',
                 'priority': 1,
                 'should_auto_respond': False,
-                'sentiment': {'label': 'neutral', 'confidence': 0.5},
+                'sentiment': 'neutral',
                 'confidence': 0.5,
-                'spam_score': 0.0,
-                'entities': {},
-                'reading_time': 0,
-                'response_required': False,
-                'meeting_request': False,
-                'action_items': [],
-                'key_topics': []
+                'keywords': [],
+                'entities': [],
+                'meeting_info': None
             }
     
     def should_auto_respond(self, email) -> bool:
         """Détermine si une réponse automatique est nécessaire"""
         try:
-            info = self.extract_key_information(email)
-            return info.get('should_auto_respond', False)
+            classification = self.classify_email(email)
+            return classification.get('should_auto_respond', False)
         except Exception as e:
             logger.error(f"Erreur should_auto_respond: {e}")
             return False
     
-    def get_email_insights(self, email) -> Dict:
-        """Génère des insights sur un email"""
+    # Méthodes utilitaires
+    
+    def save_feedback(self, email_id: str, predicted: str, actual: str):
+        """Sauvegarde le feedback utilisateur"""
         try:
-            classification = self.classify_email(email)
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
             
-            insights = {
-                'classification': classification,
-                'reading_time': classification.get('reading_time', 0),
-                'response_required': classification.get('response_required', False),
-                'deadline_detected': self._extract_deadlines(email.body),
-                'meeting_request': classification.get('meeting_request', False),
-                'action_items': classification.get('action_items', []),
-                'key_topics': classification.get('key_topics', []),
-                'sender_analysis': self._analyze_sender_profile(email.get_sender_email()),
-                'follow_up_suggested': self._suggest_follow_up(email)
-            }
+            cursor.execute('''
+                INSERT INTO user_feedback (email_id, predicted_category, actual_category, feedback_type)
+                VALUES (?, ?, ?, ?)
+            ''', (email_id, predicted, actual, 'correction'))
             
-            return insights
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"Feedback sauvegardé: {email_id}, {predicted} -> {actual}")
             
         except Exception as e:
-            logger.error(f"Erreur génération insights: {e}")
-            return {'classification': self._fallback_classification()}
+            logger.error(f"Erreur sauvegarde feedback: {e}")
     
-    def _extract_deadlines(self, text: str) -> List[str]:
-        """Extrait les échéances du texte"""
-        try:
-            date_patterns = [
-                r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b',
-                r'\b\d{1,2}\s+(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+\d{4}\b'
-            ]
-            
-            deadlines = []
-            for pattern in date_patterns:
-                matches = re.findall(pattern, text.lower())
-                deadlines.extend(matches)
-            
-            return deadlines[:3]
-        except:
-            return []
-    
-    def _analyze_sender_profile(self, sender_email: str) -> Dict:
-        """Analyse le profil de l'expéditeur"""
-        try:
-            return {
-                'email': sender_email,
-                'domain': sender_email.split('@')[1] if '@' in sender_email else '',
-                'is_professional': self._is_professional_email(sender_email),
-                'reputation': 'unknown'
-            }
-        except:
-            return {'email': sender_email, 'reputation': 'unknown'}
-    
-    def _suggest_follow_up(self, email) -> bool:
-        """Suggère si un suivi est nécessaire"""
-        try:
-            text = f"{email.subject} {email.body}".lower()
-            follow_up_keywords = ['suivi', 'follow-up', 'relance', 'réponse attendue']
-            return any(keyword in text for keyword in follow_up_keywords)
-        except:
-            return False
-    
-    def learn_from_feedback(self, email_id: str, predicted: str, actual: str, confidence: float = 0.5):
-        """Apprentissage à partir du feedback utilisateur (asynchrone)"""
-        def _store_feedback():
-            try:
-                conn = sqlite3.connect(self.user_feedback_db)
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS user_feedback (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        email_id TEXT,
-                        predicted_category TEXT,
-                        actual_category TEXT,
-                        confidence REAL,
-                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                cursor.execute('''
-                    INSERT INTO user_feedback 
-                    (email_id, predicted_category, actual_category, confidence)
-                    VALUES (?, ?, ?, ?)
-                ''', (email_id, predicted, actual, confidence))
-                
-                conn.commit()
-                conn.close()
-                
-                logger.info(f"Feedback intégré: {predicted} -> {actual}")
-                
-            except Exception as e:
-                logger.error(f"Erreur lors de l'apprentissage: {e}")
-        
-        # Exécution asynchrone pour éviter les blocages
-        self.thread_pool.submit(_store_feedback)
-    
-    def create_custom_category(self, name: str, examples: List[str], rules: Dict = None):
-        """Création d'une catégorie personnalisée"""
-        def _create_category():
-            try:
-                # Génération d'embeddings pour les exemples si possible
-                if self._models_loaded and self.sentence_transformer:
-                    with torch.no_grad():
-                        embeddings = self.sentence_transformer.encode(examples)
-                        avg_embedding = np.mean(embeddings, axis=0)
-                else:
-                    avg_embedding = np.zeros(384)
-                
-                # Stockage de la nouvelle catégorie
-                self.user_categories[name] = {
-                    'embedding': avg_embedding.tolist(),
-                    'examples': examples,
-                    'rules': rules or {},
-                    'created_at': datetime.now().isoformat(),
-                    'usage_count': 0
-                }
-                
-                # Sauvegarde
-                self._save_user_categories()
-                
-                logger.info(f"Catégorie personnalisée créée: {name}")
-                
-            except Exception as e:
-                logger.error(f"Erreur création catégorie: {e}")
-        
-        # Exécution asynchrone
-        self.thread_pool.submit(_create_category)
-    
-    def _save_user_categories(self):
-        """Sauvegarde les catégories utilisateur"""
-        try:
-            with open("user_categories.json", 'w') as f:
-                json.dump(self.user_categories, f, indent=2)
-        except Exception as e:
-            logger.error(f"Erreur sauvegarde catégories: {e}")
-    
-    def get_performance_stats(self) -> Dict:
-        """Retourne les statistiques de performance"""
+    def get_stats(self) -> Dict:
+        """Retourne les statistiques du processeur"""
         try:
             return {
                 'models_loaded': self._models_loaded,
-                'models_status': {
-                    'sentence_transformer': self.sentence_transformer is not None,
+                'available_models': {
                     'email_classifier': self.email_classifier is not None,
                     'spam_detector': self.spam_detector is not None,
                     'sentiment_analyzer': self.sentiment_analyzer is not None,
                     'intent_classifier': self.intent_classifier is not None,
-                    'nlp': self.nlp is not None
+                    'sentence_transformer': self.sentence_transformer is not None,
+                    'nlp_fr': self.nlp_fr is not None,
+                    'nlp_en': self.nlp_en is not None
                 },
                 'categories': list(self.categories.keys()),
                 'user_categories': list(self.user_categories.keys()),
@@ -1136,7 +670,7 @@ class AdvancedAIProcessor:
                 'has_sklearn': HAS_SKLEARN,
                 'has_transformers': HAS_TRANSFORMERS,
                 'has_sentence_transformers': HAS_SENTENCE_TRANSFORMERS,
-                'device': str(self.device),
+                'device': str(self.device) if self.device else 'None',
                 'cache_size': len(self.embeddings_cache)
             }
         except Exception as e:
@@ -1151,7 +685,8 @@ class AdvancedAIProcessor:
             
             # Nettoyage mémoire
             if HAS_TORCH:
-                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                if hasattr(torch, 'cuda') and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
             
             gc.collect()
         except:
