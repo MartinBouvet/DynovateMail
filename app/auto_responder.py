@@ -9,7 +9,7 @@ import json
 from models.email_model import Email
 from models.pending_response_model import PendingResponse, ResponseStatus
 from gmail_client import GmailClient
-from ai_processor import AIProcessor
+from ai_processor import AdvancedAIProcessor as AIProcessor
 from calendar_manager import CalendarManager
 from pending_response_manager import PendingResponseManager
 from utils.config import get_config_manager
