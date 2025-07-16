@@ -1,367 +1,306 @@
+#!/usr/bin/env python3
 """
-Gestionnaire de calendrier intégré à la solution email.
+Gestionnaire de calendrier avec base de données SQLite.
 """
 import logging
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
-import json
 import sqlite3
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta
 from pathlib import Path
-
 from models.calendar_model import CalendarEvent
-from models.email_model import Email
 
 logger = logging.getLogger(__name__)
 
 class CalendarManager:
-    """Gestionnaire de calendrier pour les événements extraits des emails."""
+    """Gestionnaire de calendrier avec persistance SQLite."""
     
-    def __init__(self, db_path: str = "calendar.db"):
-        """
-        Initialise le gestionnaire de calendrier.
+    def __init__(self, db_path: str = "app/data/calendar.db"):
+        self.db_path = Path(db_path)
+        self.events = []
         
-        Args:
-            db_path: Chemin vers la base de données SQLite.
-        """
-        self.db_path = db_path
+        # Créer le dossier de données si nécessaire
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        
         self._init_database()
+        self._load_events()
+        
+        logger.info("Base de données calendrier initialisée")
     
     def _init_database(self):
         """Initialise la base de données SQLite."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Créer la table des événements
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS events (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        title TEXT NOT NULL,
-                        description TEXT,
-                        start_time TEXT NOT NULL,
-                        end_time TEXT,
-                        location TEXT,
-                        attendees TEXT,
-                        email_id TEXT,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        status TEXT DEFAULT 'pending'
-                    )
-                ''')
-                
-                conn.commit()
-                logger.info("Base de données calendrier initialisée")
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de l'initialisation de la base de données: {e}")
-    
-    def add_event(self, event: CalendarEvent) -> bool:
-        """
-        Ajoute un événement au calendrier.
-        
-        Args:
-            event: L'événement à ajouter.
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
             
-        Returns:
-            True si l'ajout a réussi, False sinon.
-        """
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS events (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    start_time TEXT,
+                    duration INTEGER DEFAULT 60,
+                    location TEXT,
+                    description TEXT,
+                    attendees TEXT,
+                    status TEXT DEFAULT 'confirmed',
+                    created_at TEXT,
+                    updated_at TEXT
+                )
+            ''')
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"Erreur initialisation base de données: {e}")
+    
+    def _load_events(self):
+        """Charge les événements depuis la base de données."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                now = datetime.now().isoformat()
-                
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT * FROM events ORDER BY start_time')
+            rows = cursor.fetchall()
+            
+            self.events = []
+            for row in rows:
+                event = CalendarEvent(
+                    id=row[0],
+                    title=row[1],
+                    start_time=datetime.fromisoformat(row[2]) if row[2] else None,
+                    duration=row[3] or 60,
+                    location=row[4],
+                    description=row[5],
+                    attendees=row[6].split(',') if row[6] else [],
+                    status=row[7] or 'confirmed'
+                )
+                self.events.append(event)
+            
+            conn.close()
+            logger.info(f"{len(self.events)} événements chargés")
+            
+        except Exception as e:
+            logger.error(f"Erreur chargement événements: {e}")
+            # Créer quelques événements de test
+            self._create_sample_events()
+    
+    def _create_sample_events(self):
+        """Crée quelques événements de test."""
+        now = datetime.now()
+        
+        sample_events = [
+            {
+                'title': 'Réunion équipe',
+                'start_time': now + timedelta(hours=2),
+                'duration': 60,
+                'location': 'Salle de conférence',
+                'description': 'Point hebdomadaire avec l\'équipe',
+                'status': 'confirmed'
+            },
+            {
+                'title': 'Entretien candidat',
+                'start_time': now + timedelta(days=1, hours=10),
+                'duration': 45,
+                'location': 'Bureau RH',
+                'description': 'Entretien pour le poste de développeur',
+                'status': 'confirmed'
+            },
+            {
+                'title': 'Call client',
+                'start_time': now + timedelta(days=2, hours=14),
+                'duration': 30,
+                'description': 'Point projet avec le client ABC',
+                'status': 'pending'
+            }
+        ]
+        
+        for i, event_data in enumerate(sample_events):
+            self.create_event(**event_data)
+    
+    def get_all_events(self) -> List[CalendarEvent]:
+        """Retourne tous les événements."""
+        return self.events.copy()
+    
+    def get_upcoming_events(self, days: int = 7) -> List[CalendarEvent]:
+        """Retourne les événements à venir."""
+        now = datetime.now()
+        end_date = now + timedelta(days=days)
+        
+        upcoming = []
+        for event in self.events:
+            if event.start_time and now <= event.start_time <= end_date:
+                upcoming.append(event)
+        
+        return sorted(upcoming, key=lambda e: e.start_time or datetime.min)
+    
+    def get_events_for_date(self, date: datetime) -> List[CalendarEvent]:
+        """Retourne les événements pour une date donnée."""
+        target_date = date.date()
+        
+        day_events = []
+        for event in self.events:
+            if event.start_time and event.start_time.date() == target_date:
+                day_events.append(event)
+        
+        return sorted(day_events, key=lambda e: e.start_time or datetime.min)
+    
+    def create_event(self, **kwargs) -> CalendarEvent:
+        """Crée un nouvel événement."""
+        try:
+            event_id = f"event_{int(datetime.now().timestamp())}_{len(self.events)}"
+            
+            event = CalendarEvent(
+                id=event_id,
+                title=kwargs.get('title', 'Nouvel événement'),
+                start_time=kwargs.get('start_time'),
+                duration=kwargs.get('duration', 60),
+                location=kwargs.get('location'),
+                description=kwargs.get('description'),
+                attendees=kwargs.get('attendees', []),
+                status=kwargs.get('status', 'confirmed')
+            )
+            
+            # Sauvegarder en base
+            self._save_event(event)
+            
+            # Ajouter à la liste
+            self.events.append(event)
+            
+            logger.info(f"Événement créé: {event.title}")
+            return event
+            
+        except Exception as e:
+            logger.error(f"Erreur création événement: {e}")
+            raise
+    
+    def update_event(self, event_id: str, **kwargs) -> CalendarEvent:
+        """Met à jour un événement."""
+        try:
+            # Trouver l'événement
+            event = None
+            for e in self.events:
+                if e.id == event_id:
+                    event = e
+                    break
+            
+            if not event:
+                raise ValueError(f"Événement non trouvé: {event_id}")
+            
+            # Mettre à jour les propriétés
+            for key, value in kwargs.items():
+                if hasattr(event, key):
+                    setattr(event, key, value)
+            
+            # Sauvegarder en base
+            self._save_event(event, update=True)
+            
+            logger.info(f"Événement mis à jour: {event.title}")
+            return event
+            
+        except Exception as e:
+            logger.error(f"Erreur mise à jour événement: {e}")
+            raise
+    
+    def delete_event(self, event_id: str):
+        """Supprime un événement."""
+        try:
+            # Supprimer de la base
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM events WHERE id = ?', (event_id,))
+            conn.commit()
+            conn.close()
+            
+            # Supprimer de la liste
+            self.events = [e for e in self.events if e.id != event_id]
+            
+            logger.info(f"Événement supprimé: {event_id}")
+            
+        except Exception as e:
+            logger.error(f"Erreur suppression événement: {e}")
+            raise
+    
+    def _save_event(self, event: CalendarEvent, update: bool = False):
+        """Sauvegarde un événement en base de données."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            attendees_str = ','.join(event.attendees) if event.attendees else ''
+            start_time_str = event.start_time.isoformat() if event.start_time else None
+            now_str = datetime.now().isoformat()
+            
+            if update:
                 cursor.execute('''
-                    INSERT INTO events (
-                        title, description, start_time, end_time, location,
-                        attendees, email_id, created_at, updated_at, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    UPDATE events SET 
+                    title=?, start_time=?, duration=?, location=?, 
+                    description=?, attendees=?, status=?, updated_at=?
+                    WHERE id=?
                 ''', (
-                    event.title,
-                    event.description,
-                    event.start_time.isoformat() if event.start_time else None,
-                    event.end_time.isoformat() if event.end_time else None,
-                    event.location,
-                    json.dumps(event.attendees),
-                    event.email_id,
-                    now,
-                    now,
-                    event.status
+                    event.title, start_time_str, event.duration, event.location,
+                    event.description, attendees_str, event.status, now_str, event.id
                 ))
-                
-                event.id = cursor.lastrowid
-                conn.commit()
-                
-                logger.info(f"Événement ajouté: {event.title}")
-                return True
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de l'ajout de l'événement: {e}")
-            return False
-    
-    def get_events(self, start_date: Optional[datetime] = None,
-                   end_date: Optional[datetime] = None) -> List[CalendarEvent]:
-        """
-        Récupère les événements du calendrier.
-        
-        Args:
-            start_date: Date de début (optionnel).
-            end_date: Date de fin (optionnel).
-            
-        Returns:
-            Liste des événements.
-        """
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                query = "SELECT * FROM events"
-                params = []
-                
-                if start_date and end_date:
-                    query += " WHERE start_time >= ? AND start_time <= ?"
-                    params = [start_date.isoformat(), end_date.isoformat()]
-                elif start_date:
-                    query += " WHERE start_time >= ?"
-                    params = [start_date.isoformat()]
-                elif end_date:
-                    query += " WHERE start_time <= ?"
-                    params = [end_date.isoformat()]
-                
-                query += " ORDER BY start_time ASC"
-                
-                cursor.execute(query, params)
-                rows = cursor.fetchall()
-                
-                events = []
-                for row in rows:
-                    event = CalendarEvent(
-                        id=row[0],
-                        title=row[1],
-                        description=row[2],
-                        start_time=datetime.fromisoformat(row[3]) if row[3] else None,
-                        end_time=datetime.fromisoformat(row[4]) if row[4] else None,
-                        location=row[5],
-                        attendees=json.loads(row[6]) if row[6] else [],
-                        email_id=row[7],
-                        status=row[10]
-                    )
-                    events.append(event)
-                
-                return events
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de la récupération des événements: {e}")
-            return []
-    
-    def update_event(self, event: CalendarEvent) -> bool:
-        """
-        Met à jour un événement existant.
-        
-        Args:
-            event: L'événement à mettre à jour.
-            
-        Returns:
-            True si la mise à jour a réussi, False sinon.
-        """
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                now = datetime.now().isoformat()
-                
+            else:
                 cursor.execute('''
-                    UPDATE events SET
-                        title = ?, description = ?, start_time = ?, end_time = ?,
-                        location = ?, attendees = ?, updated_at = ?, status = ?
-                    WHERE id = ?
+                    INSERT INTO events 
+                    (id, title, start_time, duration, location, description, attendees, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
-                    event.title,
-                    event.description,
-                    event.start_time.isoformat() if event.start_time else None,
-                    event.end_time.isoformat() if event.end_time else None,
-                    event.location,
-                    json.dumps(event.attendees),
-                    now,
-                    event.status,
-                    event.id
+                    event.id, event.title, start_time_str, event.duration, event.location,
+                    event.description, attendees_str, event.status, now_str, now_str
                 ))
-                
-                conn.commit()
-                
-                logger.info(f"Événement mis à jour: {event.title}")
-                return True
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de la mise à jour de l'événement: {e}")
-            return False
-    
-    def delete_event(self, event_id: int) -> bool:
-        """
-        Supprime un événement du calendrier.
-        
-        Args:
-            event_id: ID de l'événement à supprimer.
             
-        Returns:
-            True si la suppression a réussi, False sinon.
-        """
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute("DELETE FROM events WHERE id = ?", (event_id,))
-                conn.commit()
-                
-                logger.info(f"Événement supprimé: {event_id}")
-                return True
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de la suppression de l'événement: {e}")
-            return False
-    
-    def get_events_for_today(self) -> List[CalendarEvent]:
-        """
-        Récupère les événements d'aujourd'hui.
-        
-        Returns:
-            Liste des événements du jour.
-        """
-        today = datetime.now().date()
-        start_of_day = datetime.combine(today, datetime.min.time())
-        end_of_day = datetime.combine(today, datetime.max.time())
-        
-        return self.get_events(start_of_day, end_of_day)
-    
-    def get_events_for_week(self) -> List[CalendarEvent]:
-        """
-        Récupère les événements de la semaine.
-        
-        Returns:
-            Liste des événements de la semaine.
-        """
-        today = datetime.now().date()
-        start_of_week = today - timedelta(days=today.weekday())
-        end_of_week = start_of_week + timedelta(days=6)
-        
-        start_datetime = datetime.combine(start_of_week, datetime.min.time())
-        end_datetime = datetime.combine(end_of_week, datetime.max.time())
-        
-        return self.get_events(start_datetime, end_datetime)
-    
-    def get_conflicting_events(self, new_event: CalendarEvent) -> List[CalendarEvent]:
-        """
-        Trouve les événements en conflit avec un nouvel événement.
-        
-        Args:
-            new_event: Le nouvel événement à vérifier.
+            conn.commit()
+            conn.close()
             
-        Returns:
-            Liste des événements en conflit.
-        """
-        if not new_event.start_time or not new_event.end_time:
+        except Exception as e:
+            logger.error(f"Erreur sauvegarde événement: {e}")
+            raise
+    
+    def extract_event_from_email(self, email_text: str, email_sender: str = "") -> Optional[CalendarEvent]:
+        """Extrait un événement potentiel depuis un email."""
+        # TODO: Implémenter l'extraction IA d'événements
+        return None
+    
+    def get_conflicts(self, start_time: datetime, duration: int) -> List[CalendarEvent]:
+        """Trouve les conflits d'horaire pour un créneau donné."""
+        if not start_time:
             return []
         
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    SELECT * FROM events 
-                    WHERE start_time < ? AND end_time > ?
-                ''', (
-                    new_event.end_time.isoformat(),
-                    new_event.start_time.isoformat()
-                ))
-                
-                rows = cursor.fetchall()
-                
-                conflicts = []
-                for row in rows:
-                    if row[0] != new_event.id:  # Exclure l'événement lui-même
-                        conflict = CalendarEvent(
-                            id=row[0],
-                            title=row[1],
-                            description=row[2],
-                            start_time=datetime.fromisoformat(row[3]) if row[3] else None,
-                            end_time=datetime.fromisoformat(row[4]) if row[4] else None,
-                            location=row[5],
-                            attendees=json.loads(row[6]) if row[6] else [],
-                            email_id=row[7],
-                            status=row[10]
-                        )
-                        conflicts.append(conflict)
-                
-                return conflicts
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de la vérification des conflits: {e}")
-            return []
-    
-    def confirm_event(self, event_id: int) -> bool:
-        """
-        Confirme un événement (change le statut de 'pending' à 'confirmed').
+        end_time = start_time + timedelta(minutes=duration)
+        conflicts = []
         
-        Args:
-            event_id: ID de l'événement à confirmer.
+        for event in self.events:
+            if not event.start_time:
+                continue
             
-        Returns:
-            True si la confirmation a réussi, False sinon.
-        """
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    UPDATE events SET status = 'confirmed', updated_at = ?
-                    WHERE id = ?
-                ''', (datetime.now().isoformat(), event_id))
-                
-                conn.commit()
-                
-                logger.info(f"Événement confirmé: {event_id}")
-                return True
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de la confirmation de l'événement: {e}")
-            return False
-    
-    def get_pending_events(self) -> List[CalendarEvent]:
-        """
-        Récupère les événements en attente de confirmation.
+            event_end = event.start_time + timedelta(minutes=event.duration)
+            
+            # Vérifier le chevauchement
+            if (start_time < event_end and end_time > event.start_time):
+                conflicts.append(event)
         
-        Returns:
-            Liste des événements en attente.
-        """
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    SELECT * FROM events 
-                    WHERE status = 'pending'
-                    ORDER BY start_time ASC
-                ''')
-                
-                rows = cursor.fetchall()
-                
-                events = []
-                for row in rows:
-                    event = CalendarEvent(
-                        id=row[0],
-                        title=row[1],
-                        description=row[2],
-                        start_time=datetime.fromisoformat(row[3]) if row[3] else None,
-                        end_time=datetime.fromisoformat(row[4]) if row[4] else None,
-                        location=row[5],
-                        attendees=json.loads(row[6]) if row[6] else [],
-                        email_id=row[7],
-                        status=row[10]
-                    )
-                    events.append(event)
-                
-                return events
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de la récupération des événements en attente: {e}")
-            return []
+        return conflicts
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Retourne les statistiques du calendrier."""
+        now = datetime.now()
+        
+        # Événements aujourd'hui
+        today_events = self.get_events_for_date(now)
+        
+        # Événements cette semaine
+        week_events = self.get_upcoming_events(7)
+        
+        # Événements par statut
+        status_counts = {}
+        for event in self.events:
+            status = event.status
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
+        return {
+            'total_events': len(self.events),
+            'today_events': len(today_events),
+            'week_events': len(week_events),
+            'status_breakdown': status_counts
+        }

@@ -1,0 +1,30 @@
+{
+    "app": {
+      "name": "Dynovate Mail Assistant IA",
+      "version": "2.0",
+      "auto_refresh": true,
+      "font_size": 12
+    },
+    "ai": {
+      "auto_classify": true,
+      "confidence_threshold": 0.75,
+      "auto_respond": false,
+      "response_delay": 5,
+      "ai_model": "Modèle local (rapide)",
+      "enable_learning": true
+    },
+    "email": {
+      "auto_refresh": true,
+      "refresh_interval": 5,
+      "max_emails": 100,
+      "auto_mark_read": false,
+      "default_signature": ""
+    },
+    "appearance": {
+      "theme": "Clair",
+      "font_size": 12,
+      "enable_animations": true,
+      "enable_notifications": true,
+      "enable_sounds": false
+    }
+  }
