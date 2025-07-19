@@ -3,8 +3,23 @@
 Client Gmail avec authentification et mode mock pour développement.
 """
 import logging
+import os
+import base64
 from typing import List, Optional
 from datetime import datetime, timedelta
+
+# Imports Gmail API
+try:
+    from googleapiclient.discovery import build
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from email.utils import parsedate_to_datetime
+    HAS_GMAIL_API = True
+except ImportError:
+    HAS_GMAIL_API = False
+    logging.warning("Gmail API non disponible - mode mock uniquement")
+
 from models.email_model import Email
 
 logger = logging.getLogger(__name__)
@@ -42,25 +57,19 @@ class GmailClient:
         return False
     
     def get_recent_emails(self, limit: int = 50) -> List[Email]:
-        """
-        Récupère les emails récents.
-        
-        Args:
-            limit: Nombre maximum d'emails à récupérer
-            
-        Returns:
-            Liste des emails récents
-        """
-        if not self.authenticated:
-            logger.error("Client Gmail non authentifié")
-            return []
-        
+        """Récupère les emails récents."""
         if self.mock_mode:
             return self._generate_mock_emails(limit)
-        
-        # TODO: Implémenter la récupération réelle
-        logger.warning("Récupération réelle d'emails non implémentée")
-        return []
+    
+    # Mode réel - d'abord s'authentifier
+        if not self.authenticated:
+            if not self.authenticate():
+                logger.error("Échec de l'authentification - basculement en mode mock")
+                self.mock_mode = True
+                return self._generate_mock_emails(limit)
+    
+    # Récupérer les vrais emails
+        return self.get_real_emails(limit)
     
     def _generate_mock_emails(self, limit: int) -> List[Email]:
         """Génère des emails de test pour le développement."""
@@ -286,3 +295,150 @@ class GmailClient:
             'credentials_loaded': self.credentials is not None,
             'last_sync': datetime.now().isoformat() if self.authenticated else None
         }
+    def authenticate(self) -> bool:
+        """Authentifie l'utilisateur avec Gmail."""
+        if self.mock_mode:
+            self.authenticated = True
+            return True
+    
+        if not HAS_GMAIL_API:
+            logger.error("Gmail API non disponible")
+            return False
+    
+        try:
+            creds = None
+        
+        # Charger les tokens existants
+            if os.path.exists('token.json'):
+                creds = Credentials.from_authorized_user_file('token.json', self.SCOPES)
+        
+        # Si pas de credentials valides, faire l'auth
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                else:
+                    if not os.path.exists(self.credentials):
+                        logger.error(f"Fichier credentials manquant: {self.credentials}")
+                        return False
+                
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        self.credentials, self.SCOPES)
+                    creds = flow.run_local_server(port=0)
+            
+            # Sauvegarder les credentials
+                with open('token.json', 'w') as token:
+                    token.write(creds.to_json())
+        
+        # Créer le service Gmail
+            from googleapiclient.discovery import build
+            self.service = build('gmail', 'v1', credentials=creds)
+            self.authenticated = True
+            logger.info("Authentification Gmail réussie")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Erreur authentification Gmail: {e}")
+            return False
+
+    def get_real_emails(self, limit: int = 50) -> List[Email]:
+        """Récupère les vrais emails depuis Gmail."""
+        if not self.authenticated or not hasattr(self, 'service'):
+            logger.error("Client Gmail non authentifié")
+            return []
+    
+        try:
+        # Requête pour récupérer les emails
+            results = self.service.users().messages().list(
+                userId='me',
+                maxResults=limit,
+                q='in:inbox'
+            ).execute()
+        
+            messages = results.get('messages', [])
+            emails = []
+        
+            for message in messages:
+                email_data = self._get_email_details(message['id'])
+                if email_data:
+                    emails.append(email_data)
+        
+            logger.info(f"{len(emails)} emails récupérés depuis Gmail")
+            return emails
+        
+        except Exception as e:
+            logger.error(f"Erreur récupération emails: {e}")
+            return []
+
+    def _get_email_details(self, message_id: str) -> Optional[Email]:
+        """Récupère les détails d'un email."""
+        try:
+            message = self.service.users().messages().get(
+                userId='me', 
+                id=message_id,
+                format='full'
+            ).execute()
+        
+            payload = message['payload']
+            headers = payload.get('headers', [])
+        
+        # Extraire les headers
+            subject = ""
+            sender = ""
+            date_str = ""
+        
+            for header in headers:
+                name = header['name'].lower()
+                if name == 'subject':
+                    subject = header['value']
+                elif name == 'from':
+                    sender = header['value']
+                elif name == 'date':
+                    date_str = header['value']
+        
+        # Extraire le corps
+            body = self._extract_body(payload)
+        
+        # Convertir la date
+            try:
+                received_date = parsedate_to_datetime(date_str)
+            except:
+                received_date = datetime.now()
+        
+        # Vérifier si lu
+            labels = message.get('labelIds', [])
+            is_read = 'UNREAD' not in labels
+        
+            return Email(
+                id=message_id,
+                subject=subject or "(Aucun sujet)",
+                sender=sender,
+                received_date=received_date,
+                body=body or "",
+                labels=labels,
+                thread_id=message.get('threadId', ''),
+                snippet=message.get('snippet', ''),
+                is_read=is_read
+            )
+        
+        except Exception as e:
+            logger.error(f"Erreur détails email {message_id}: {e}")
+            return None
+
+    def _extract_body(self, payload) -> str:
+        """Extrait le corps de l'email."""
+        body = ""
+    
+        try:
+            if 'parts' in payload:
+                for part in payload['parts']:
+                    if part['mimeType'] == 'text/plain' and 'data' in part['body']:
+                        data = part['body']['data']
+                        body = base64.urlsafe_b64decode(data).decode('utf-8')
+                        break
+            elif payload['mimeType'] == 'text/plain' and 'data' in payload['body']:
+                data = payload['body']['data']
+                body = base64.urlsafe_b64decode(data).decode('utf-8')
+        except Exception as e:
+            logger.error(f"Erreur extraction body: {e}")
+    
+        return body

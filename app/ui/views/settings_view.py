@@ -1,3 +1,50 @@
+#!/usr/bin/env python3
+"""
+Vue des paramètres de l'application.
+"""
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, 
+    QSlider, QSpinBox, QComboBox, QFrame
+)
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
+from typing import Dict, Any
+
+class SettingCard(QFrame):
+    """Carte de paramètre moderne."""
+    
+    def __init__(self, title: str, description: str, control_widget: QWidget):
+        super().__init__()
+        self.setObjectName("setting-card")
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(16, 16, 16, 16)
+        
+        # Titre
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Inter", 14, QFont.Weight.Bold))
+        layout.addWidget(title_label)
+        
+        # Description
+        desc_label = QLabel(description)
+        desc_label.setFont(QFont("Inter", 11))
+        desc_label.setStyleSheet("color: #6c757d;")
+        desc_label.setWordWrap(True)
+        layout.addWidget(desc_label)
+        
+        # Contrôle
+        layout.addWidget(control_widget)
+        
+        self.setStyleSheet("""
+            QFrame#setting-card {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                margin: 4px 0;
+            }
+        """)
+
 class AIConfigSection(QWidget):
     """Section de configuration IA."""
     
@@ -158,3 +205,26 @@ class AIConfigSection(QWidget):
         self.response_delay_spin.blockSignals(False)
         self.ai_model_combo.blockSignals(False)
         self.learning_cb.blockSignals(False)
+
+class SettingsView(QWidget):
+    """Vue des paramètres principale."""
+    
+    def __init__(self):
+        super().__init__()
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Titre
+        title = QLabel("⚙️ Paramètres")
+        title.setFont(QFont("Inter", 24, QFont.Weight.Bold))
+        title.setStyleSheet("color: #000000; margin-bottom: 20px;")
+        layout.addWidget(title)
+        
+        # Section IA
+        ai_section = AIConfigSection()
+        layout.addWidget(ai_section)
+        
+        layout.addStretch()

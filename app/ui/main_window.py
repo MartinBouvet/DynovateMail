@@ -267,10 +267,7 @@ class MainWindow(QMainWindow):
            background-color: #adb5bd;
        }
        
-       /* Animations */
-       * {
-           transition: all 0.2s ease-in-out;
-       }
+
        """
        
        self.setStyleSheet(style)
@@ -391,16 +388,10 @@ class MainWindow(QMainWindow):
     def _start_refresh_animation(self):
        """Démarre l'animation de refresh."""
        self.refresh_btn.setText("⟳")
-       # Animation de rotation
-       self.rotation_animation = QPropertyAnimation(self.refresh_btn, b"rotation")
-       self.rotation_animation.setDuration(1000)
-       self.rotation_animation.setLoopCount(-1)  # Infini
-       self.rotation_animation.start()
+
    
     def _stop_refresh_animation(self):
-       """Arrête l'animation de refresh."""
-       if hasattr(self, 'rotation_animation'):
-           self.rotation_animation.stop()
+
        self.refresh_btn.setText("🔄")
    
     def _update_animations(self):

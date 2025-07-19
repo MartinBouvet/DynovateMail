@@ -2,6 +2,12 @@
 """
 Carte d'email intelligente avec informations IA et actions rapides.
 """
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QTextEdit, QFrame, QScrollArea, QCheckBox, QSlider
+)
+from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt6.QtGui import QFont, QColor, QPainter, QBrush
 import logging
 from typing import Optional
 from datetime import datetime, timedelta

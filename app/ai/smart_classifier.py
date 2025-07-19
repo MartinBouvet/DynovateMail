@@ -10,9 +10,22 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 import sqlite3
 import hashlib
-from pathlib import Path  # AJOUT DE CET IMPORT
+from pathlib import Path
 
-logger = logging.getLogger(__name__)
+# Imports conditionnels pour éviter les erreurs
+try:
+    import spacy
+    HAS_SPACY = True
+except ImportError:
+    HAS_SPACY = False
+    logging.warning("Module spaCy non disponible - fonctionnement en mode dégradé")
+
+try:
+    from transformers import pipeline
+    HAS_TRANSFORMERS = True
+except ImportError:
+    HAS_TRANSFORMERS = False
+    logging.warning("Module transformers non disponible - fonctionnement en mode dégradé")
 
 logger = logging.getLogger(__name__)
 
@@ -78,14 +91,16 @@ class SmartClassifier:
         """Initialise les modèles NLP."""
         try:
             # Modèle spaCy pour l'analyse linguistique
-            self.nlp = spacy.load("fr_core_news_sm")
+            if HAS_SPACY:
+                self.nlp = spacy.load("fr_core_news_sm")
             
             # Pipeline Transformers pour l'analyse de sentiment
-            self.sentiment_analyzer = pipeline(
-                "sentiment-analysis",
-                model="cardiffnlp/twitter-roberta-base-sentiment-latest",
-                return_all_scores=True
-            )
+            if HAS_TRANSFORMERS:
+                self.sentiment_analyzer = pipeline(
+                    "sentiment-analysis",
+                    model="cardiffnlp/twitter-roberta-base-sentiment-latest",
+                    return_all_scores=True
+                )
             
             logger.info("Modèles IA initialisés avec succès")
         except Exception as e:
@@ -97,6 +112,9 @@ class SmartClassifier:
     def _init_database(self):
         """Initialise la base de données pour l'apprentissage."""
         try:
+            # Créer le dossier si nécessaire
+            Path(self.model_path).parent.mkdir(parents=True, exist_ok=True)
+            
             conn = sqlite3.connect(self.model_path)
             cursor = conn.cursor()
             
@@ -217,13 +235,16 @@ class SmartClassifier:
     def _nlp_category_score(self, text: str, category: str) -> float:
         """Score basé sur l'analyse NLP avancée."""
         try:
+            if not self.nlp:
+                return 0.0
+                
             doc = self.nlp(text[:1000])  # Limite pour les performances
             
             # Entités nommées pertinentes
             entities = [ent.label_ for ent in doc.ents]
             
             category_entities = {
-                'cv': ['PERSON', 'ORG', 'SKILL'],
+                'cv': ['PERSON', 'ORG'],
                 'rdv': ['DATE', 'TIME', 'PERSON'],
                 'facture': ['MONEY', 'DATE', 'ORG'],
                 'support': ['PRODUCT', 'ORG']
@@ -291,9 +312,10 @@ class SmartClassifier:
         if self.sentiment_analyzer:
             try:
                 sentiment = self.sentiment_analyzer(text[:500])
-                negative_score = next((s['score'] for s in sentiment[0] if s['label'] == 'NEGATIVE'), 0)
-                if negative_score > 0.7:
-                    priority = max(1, priority - 1)
+                if sentiment and len(sentiment) > 0 and len(sentiment[0]) > 0:
+                    negative_score = next((s['score'] for s in sentiment[0] if s['label'] == 'NEGATIVE'), 0)
+                    if negative_score > 0.7:
+                        priority = max(1, priority - 1)
             except:
                 pass
         
@@ -348,9 +370,12 @@ class SmartClassifier:
         elif category == 'cv':
             # Extraction d'informations candidat
             if self.nlp:
-                doc = self.nlp(text)
-                persons = [ent.text for ent in doc.ents if ent.label_ == 'PERSON']
-                info['candidate_names'] = persons[:3]  # Max 3 noms
+                try:
+                    doc = self.nlp(text)
+                    persons = [ent.text for ent in doc.ents if ent.label_ == 'PERSON']
+                    info['candidate_names'] = persons[:3]  # Max 3 noms
+                except:
+                    pass
         
         elif category == 'facture':
             # Extraction de montants

@@ -55,7 +55,7 @@ def main():
         logger.info("Initialisation des services...")
         
         # Initialisation sans credentials (mode mock)
-        gmail_client = GmailClient(mock_mode=True)
+        gmail_client = GmailClient(mock_mode=False)
         ai_processor = AIProcessor()
         calendar_manager = CalendarManager()
         pending_manager = PendingResponseManager()
