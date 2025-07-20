@@ -2,6 +2,12 @@
 PyQt6>=6.4.0
 PyQt6-Qt6>=6.4.0
 
+# Gmail API - OBLIGATOIRE pour les vrais emails
+google-api-python-client>=2.50.0
+google-auth-httplib2>=0.1.0
+google-auth-oauthlib>=0.5.0
+google-auth>=2.0.0
+
 # Intelligence artificielle
 torch>=1.13.0
 transformers>=4.20.0
@@ -12,20 +18,15 @@ scikit-learn>=1.1.0
 nltk>=3.7
 textblob>=0.17.1
 
-# APIs et communication
-google-api-python-client>=2.50.0
-google-auth-httplib2>=0.1.0
-google-auth-oauthlib>=0.5.0
-requests>=2.28.0
-
-# Base de données et stockage
-sqlalchemy>=1.4.0
-
 # Utilitaires
 python-dateutil>=2.8.0
 beautifulsoup4>=4.11.0
 lxml>=4.9.0
 pillow>=9.0.0
+requests>=2.28.0
+
+# Base de données et stockage
+sqlalchemy>=1.4.0
 
 # Développement et tests
 pytest>=7.0.0

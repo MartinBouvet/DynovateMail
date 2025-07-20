@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """
-Point d'entrée principal de Dynovate Mail Assistant IA.
-Application de gestion d'emails avec intelligence artificielle.
+Point d'entrée principal corrigé.
 """
 import sys
 import logging
 from pathlib import Path
 import os
+
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.fonts.debug=false"
-# Ajouter le dossier app au chemin Python
+
 app_dir = Path(__file__).parent
 sys.path.insert(0, str(app_dir))
 
-# Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -27,41 +26,44 @@ logger = logging.getLogger(__name__)
 def main():
     """Fonction principale."""
     try:
-        # Imports après configuration du chemin
+        credentials_file = "client_secret.json"
+        if not os.path.exists(credentials_file):
+            logger.error(f"Fichier {credentials_file} non trouvé")
+            print(f"ERREUR: Le fichier {credentials_file} est requis")
+            sys.exit(1)
+        
         from PyQt6.QtWidgets import QApplication
         from PyQt6.QtCore import Qt
-        from PyQt6.QtGui import QIcon
         
-        # Services
         from gmail_client import GmailClient
         from ai_processor import AIProcessor
         from calendar_manager import CalendarManager
         from auto_responder import AutoResponder
         from pending_response_manager import PendingResponseManager
-        
-        # Interface
         from ui.main_window import MainWindow
         
-        # Créer l'application
         app = QApplication(sys.argv)
         app.setApplicationName("Dynovate Mail Assistant IA")
         app.setApplicationVersion("2.0")
         app.setOrganizationName("Dynovate")
+        app.setStyle('Fusion')
         
-        # Configuration du style
-        app.setStyle('Fusion')  # Style moderne
-        
-        # Initialiser les services
         logger.info("Initialisation des services...")
         
-        # Initialisation sans credentials (mode mock)
-        gmail_client = GmailClient(mock_mode=False)
+        # Services
+        gmail_client = GmailClient(credentials_file=credentials_file, mock_mode=False)
+        
+        if not gmail_client.authenticated:
+            logger.error("Impossible de s'authentifier avec Gmail")
+            print("ERREUR: Authentification Gmail échouée")
+            sys.exit(1)
+        
         ai_processor = AIProcessor()
         calendar_manager = CalendarManager()
         pending_manager = PendingResponseManager()
         auto_responder = AutoResponder(ai_processor, pending_manager)
         
-        # Créer l'interface principale
+        # Interface principale
         main_window = MainWindow(
             gmail_client=gmail_client,
             ai_processor=ai_processor,
@@ -69,18 +71,16 @@ def main():
             auto_responder=auto_responder
         )
         
-        # Afficher la fenêtre
         main_window.show()
         
-        logger.info("Application démarrée avec succès")
+        logger.info("✅ Application lancée avec succès - Mode PRODUCTION")
+        print("✅ Dynovate Mail avec IA fonctionnelle lancé !")
         
-        # Lancer la boucle d'événements
         sys.exit(app.exec())
         
     except ImportError as e:
-        logger.error(f"Erreur d'import: {e}")
-        print(f"Erreur: Module manquant - {e}")
-        print("Installez les dépendances manquantes")
+        logger.error(f"Module manquant: {e}")
+        print(f"ERREUR: Installez les dépendances - {e}")
         sys.exit(1)
         
     except Exception as e:
