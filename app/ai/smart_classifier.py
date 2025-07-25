@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Classification intelligente des emails avec scoring multicritères et apprentissage.
+Classification intelligente avec génération de réponses améliorée.
 """
 import logging
 import re
@@ -11,21 +11,6 @@ from dataclasses import dataclass
 import sqlite3
 import hashlib
 from pathlib import Path
-
-# Imports conditionnels pour éviter les erreurs
-try:
-    import spacy
-    HAS_SPACY = True
-except ImportError:
-    HAS_SPACY = False
-    logging.warning("Module spaCy non disponible - fonctionnement en mode dégradé")
-
-try:
-    from transformers import pipeline
-    HAS_TRANSFORMERS = True
-except ImportError:
-    HAS_TRANSFORMERS = False
-    logging.warning("Module transformers non disponible - fonctionnement en mode dégradé")
 
 logger = logging.getLogger(__name__)
 
@@ -41,84 +26,130 @@ class EmailAnalysis:
     reasoning: str
 
 class SmartClassifier:
-    """Classificateur intelligent avec apprentissage et context awareness."""
+    """Classificateur intelligent avec génération de réponses."""
     
     def __init__(self, model_path: str = "app/data/classifier.db"):
         self.model_path = model_path
-        self.nlp = None
-        self.sentiment_analyzer = None
-        self._init_models()
         self._init_database()
+        
+        # Templates de réponses améliorés
+        self.response_templates = {
+            'cv': {
+                'template': """Bonjour {sender_name},
+
+Merci pour votre candidature et l'intérêt que vous portez à notre entreprise.
+
+Nous avons bien reçu votre CV et nous l'examinerons attentivement. Notre équipe RH va étudier votre profil et nous vous recontacterons dans les meilleurs délais si votre candidature retient notre attention.
+
+Nous vous remercions pour le temps que vous avez consacré à votre candidature.
+
+Cordialement,
+L'équipe Recrutement""",
+                'should_respond': True
+            },
+            'rdv': {
+                'template': """Bonjour {sender_name},
+
+Merci pour votre demande de rendez-vous.
+
+Je consulte mon planning et vous propose les créneaux suivants :
+- Lundi prochain à 14h00
+- Mardi prochain à 10h30
+- Mercredi prochain à 16h00
+
+N'hésitez pas à me confirmer le créneau qui vous convient le mieux ou à me proposer d'autres alternatives.
+
+Dans l'attente de notre rencontre.
+
+Cordialement,
+{user_name}""",
+                'should_respond': True
+            },
+            'support': {
+                'template': """Bonjour {sender_name},
+
+Merci de nous avoir contactés concernant votre demande d'assistance.
+
+Nous avons bien pris en compte votre message et notre équipe technique va examiner votre problème. Vous devriez recevoir une réponse détaillée de notre part dans les prochaines heures.
+
+En cas d'urgence, n'hésitez pas à nous contacter par téléphone.
+
+Cordialement,
+L'équipe Support Technique""",
+                'should_respond': True
+            },
+            'facture': {
+                'template': """Bonjour {sender_name},
+
+Nous accusons réception de votre message concernant la facturation.
+
+Votre demande a été transmise à notre service comptabilité qui vous répondra dans les meilleurs délais avec les informations demandées.
+
+Cordialement,
+Le service Facturation""",
+                'should_respond': False
+            },
+            'spam': {
+                'template': "",
+                'should_respond': False
+            },
+            'general': {
+                'template': """Bonjour {sender_name},
+
+Merci pour votre message.
+
+Nous l'avons bien reçu et nous vous répondrons dans les plus brefs délais.
+
+Cordialement,
+L'équipe""",
+                'should_respond': False
+            }
+        }
         
         # Patterns de détection améliorés
         self.patterns = {
             'cv': [
                 r'\b(cv|curriculum|résumé|candidature|postule|emploi|poste|job)\b',
                 r'\b(experience|compétence|formation|diplôme|qualification)\b',
-                r'\b(lettre de motivation|cover letter)\b'
+                r'\b(lettre de motivation|cover letter)\b',
+                r'\b(recherche un poste|recherche d\'emploi)\b'
             ],
             'rdv': [
-                r'\b(rendez[-\s]?vous|meeting|réunion|entretien|call)\b',
+                r'\b(rendez[-\s]?vous|meeting|réunion|entretien|call|appointment)\b',
                 r'\b(disponible|créneau|calendrier|planning)\b',
                 r'\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b',
-                r'\d{1,2}[h:]\d{2}|\d{1,2}h\d{2}|\d{1,2}:\d{2}'
+                r'\d{1,2}[h:]\d{2}|\d{1,2}h\d{2}|\d{1,2}:\d{2}',
+                r'\b(quand êtes-vous|êtes-vous libre|pouvons-nous nous voir)\b'
             ],
             'facture': [
                 r'\b(facture|invoice|bill|payment|paiement)\b',
                 r'\b(montant|prix|coût|€|euro|dollar|\$)\b',
-                r'\b(due|échéance|deadline)\b'
+                r'\b(due|échéance|deadline|devis)\b'
             ],
             'support': [
                 r'\b(aide|help|support|problème|issue|bug)\b',
                 r'\b(erreur|error|panne|dysfonctionnement)\b',
-                r'\b(urgent|critique|emergency)\b'
+                r'\b(urgent|critique|emergency|assistance)\b',
+                r'\b(ne fonctionne pas|ne marche pas|problème avec)\b'
             ],
             'spam': [
                 r'\b(gratuit|free|promo|offre|reduction|discount)\b',
                 r'\b(cliquez|click|urgent|limited|limité)\b',
-                r'[A-Z]{3,}.*[A-Z]{3,}'  # Beaucoup de majuscules
+                r'[A-Z]{3,}.*[A-Z]{3,}',  # Beaucoup de majuscules
+                r'\b(félicitations|congratulations|winner|gagnant)\b'
             ]
         }
         
-        # Mots-clés d'évitement pour auto-réponse
-        self.avoid_auto_response = [
-            r'\b(ne pas répondre|do not reply|noreply)\b',
-            r'\b(automatique|automatic|newsletter)\b',
-            r'\b(notification|alert|reminder)\b'
-        ]
-    
-    def _init_models(self):
-        """Initialise les modèles NLP."""
-        try:
-            # Modèle spaCy pour l'analyse linguistique
-            if HAS_SPACY:
-                self.nlp = spacy.load("fr_core_news_sm")
-            
-            # Pipeline Transformers pour l'analyse de sentiment
-            if HAS_TRANSFORMERS:
-                self.sentiment_analyzer = pipeline(
-                    "sentiment-analysis",
-                    model="cardiffnlp/twitter-roberta-base-sentiment-latest",
-                    return_all_scores=True
-                )
-            
-            logger.info("Modèles IA initialisés avec succès")
-        except Exception as e:
-            logger.error(f"Erreur initialisation modèles: {e}")
-            # Fallback sans modèles avancés
-            self.nlp = None
-            self.sentiment_analyzer = None
+        logger.info("SmartClassifier initialisé avec templates de réponses")
     
     def _init_database(self):
-        """Initialise la base de données pour l'apprentissage."""
+        """Initialise la base de données."""
         try:
-            # Créer le dossier si nécessaire
             Path(self.model_path).parent.mkdir(parents=True, exist_ok=True)
             
             conn = sqlite3.connect(self.model_path)
             cursor = conn.cursor()
             
-            # Table pour stocker les corrections utilisateur
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_corrections (
                     id INTEGER PRIMARY KEY,
@@ -130,62 +161,43 @@ class SmartClassifier:
                 )
             ''')
             
-            # Table pour l'historique des performances
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS performance_history (
-                    id INTEGER PRIMARY KEY,
-                    date DATE,
-                    total_emails INTEGER,
-                    correct_classifications INTEGER,
-                    accuracy REAL
-                )
-            ''')
-            
             conn.commit()
             conn.close()
-            logger.info("Base de données d'apprentissage initialisée")
+            logger.info("Base de données classificateur initialisée")
         except Exception as e:
             logger.error(f"Erreur init base de données: {e}")
     
     def analyze_email(self, email_data: Dict) -> EmailAnalysis:
-        """
-        Analyse complète d'un email avec scoring multicritères.
-        
-        Args:
-            email_data: Dict avec subject, body, sender, date etc.
-            
-        Returns:
-            EmailAnalysis avec tous les résultats
-        """
+        """Analyse complète d'un email avec génération de réponse."""
         try:
-            # Extraction du contenu
             subject = email_data.get('subject', '').lower()
             body = email_data.get('body', '').lower()
             sender = email_data.get('sender', '').lower()
+            sender_name = email_data.get('sender_name', 'Monsieur/Madame')
             full_text = f"{subject} {body}".strip()
             
-            # Scoring multicritères
+            # Classification
             category_scores = self._calculate_category_scores(full_text, sender)
             best_category = max(category_scores.items(), key=lambda x: x[1])
             
-            # Analyse de priorité
+            # Priorité
             priority = self._calculate_priority(full_text, best_category[0])
             
-            # Décision auto-réponse
-            should_respond = self._should_auto_respond(full_text, best_category[0])
+            # Décision de réponse automatique
+            should_respond = self._should_auto_respond(full_text, best_category[0], best_category[1])
             
-            # Extraction d'informations spécifiques
-            extracted_info = self._extract_specific_info(full_text, best_category[0])
-            
-            # Génération de réponse suggérée
+            # Génération de réponse si appropriée
             suggested_response = None
             if should_respond:
-                suggested_response = self._generate_response_suggestion(
-                    email_data, best_category[0], extracted_info
+                suggested_response = self._generate_response(
+                    best_category[0], sender_name, email_data
                 )
             
-            # Explication du raisonnement
-            reasoning = self._explain_reasoning(category_scores, best_category)
+            # Extraction d'informations
+            extracted_info = self._extract_specific_info(full_text, best_category[0])
+            
+            # Raisonnement
+            reasoning = self._explain_reasoning(category_scores, best_category, should_respond)
             
             return EmailAnalysis(
                 category=best_category[0],
@@ -203,12 +215,12 @@ class SmartClassifier:
     
     def _calculate_category_scores(self, text: str, sender: str) -> Dict[str, float]:
         """Calcule les scores pour chaque catégorie."""
-        scores = {'general': 0.1}  # Score de base
+        scores = {'general': 0.1}
         
         for category, patterns in self.patterns.items():
             score = 0.0
             
-            # Score basé sur les patterns regex
+            # Score basé sur les patterns
             for pattern in patterns:
                 matches = len(re.findall(pattern, text, re.IGNORECASE))
                 score += matches * 0.3
@@ -218,80 +230,15 @@ class SmartClassifier:
                 score += 0.4
             elif category == 'cv' and 'candidat' in text:
                 score += 0.5
-            elif category == 'rdv' and any(word in text for word in ['calendly', 'zoom', 'teams']):
+            elif category == 'support' and any(word in sender for word in ['support', 'help', 'assistance']):
                 score += 0.4
             
-            # Analyse NLP avancée si disponible
-            if self.nlp:
-                score += self._nlp_category_score(text, category)
-            
-            # Apprentissage utilisateur
-            score += self._get_user_learning_bonus(text, category)
-            
-            scores[category] = min(score, 1.0)  # Cap à 1.0
+            scores[category] = min(score, 1.0)
         
         return scores
     
-    def _nlp_category_score(self, text: str, category: str) -> float:
-        """Score basé sur l'analyse NLP avancée."""
-        try:
-            if not self.nlp:
-                return 0.0
-                
-            doc = self.nlp(text[:1000])  # Limite pour les performances
-            
-            # Entités nommées pertinentes
-            entities = [ent.label_ for ent in doc.ents]
-            
-            category_entities = {
-                'cv': ['PERSON', 'ORG'],
-                'rdv': ['DATE', 'TIME', 'PERSON'],
-                'facture': ['MONEY', 'DATE', 'ORG'],
-                'support': ['PRODUCT', 'ORG']
-            }
-            
-            relevant_entities = category_entities.get(category, [])
-            entity_score = len([e for e in entities if e in relevant_entities]) * 0.1
-            
-            return min(entity_score, 0.3)
-        except:
-            return 0.0
-    
-    def _get_user_learning_bonus(self, text: str, category: str) -> float:
-        """Bonus basé sur l'apprentissage des corrections utilisateur."""
-        try:
-            email_hash = hashlib.md5(text.encode()).hexdigest()
-            
-            conn = sqlite3.connect(self.model_path)
-            cursor = conn.cursor()
-            
-            # Chercher des corrections similaires
-            cursor.execute('''
-                SELECT corrected_category, confidence FROM user_corrections 
-                WHERE email_hash = ? OR corrected_category = ?
-                ORDER BY timestamp DESC LIMIT 5
-            ''', (email_hash, category))
-            
-            results = cursor.fetchall()
-            conn.close()
-            
-            if results:
-                # Moyenne pondérée des corrections récentes
-                total_weight = 0
-                weighted_bonus = 0
-                for corrected_cat, confidence in results:
-                    weight = confidence if corrected_cat == category else -confidence
-                    weighted_bonus += weight * 0.2
-                    total_weight += abs(weight)
-                
-                return weighted_bonus / max(total_weight, 1) if total_weight > 0 else 0
-            
-            return 0.0
-        except:
-            return 0.0
-    
     def _calculate_priority(self, text: str, category: str) -> int:
-        """Calcule la priorité de l'email (1=urgent, 5=low)."""
+        """Calcule la priorité de l'email."""
         base_priorities = {
             'support': 2,
             'rdv': 2,
@@ -304,146 +251,182 @@ class SmartClassifier:
         priority = base_priorities.get(category, 3)
         
         # Mots-clés d'urgence
-        urgent_keywords = ['urgent', 'emergency', 'critique', 'asap', 'immédiat']
+        urgent_keywords = ['urgent', 'emergency', 'critique', 'asap', 'immédiat', 'rapidement']
         if any(keyword in text for keyword in urgent_keywords):
             priority = max(1, priority - 2)
         
-        # Analyse de sentiment pour détecter la frustration
-        if self.sentiment_analyzer:
-            try:
-                sentiment = self.sentiment_analyzer(text[:500])
-                if sentiment and len(sentiment) > 0 and len(sentiment[0]) > 0:
-                    negative_score = next((s['score'] for s in sentiment[0] if s['label'] == 'NEGATIVE'), 0)
-                    if negative_score > 0.7:
-                        priority = max(1, priority - 1)
-            except:
-                pass
-        
         return min(priority, 5)
     
-    def _should_auto_respond(self, text: str, category: str) -> bool:
+    def _should_auto_respond(self, text: str, category: str, confidence: float) -> bool:
         """Détermine si une réponse automatique est appropriée."""
-        # Ne jamais répondre aux spams
-        if category == 'spam':
+        # Vérifier la configuration de la catégorie
+        template_config = self.response_templates.get(category, {})
+        if not template_config.get('should_respond', False):
             return False
         
-        # Vérifier les patterns d'évitement
-        for pattern in self.avoid_auto_response:
+        # Vérifier la confiance minimale
+        if confidence < 0.7:
+            return False
+        
+        # Patterns d'évitement
+        avoid_patterns = [
+            r'\b(ne pas répondre|do not reply|noreply)\b',
+            r'\b(automatique|automatic|newsletter)\b',
+            r'\b(notification|alert|reminder)\b'
+        ]
+        
+        for pattern in avoid_patterns:
             if re.search(pattern, text, re.IGNORECASE):
                 return False
         
-        # Catégories qui méritent une réponse
-        auto_respond_categories = ['cv', 'rdv', 'support']
+        return True
+    
+    def _generate_response(self, category: str, sender_name: str, email_data: Dict) -> str:
+        """Génère une réponse personnalisée."""
+        template_config = self.response_templates.get(category, {})
+        template = template_config.get('template', '')
         
-        return category in auto_respond_categories
+        if not template:
+            return None
+        
+        # Personnalisation du nom d'expéditeur
+        if not sender_name or sender_name in ['Monsieur/Madame', '']:
+            sender_name = "Monsieur/Madame"
+        elif len(sender_name) > 30:
+            sender_name = sender_name[:30] + "..."
+        
+        # Variables pour le template
+        template_vars = {
+            'sender_name': sender_name,
+            'user_name': '[Votre nom]',
+            'company_name': '[Votre entreprise]'
+        }
+        
+        # Personnalisation selon la catégorie
+        try:
+            response = template.format(**template_vars)
+            
+            # Ajout d'éléments contextuels
+            if category == 'rdv':
+                response = self._enhance_rdv_response(response, email_data)
+            elif category == 'cv':
+                response = self._enhance_cv_response(response, email_data)
+            elif category == 'support':
+                response = self._enhance_support_response(response, email_data)
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Erreur génération réponse: {e}")
+            return f"Bonjour {sender_name},\n\nMerci pour votre message. Nous vous répondrons rapidement.\n\nCordialement,"
+    
+    def _enhance_rdv_response(self, response: str, email_data: Dict) -> str:
+        """Améliore la réponse pour les RDV."""
+        # Analyser si des créneaux spécifiques sont mentionnés
+        text = email_data.get('body', '') + ' ' + email_data.get('subject', '')
+        
+        # Rechercher des mentions de jours/heures
+        day_mentions = re.findall(r'\b(lundi|mardi|mercredi|jeudi|vendredi)\b', text.lower())
+        time_mentions = re.findall(r'\b(\d{1,2})[h:](\d{2})\b', text.lower())
+        
+        if day_mentions or time_mentions:
+            response += "\n\nP.S.: J'ai noté vos préférences horaires et m'efforcerai de vous proposer des créneaux correspondants."
+        
+        return response
+    
+    def _enhance_cv_response(self, response: str, email_data: Dict) -> str:
+        """Améliore la réponse pour les CV."""
+        # Analyser si un poste spécifique est mentionné
+        text = email_data.get('subject', '') + ' ' + email_data.get('body', '')
+        
+        job_patterns = [
+            r'poste de (.{1,30})',
+            r'candidature (.{1,30})',
+            r'emploi (.{1,30})'
+        ]
+        
+        for pattern in job_patterns:
+            match = re.search(pattern, text.lower())
+            if match:
+                job_title = match.group(1).strip()
+                response += f"\n\nConcernant le poste de {job_title}, nous étudierons attentivement votre profil."
+                break
+        
+        return response
+    
+    def _enhance_support_response(self, response: str, email_data: Dict) -> str:
+        """Améliore la réponse pour le support."""
+        text = email_data.get('body', '') + ' ' + email_data.get('subject', '')
+        
+        # Détecter l'urgence
+        urgent_keywords = ['urgent', 'critique', 'bloqué', 'down', 'panne']
+        
+        if any(keyword in text.lower() for keyword in urgent_keywords):
+            response = response.replace(
+                "dans les prochaines heures",
+                "en priorité absolue et vous contacterons dans l'heure qui suit"
+            )
+        
+        return response
     
     def _extract_specific_info(self, text: str, category: str) -> Dict:
-        """Extrait des informations spécifiques selon la catégorie."""
+        """Extrait des informations spécifiques."""
         info = {}
         
         if category == 'rdv':
             # Extraction de dates/heures
-            date_patterns = [
-                r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b',
-                r'\b(\d{1,2})-(\d{1,2})-(\d{4})\b',
-                r'\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b'
-            ]
+            dates = re.findall(r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b', text)
+            times = re.findall(r'\b(\d{1,2}):(\d{2})\b', text)
+            days = re.findall(r'\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b', text.lower())
             
-            time_patterns = [
-                r'\b(\d{1,2}):(\d{2})\b',
-                r'\b(\d{1,2})h(\d{2})\b',
-                r'\b(\d{1,2})h\b'
-            ]
-            
-            dates = []
-            times = []
-            
-            for pattern in date_patterns:
-                dates.extend(re.findall(pattern, text, re.IGNORECASE))
-            
-            for pattern in time_patterns:
-                times.extend(re.findall(pattern, text))
-            
-            info['potential_dates'] = dates
-            info['potential_times'] = times
+            info['potential_dates'] = dates[:3]
+            info['potential_times'] = times[:3]
+            info['mentioned_days'] = days[:3]
         
         elif category == 'cv':
-            # Extraction d'informations candidat
-            if self.nlp:
-                try:
-                    doc = self.nlp(text)
-                    persons = [ent.text for ent in doc.ents if ent.label_ == 'PERSON']
-                    info['candidate_names'] = persons[:3]  # Max 3 noms
-                except:
-                    pass
-        
-        elif category == 'facture':
-            # Extraction de montants
-            money_patterns = [
-                r'(\d+[,.]?\d*)\s*€',
-                r'€\s*(\d+[,.]?\d*)',
-                r'(\d+[,.]?\d*)\s*euros?'
+            # Extraction de postes mentionnés
+            job_patterns = [
+                r'poste de (.{1,50})',
+                r'candidature (.{1,50})',
+                r'emploi (.{1,50})'
             ]
             
-            amounts = []
-            for pattern in money_patterns:
-                amounts.extend(re.findall(pattern, text, re.IGNORECASE))
+            for pattern in job_patterns:
+                matches = re.findall(pattern, text.lower())
+                if matches:
+                    info['job_positions'] = matches[:3]
+                    break
+        
+        elif category == 'support':
+            # Extraction de produits/services mentionnés
+            product_keywords = ['logiciel', 'application', 'site', 'service', 'produit']
+            products = []
+            for keyword in product_keywords:
+                pattern = f'{keyword} (.{{1,30}})'
+                matches = re.findall(pattern, text.lower())
+                products.extend(matches)
             
-            info['amounts'] = amounts[:5]  # Max 5 montants
+            info['mentioned_products'] = products[:3]
         
         return info
     
-    def _generate_response_suggestion(self, email_data: Dict, category: str, extracted_info: Dict) -> str:
-        """Génère une suggestion de réponse contextuelle."""
-        sender_name = email_data.get('sender_name', 'Monsieur/Madame')
-        
-        templates = {
-            'cv': f"""Bonjour {sender_name},
-
-Merci pour votre candidature et l'intérêt que vous portez à notre entreprise.
-
-Nous avons bien reçu votre CV et nous l'examinerons attentivement. Nous vous recontacterons dans les meilleurs délais si votre profil correspond à nos besoins actuels.
-
-Cordialement,
-[Votre nom]""",
-
-            'rdv': f"""Bonjour {sender_name},
-
-Merci pour votre demande de rendez-vous.
-
-Je consulte mon planning et vous propose les créneaux suivants :
-- [Date 1] à [Heure 1]
-- [Date 2] à [Heure 2]
-
-N'hésitez pas à me confirmer le créneau qui vous convient le mieux.
-
-Cordialement,
-[Votre nom]""",
-
-            'support': f"""Bonjour {sender_name},
-
-Merci de nous avoir contactés concernant votre demande d'assistance.
-
-Nous avons bien pris en compte votre message et notre équipe technique va examiner votre problème. Nous vous apporterons une réponse dans les plus brefs délais.
-
-Cordialement,
-L'équipe support"""
-        }
-        
-        return templates.get(category, f"Bonjour {sender_name},\n\nMerci pour votre message. Nous vous répondrons rapidement.\n\nCordialement,")
-    
-    def _explain_reasoning(self, scores: Dict[str, float], best_category: Tuple[str, float]) -> str:
-        """Génère une explication du raisonnement de classification."""
+    def _explain_reasoning(self, scores: Dict[str, float], best_category: Tuple[str, float], should_respond: bool) -> str:
+        """Génère une explication du raisonnement."""
         top_3 = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:3]
         
         explanation = f"Classé comme '{best_category[0]}' (confiance: {best_category[1]:.2f})\n"
         explanation += f"Scores alternatifs: "
         explanation += ", ".join([f"{cat}: {score:.2f}" for cat, score in top_3[1:]])
         
+        if should_respond:
+            explanation += "\nRéponse automatique recommandée."
+        else:
+            explanation += "\nRéponse automatique non recommandée."
+        
         return explanation
     
     def _fallback_analysis(self) -> EmailAnalysis:
-        """Analyse de fallback en cas d'erreur."""
+        """Analyse de fallback."""
         return EmailAnalysis(
             category='general',
             confidence=0.1,

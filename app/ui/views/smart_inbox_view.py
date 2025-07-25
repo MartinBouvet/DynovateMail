@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Vue Smart Inbox corrigée avec interface fonctionnelle.
+Vue Smart Inbox avec panel de réponses IA visible.
 """
 import logging
 from typing import List, Dict, Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, 
-    QLabel, QPushButton, QFrame, QButtonGroup, QSplitter
+    QLabel, QPushButton, QFrame, QButtonGroup, QSplitter, QTextEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QFont
@@ -36,7 +36,8 @@ class EmailLoaderThread(QThread):
     def run(self):
         """Charge et analyse les emails."""
         try:
-            emails = self.gmail_client.get_recent_emails(limit=50)
+            # Récupérer les vrais emails depuis Gmail
+            emails = self.gmail_client.get_recent_emails(limit=20)
             self.emails_loaded.emit(emails)
             
             self.emails_with_analysis = []
@@ -46,12 +47,13 @@ class EmailLoaderThread(QThread):
                 if self.should_stop:
                     break
                 
+                # Analyser chaque email avec l'IA
                 analysis = self.ai_processor.process_email(email)
                 email.ai_analysis = analysis
                 self.emails_with_analysis.append(email)
                 
                 self.progress_updated.emit(i + 1, total_emails)
-                self.msleep(50)
+                self.msleep(100)  # Petite pause pour voir le progrès
             
             self.analysis_complete.emit()
             logger.info(f"Analyse IA terminée pour {len(self.emails_with_analysis)} emails")
@@ -64,7 +66,7 @@ class EmailLoaderThread(QThread):
         self.should_stop = True
 
 class CategoryFilter(QPushButton):
-    """Bouton de filtre par catégorie corrigé."""
+    """Bouton de filtre par catégorie."""
     
     def __init__(self, name: str, category: str, count: int = 0):
         super().__init__(f"{name} ({count})")
@@ -125,11 +127,220 @@ class CategoryFilter(QPushButton):
         
         self.setStyleSheet(style)
 
+class AIResponsePanel(QFrame):
+    """Panel de réponse IA intégré directement dans l'interface."""
+    
+    response_approved = pyqtSignal(str, object)  # response_text, email
+    response_rejected = pyqtSignal(object)  # email
+    
+    def __init__(self):
+        super().__init__()
+        self.current_email = None
+        self.current_analysis = None
+        
+        self.setObjectName("ai-response-panel")
+        self.setMinimumHeight(300)
+        self.setMaximumHeight(400)
+        
+        self._setup_ui()
+        self._apply_style()
+        self.hide()  # Caché par défaut
+    
+    def _setup_ui(self):
+        """Configure l'interface du panel."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setSpacing(15)
+        
+        # Header
+        header_layout = QHBoxLayout()
+        
+        title_label = QLabel("🤖 Réponse IA suggérée")
+        title_label.setObjectName("ai-title")
+        title_label.setFont(QFont("Inter", 16, QFont.Weight.Bold))
+        header_layout.addWidget(title_label)
+        
+        header_layout.addStretch()
+        
+        # Indicateur de confiance
+        self.confidence_label = QLabel("Confiance: 0%")
+        self.confidence_label.setObjectName("confidence-label")
+        self.confidence_label.setFont(QFont("Inter", 12, QFont.Weight.Medium))
+        header_layout.addWidget(self.confidence_label)
+        
+        layout.addLayout(header_layout)
+        
+        # Informations sur l'email analysé
+        self.email_info_label = QLabel()
+        self.email_info_label.setObjectName("email-info")
+        self.email_info_label.setFont(QFont("Inter", 12))
+        self.email_info_label.setWordWrap(True)
+        layout.addWidget(self.email_info_label)
+        
+        # Zone de texte pour la réponse
+        response_label = QLabel("Réponse suggérée (modifiable):")
+        response_label.setFont(QFont("Inter", 13, QFont.Weight.Medium))
+        layout.addWidget(response_label)
+        
+        self.response_text = QTextEdit()
+        self.response_text.setObjectName("response-text")
+        self.response_text.setFont(QFont("Inter", 12))
+        self.response_text.setMinimumHeight(150)
+        self.response_text.setPlaceholderText("Aucune réponse suggérée...")
+        layout.addWidget(self.response_text)
+        
+        # Boutons d'action
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+        
+        self.reject_btn = QPushButton("❌ Ignorer")
+        self.reject_btn.setObjectName("reject-btn")
+        self.reject_btn.clicked.connect(self._reject_response)
+        buttons_layout.addWidget(self.reject_btn)
+        
+        buttons_layout.addStretch()
+        
+        self.approve_btn = QPushButton("✅ Envoyer cette réponse")
+        self.approve_btn.setObjectName("approve-btn")
+        self.approve_btn.clicked.connect(self._approve_response)
+        buttons_layout.addWidget(self.approve_btn)
+        
+        layout.addLayout(buttons_layout)
+    
+    def _apply_style(self):
+        """Applique le style au panel."""
+        self.setStyleSheet("""
+            #ai-response-panel {
+                background-color: #e3f2fd;
+                border: 2px solid #1976d2;
+                border-radius: 12px;
+                margin: 10px 0;
+            }
+            
+            #ai-title {
+                color: #1565c0;
+            }
+            
+            #confidence-label {
+                color: #1976d2;
+                background-color: #bbdefb;
+                padding: 4px 12px;
+                border-radius: 15px;
+                font-weight: 600;
+            }
+            
+            #email-info {
+                color: #424242;
+                background-color: #ffffff;
+                padding: 10px;
+                border-radius: 6px;
+                border: 1px solid #e1f5fe;
+            }
+            
+            #response-text {
+                background-color: #ffffff;
+                border: 2px solid #90caf9;
+                border-radius: 8px;
+                padding: 10px;
+                color: #212121;
+                font-family: 'Inter', Arial, sans-serif;
+                line-height: 1.4;
+            }
+            
+            #response-text:focus {
+                border-color: #1976d2;
+            }
+            
+            #approve-btn {
+                background-color: #4caf50;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-weight: 600;
+                font-size: 14px;
+                min-width: 160px;
+            }
+            
+            #approve-btn:hover {
+                background-color: #45a049;
+            }
+            
+            #reject-btn {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 20px;
+                font-weight: 600;
+                font-size: 14px;
+                min-width: 100px;
+            }
+            
+            #reject-btn:hover {
+                background-color: #da190b;
+            }
+        """)
+    
+    def show_suggestion(self, email: Email, analysis):
+        """Affiche une suggestion de réponse."""
+        self.current_email = email
+        self.current_analysis = analysis
+        
+        # Mettre à jour les informations
+        confidence_percent = int(analysis.confidence * 100)
+        self.confidence_label.setText(f"Confiance: {confidence_percent}%")
+        
+        # Informations sur l'email
+        sender_name = email.get_sender_name()
+        category_names = {
+            'cv': 'Candidature/CV',
+            'rdv': 'Rendez-vous',
+            'support': 'Support technique',
+            'facture': 'Facture',
+            'general': 'Email général'
+        }
+        category_display = category_names.get(analysis.category, analysis.category)
+        
+        email_info = f"📧 De: {sender_name}\n📂 Catégorie détectée: {category_display}\n📋 Sujet: {email.subject or '(Aucun sujet)'}"
+        self.email_info_label.setText(email_info)
+        
+        # Réponse suggérée
+        if analysis.suggested_response:
+            self.response_text.setPlainText(analysis.suggested_response)
+            self.approve_btn.setEnabled(True)
+        else:
+            self.response_text.setPlainText("Aucune réponse automatique suggérée pour cette catégorie.")
+            self.approve_btn.setEnabled(False)
+        
+        self.show()
+        logger.info(f"Suggestion IA affichée pour email de {sender_name}")
+    
+    def _approve_response(self):
+        """Approuve et envoie la réponse."""
+        if not self.current_email:
+            return
+        
+        response_text = self.response_text.toPlainText().strip()
+        if not response_text:
+            return
+        
+        self.response_approved.emit(response_text, self.current_email)
+        self.hide()
+        logger.info("Réponse IA approuvée par l'utilisateur")
+    
+    def _reject_response(self):
+        """Rejette la suggestion."""
+        if self.current_email:
+            self.response_rejected.emit(self.current_email)
+        
+        self.hide()
+        logger.info("Suggestion IA rejetée par l'utilisateur")
+
 class SmartInboxView(QWidget):
-    """Vue Smart Inbox corrigée."""
+    """Vue Smart Inbox avec panel IA intégré."""
     
     email_selected = pyqtSignal(object)
-    ai_suggestion_requested = pyqtSignal(object)
     
     def __init__(self, gmail_client: GmailClient, ai_processor: AIProcessor):
         super().__init__()
@@ -161,24 +372,43 @@ class SmartInboxView(QWidget):
         filters_section = self._create_filters()
         layout.addWidget(filters_section)
         
-        # Splitter principal
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        # Splitter principal horizontal
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # Liste des emails
+        # Liste des emails (côté gauche)
         email_list = self._create_email_list()
-        splitter.addWidget(email_list)
+        main_splitter.addWidget(email_list)
         
-        # Vue détail
+        # Côté droit : détail + panel IA
+        right_panel = self._create_right_panel()
+        main_splitter.addWidget(right_panel)
+        
+        # Proportions du splitter principal
+        main_splitter.setSizes([400, 800])
+        layout.addWidget(main_splitter)
+    
+    def _create_right_panel(self) -> QWidget:
+        """Crée le panel de droite avec détail et suggestions IA."""
+        right_widget = QWidget()
+        layout = QVBoxLayout(right_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Vue détail de l'email
         self.detail_view = EmailDetailView()
         self.detail_view.action_requested.connect(self._handle_email_action)
-        splitter.addWidget(self.detail_view)
+        layout.addWidget(self.detail_view)
         
-        # Proportions du splitter
-        splitter.setSizes([500, 700])
-        layout.addWidget(splitter)
+        # Panel de réponse IA (toujours visible mais caché par défaut)
+        self.ai_response_panel = AIResponsePanel()
+        self.ai_response_panel.response_approved.connect(self._on_ai_response_approved)
+        self.ai_response_panel.response_rejected.connect(self._on_ai_response_rejected)
+        layout.addWidget(self.ai_response_panel)
+        
+        return right_widget
     
     def _create_filters(self) -> QWidget:
-        """Crée la section des filtres corrigée."""
+        """Crée la section des filtres."""
         filters_frame = QFrame()
         filters_frame.setObjectName("filters-section")
         filters_frame.setMinimumHeight(80)
@@ -194,12 +424,12 @@ class SmartInboxView(QWidget):
         # Filtres disponibles
         filters_data = [
             ("Tous", "all", 0),
-            ("Urgent", "urgent", 0),
-            ("CV", "cv", 0),
-            ("RDV", "rdv", 0),
-            ("Support", "support", 0),
-            ("Factures", "facture", 0),
-            ("Spam", "spam", 0)
+            ("⚡ Réponses IA", "ai_suggestions", 0),
+            ("🔴 Urgent", "urgent", 0),
+            ("📄 CV", "cv", 0),
+            ("📅 RDV", "rdv", 0),
+            ("🛠️ Support", "support", 0),
+            ("💰 Factures", "facture", 0)
         ]
         
         self.category_filters = {}
@@ -329,6 +559,9 @@ class SmartInboxView(QWidget):
         
         self.is_loading = True
         
+        # Cacher le panel IA
+        self.ai_response_panel.hide()
+        
         # Afficher le chargement
         self._clear_email_list()
         self.loading_label.setText("🔄 Connexion à Gmail...")
@@ -350,7 +583,7 @@ class SmartInboxView(QWidget):
         self.progress_label.setText("Analyse IA: 0 / 0")
         self.progress_label.show()
         
-        logger.info(f"{len(emails)} emails chargés, analyse IA en cours...")
+        logger.info(f"{len(emails)} emails chargés depuis Gmail, analyse IA en cours...")
     
     def _on_progress_updated(self, current: int, total: int):
         """Met à jour la barre de progression."""
@@ -371,6 +604,14 @@ class SmartInboxView(QWidget):
         self._update_filter_counts()
         
         self.is_loading = False
+        
+        # Afficher un message sur les suggestions IA disponibles
+        ai_suggestions_count = len([e for e in self.all_emails 
+                                   if hasattr(e, 'ai_analysis') and e.ai_analysis and 
+                                   getattr(e.ai_analysis, 'should_auto_respond', False)])
+        
+        if ai_suggestions_count > 0:
+            logger.info(f"🤖 {ai_suggestions_count} réponses IA sont disponibles - Cliquez sur '⚡ Réponses IA' pour les voir")
         
         logger.info(f"Interface mise à jour avec {len(self.all_emails)} emails analysés")
     
@@ -436,6 +677,13 @@ class SmartInboxView(QWidget):
         # Filtrer les emails selon la catégorie
         if category == "all":
             self.filtered_emails = self.all_emails.copy()
+        elif category == "ai_suggestions":
+            # Filtre spécial pour les emails avec suggestions IA
+            self.filtered_emails = [
+                email for email in self.all_emails 
+                if hasattr(email, 'ai_analysis') and email.ai_analysis and 
+                getattr(email.ai_analysis, 'should_auto_respond', False)
+            ]
         elif category == "urgent":
             self.filtered_emails = [
                 email for email in self.all_emails 
@@ -458,18 +706,22 @@ class SmartInboxView(QWidget):
         """Met à jour les compteurs des filtres."""
         counts = {
             "all": len(self.all_emails),
+            "ai_suggestions": 0,
             "urgent": 0,
             "cv": 0,
             "rdv": 0,
             "support": 0,
-            "facture": 0,
-            "spam": 0
+            "facture": 0
         }
         
         # Compter les emails par catégorie
         for email in self.all_emails:
             if hasattr(email, 'ai_analysis') and email.ai_analysis:
                 analysis = email.ai_analysis
+                
+                # Compteur suggestions IA
+                if getattr(analysis, 'should_auto_respond', False):
+                    counts["ai_suggestions"] += 1
                 
                 # Compteur urgent (priorité <= 2)
                 if getattr(analysis, 'priority', 5) <= 2:
@@ -514,151 +766,215 @@ class SmartInboxView(QWidget):
                     card._apply_style()
                     break
         
-        # Émettre les signaux
-        self.email_selected.emit(email)
-        
-        # Déclencher suggestion IA si pertinente
+        # Afficher/cacher le panel IA selon s'il y a une suggestion
         if (hasattr(email, 'ai_analysis') and email.ai_analysis and 
             getattr(email.ai_analysis, 'should_auto_respond', False)):
-            self.ai_suggestion_requested.emit(email)
+            
+            self.ai_response_panel.show_suggestion(email, email.ai_analysis)
+        else:
+            self.ai_response_panel.hide()
+        
+        # Émettre le signal
+        self.email_selected.emit(email)
         
         logger.info(f"Email sélectionné: {email.id}")
     
+    def _on_ai_response_approved(self, response_text: str, email: Email):
+       """Gère l'approbation d'une réponse IA."""
+       try:
+           # Importer la vue de composition
+           from ui.compose_view import ComposeView
+           
+           # Préparer le sujet de réponse
+           subject = email.subject or ""
+           if not subject.lower().startswith('re:'):
+               subject = f"Re: {subject}"
+           
+           # Créer et afficher le dialogue de composition avec la réponse pré-remplie
+           compose_dialog = ComposeView(
+               self.gmail_client,
+               parent=self.window(),
+               to=email.sender,
+               subject=subject,
+               body=response_text,
+               is_reply=True
+           )
+           
+           # Indiquer que c'est une réponse IA
+           compose_dialog.show_ai_indicator()
+           
+           # Connecter le signal d'envoi pour mettre à jour l'interface
+           compose_dialog.email_sent.connect(self._on_email_sent)
+           
+           compose_dialog.exec()
+           
+           logger.info(f"Réponse IA approuvée pour email {email.id}")
+           
+       except Exception as e:
+           logger.error(f"Erreur lors de l'ouverture de la composition: {e}")
+   
+    def _on_ai_response_rejected(self, email: Email):
+       """Gère le rejet d'une réponse IA."""
+       logger.info(f"Réponse IA rejetée pour email {email.id}")
+       
+       # Optionnel : enregistrer le rejet pour l'apprentissage
+       if hasattr(email, 'ai_analysis') and email.ai_analysis:
+           # Ici on pourrait améliorer l'IA avec le feedback
+           pass
+   
+    def _on_email_sent(self):
+       """Gère la confirmation d'envoi d'email."""
+       # Afficher une notification de succès dans la fenêtre principale
+       main_window = self.window()
+       if hasattr(main_window, 'show_notification'):
+           main_window.show_notification("✅ Réponse envoyée avec succès", 3000)
+       
+       # Optionnel : actualiser la liste des emails pour voir les changements
+       # self.refresh_emails()
+   
     def _handle_email_action(self, action_type: str, email: Email):
-        """Gère les actions sur les emails."""
-        logger.info(f"Action '{action_type}' demandée pour email {email.id}")
-        
-        if action_type == "reply":
-            self._reply_to_email(email)
-        elif action_type == "archive":
-            self._archive_email(email)
-        elif action_type == "add_to_calendar":
-            self._add_to_calendar(email)
-        elif action_type == "mark_urgent":
-            self._mark_urgent(email)
-        elif action_type == "delete":
-            self._delete_email(email)
-        elif action_type == "report_spam":
-            self._report_spam(email)
-    
+       """Gère les actions sur les emails."""
+       logger.info(f"Action '{action_type}' demandée pour email {email.id}")
+       
+       if action_type == "reply":
+           self._reply_to_email(email)
+       elif action_type == "archive":
+           self._archive_email(email)
+       elif action_type == "add_to_calendar":
+           self._add_to_calendar(email)
+       elif action_type == "mark_urgent":
+           self._mark_urgent(email)
+       elif action_type == "delete":
+           self._delete_email(email)
+       elif action_type == "report_spam":
+           self._report_spam(email)
+   
     def _reply_to_email(self, email: Email):
-        """Ouvre la fenêtre de réponse."""
-        try:
-            from ui.compose_view import ComposeView
-            
-            subject = email.subject or ""
-            if not subject.lower().startswith('re:'):
-                subject = f"Re: {subject}"
-            
-            original_body = email.body or email.snippet or ""
-            if len(original_body) > 500:
-                original_body = original_body[:500] + "..."
-            
-            body = f"\n\n--- Message original ---\nDe: {email.sender}\nObjet: {email.subject}\nDate: {email.received_date}\n\n{original_body}"
-            
-            compose_dialog = ComposeView(
-                self.gmail_client,
-                parent=self,
-                to=email.sender,
-                subject=subject,
-                body=body,
-                is_reply=True
-            )
-            compose_dialog.exec()
-            
-        except Exception as e:
-            logger.error(f"Erreur ouverture compose: {e}")
-    
+       """Ouvre la fenêtre de réponse."""
+       try:
+           from ui.compose_view import ComposeView
+           
+           subject = email.subject or ""
+           if not subject.lower().startswith('re:'):
+               subject = f"Re: {subject}"
+           
+           original_body = email.body or email.snippet or ""
+           if len(original_body) > 500:
+               original_body = original_body[:500] + "..."
+           
+           body = f"\n\n--- Message original ---\nDe: {email.sender}\nObjet: {email.subject}\nDate: {email.received_date}\n\n{original_body}"
+           
+           compose_dialog = ComposeView(
+               self.gmail_client,
+               parent=self.window(),
+               to=email.sender,
+               subject=subject,
+               body=body,
+               is_reply=True
+           )
+           
+           compose_dialog.email_sent.connect(self._on_email_sent)
+           compose_dialog.exec()
+           
+       except Exception as e:
+           logger.error(f"Erreur ouverture compose: {e}")
+   
     def _archive_email(self, email: Email):
-        """Archive un email."""
-        success = self.gmail_client.archive_email(email.id)
-        if success:
-            # Supprimer de la liste
-            self.all_emails = [e for e in self.all_emails if e.id != email.id]
-            if self.filtered_emails:
-                self.filtered_emails = [e for e in self.filtered_emails if e.id != email.id]
-            
-            # Recréer l'affichage
-            self._create_email_cards()
-            self._update_filter_counts()
-            
-            # Effacer la vue détail si c'était l'email sélectionné
-            if self.selected_email and self.selected_email.id == email.id:
-                self.detail_view.clear_selection()
-                self.selected_email = None
-            
-            logger.info(f"Email {email.id} archivé")
-    
+       """Archive un email."""
+       success = self.gmail_client.archive_email(email.id)
+       if success:
+           # Supprimer de la liste
+           self.all_emails = [e for e in self.all_emails if e.id != email.id]
+           if self.filtered_emails:
+               self.filtered_emails = [e for e in self.filtered_emails if e.id != email.id]
+           
+           # Recréer l'affichage
+           self._create_email_cards()
+           self._update_filter_counts()
+           
+           # Effacer la vue détail si c'était l'email sélectionné
+           if self.selected_email and self.selected_email.id == email.id:
+               self.detail_view.clear_selection()
+               self.ai_response_panel.hide()
+               self.selected_email = None
+           
+           logger.info(f"Email {email.id} archivé")
+   
     def _delete_email(self, email: Email):
-        """Supprime un email."""
-        success = self.gmail_client.delete_email(email.id)
-        if success:
-            # Supprimer de la liste (même logique que archive)
-            self.all_emails = [e for e in self.all_emails if e.id != email.id]
-            if self.filtered_emails:
-                self.filtered_emails = [e for e in self.filtered_emails if e.id != email.id]
-            
-            self._create_email_cards()
-            self._update_filter_counts()
-            
-            if self.selected_email and self.selected_email.id == email.id:
-                self.detail_view.clear_selection()
-                self.selected_email = None
-            
-            logger.info(f"Email {email.id} supprimé")
-    
+       """Supprime un email."""
+       success = self.gmail_client.delete_email(email.id)
+       if success:
+           # Supprimer de la liste (même logique que archive)
+           self.all_emails = [e for e in self.all_emails if e.id != email.id]
+           if self.filtered_emails:
+               self.filtered_emails = [e for e in self.filtered_emails if e.id != email.id]
+           
+           self._create_email_cards()
+           self._update_filter_counts()
+           
+           if self.selected_email and self.selected_email.id == email.id:
+               self.detail_view.clear_selection()
+               self.ai_response_panel.hide()
+               self.selected_email = None
+           
+           logger.info(f"Email {email.id} supprimé")
+   
     def _add_to_calendar(self, email: Email):
-        """Ajoute un événement au calendrier depuis l'email."""
-        logger.info(f"Ajout au calendrier pour email {email.id} - À implémenter")
-    
+       """Ajoute un événement au calendrier depuis l'email."""
+       logger.info(f"Ajout au calendrier pour email {email.id} - À implémenter")
+   
     def _mark_urgent(self, email: Email):
-        """Marque un email comme urgent."""
-        if hasattr(email, 'ai_analysis') and email.ai_analysis:
-            email.ai_analysis.priority = 1
-            self._update_filter_counts()
-            
-            # Mettre à jour la carte affichée
-            for card in self.email_cards:
-                if card.email.id == email.id:
-                    card.update_ai_analysis(email.ai_analysis)
-                    break
-            
-            logger.info(f"Email {email.id} marqué comme urgent")
-    
+       """Marque un email comme urgent."""
+       if hasattr(email, 'ai_analysis') and email.ai_analysis:
+           email.ai_analysis.priority = 1
+           self._update_filter_counts()
+           
+           # Mettre à jour la carte affichée
+           for card in self.email_cards:
+               if card.email.id == email.id:
+                   card.update_ai_analysis(email.ai_analysis)
+                   break
+           
+           logger.info(f"Email {email.id} marqué comme urgent")
+   
     def _report_spam(self, email: Email):
-        """Signale un email comme spam."""
-        logger.info(f"Email {email.id} signalé comme spam - À implémenter")
-    
+       """Signale un email comme spam."""
+       logger.info(f"Email {email.id} signalé comme spam - À implémenter")
+   
     def filter_emails(self, search_text: str):
-        """Filtre les emails par texte de recherche."""
-        if not search_text:
-            self.filtered_emails = self.all_emails.copy()
-        else:
-            search_lower = search_text.lower()
-            self.filtered_emails = [
-                email for email in self.all_emails
-                if (search_lower in (email.subject or '').lower() or
-                    search_lower in (email.body or '').lower() or
-                    search_lower in (email.sender or '').lower() or
-                    search_lower in (email.snippet or '').lower())
-            ]
-        
-        self._create_email_cards()
-        logger.info(f"Recherche '{search_text}': {len(self.filtered_emails)} résultats")
-    
+       """Filtre les emails par texte de recherche."""
+       if not search_text:
+           self.filtered_emails = self.all_emails.copy()
+       else:
+           search_lower = search_text.lower()
+           self.filtered_emails = [
+               email for email in self.all_emails
+               if (search_lower in (email.subject or '').lower() or
+                   search_lower in (email.body or '').lower() or
+                   search_lower in (email.sender or '').lower() or
+                   search_lower in (email.snippet or '').lower())
+           ]
+       
+       self._create_email_cards()
+       logger.info(f"Recherche '{search_text}': {len(self.filtered_emails)} résultats")
+   
     def clear_filter(self):
-        """Supprime le filtre de recherche."""
-        self.filtered_emails = self.all_emails.copy()
-        self._create_email_cards()
-    
+       """Supprime le filtre de recherche."""
+       self.filtered_emails = self.all_emails.copy()
+       self._create_email_cards()
+   
     def get_stats(self) -> Dict:
-        """Retourne les statistiques de la boîte mail."""
-        unread_count = len([e for e in self.all_emails if not e.is_read])
-        analyzed_count = len([e for e in self.all_emails if hasattr(e, 'ai_analysis') and e.ai_analysis])
-        
-        return {
-            'total_emails': len(self.all_emails),
-            'unread_emails': unread_count,
-            'analyzed_emails': analyzed_count,
-            'ai_accuracy': analyzed_count / len(self.all_emails) if self.all_emails else 0
-        }
+       """Retourne les statistiques de la boîte mail."""
+       unread_count = len([e for e in self.all_emails if not e.is_read])
+       analyzed_count = len([e for e in self.all_emails if hasattr(e, 'ai_analysis') and e.ai_analysis])
+       ai_suggestions_count = len([e for e in self.all_emails 
+                                  if hasattr(e, 'ai_analysis') and e.ai_analysis and 
+                                  getattr(e.ai_analysis, 'should_auto_respond', False)])
+       
+       return {
+           'total_emails': len(self.all_emails),
+           'unread_emails': unread_count,
+           'analyzed_emails': analyzed_count,
+           'ai_suggestions': ai_suggestions_count,
+           'ai_accuracy': analyzed_count / len(self.all_emails) if self.all_emails else 0
+       }

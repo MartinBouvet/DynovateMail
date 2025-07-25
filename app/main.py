@@ -6,7 +6,7 @@ import sys
 import logging
 from pathlib import Path
 import os
-
+from ui.components.ai_suggestion_panel import AISuggestionPanel  # Assurer l'import
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.fonts.debug=false"
 
 app_dir = Path(__file__).parent

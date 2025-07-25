@@ -1,30 +1,23 @@
 #!/usr/bin/env python3
 """
-Carte d'email intelligente avec informations IA et actions rapides.
+Panel de suggestions IA avec réponses automatiques.
 """
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QFrame, QScrollArea, QCheckBox, QSlider
-)
-from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QColor, QPainter, QBrush
 import logging
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from PyQt6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, 
-    QPushButton, QWidget, QGraphicsDropShadowEffect
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QTextEdit, QFrame, QCheckBox, QSlider, QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QColor, QPalette
+from PyQt6.QtGui import QFont, QColor
 
 from models.email_model import Email
-from ai.smart_classifier import EmailAnalysis
 
 logger = logging.getLogger(__name__)
 
 class ConfidenceBar(QWidget):
-    """Barre de confiance visuelle pour l'IA."""
+    """Barre de confiance visuelle."""
     
     def __init__(self, confidence: float):
         super().__init__()
@@ -33,7 +26,7 @@ class ConfidenceBar(QWidget):
         self.setMinimumWidth(200)
     
     def paintEvent(self, event):
-        """Dessine la barre de confiance."""
+        from PyQt6.QtGui import QPainter, QBrush
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
@@ -45,100 +38,25 @@ class ConfidenceBar(QWidget):
         # Barre de progression
         width = int(self.width() * self.confidence)
         if self.confidence >= 0.8:
-            color = QColor("#28a745")  # Vert
+            color = QColor("#28a745")
         elif self.confidence >= 0.6:
-            color = QColor("#ffc107")  # Jaune
+            color = QColor("#ffc107")
         else:
-            color = QColor("#dc3545")  # Rouge
+            color = QColor("#dc3545")
         
         painter.setBrush(QBrush(color))
         painter.drawRoundedRect(0, 0, width, self.height(), 4, 4)
 
-class ActionButton(QPushButton):
-    """Bouton d'action avec icône et style moderne."""
-    
-    def __init__(self, text: str, icon: str, button_type: str = "secondary"):
-        super().__init__(f"{icon} {text}")
-        self.button_type = button_type
-        self.setFixedHeight(40)
-        self.setFont(QFont("Inter", 13, QFont.Weight.Medium))
-        self._apply_style()
-    
-    def _apply_style(self):
-        """Applique le style selon le type."""
-        styles = {
-            "primary": """
-                QPushButton {
-                    background-color: #007bff;
-                    color: white;
-                    border: none;
-                    border-radius: 20px;
-                    padding: 8px 20px;
-                    font-weight: 600;
-                }
-                QPushButton:hover {
-                    background-color: #0056b3;
-                }
-                QPushButton:pressed {
-                    background-color: #004085;
-                }
-            """,
-            "success": """
-                QPushButton {
-                    background-color: #28a745;
-                    color: white;
-                    border: none;
-                    border-radius: 20px;
-                    padding: 8px 20px;
-                    font-weight: 600;
-                }
-                QPushButton:hover {
-                    background-color: #1e7e34;
-                }
-            """,
-            "secondary": """
-                QPushButton {
-                    background-color: #6c757d;
-                    color: white;
-                    border: none;
-                    border-radius: 20px;
-                    padding: 8px 20px;
-                    font-weight: 600;
-                }
-                QPushButton:hover {
-                    background-color: #545b62;
-                }
-            """,
-            "outline": """
-                QPushButton {
-                    background-color: transparent;
-                    color: #007bff;
-                    border: 2px solid #007bff;
-                    border-radius: 20px;
-                    padding: 8px 20px;
-                    font-weight: 600;
-                }
-                QPushButton:hover {
-                    background-color: #007bff;
-                    color: white;
-                }
-            """
-        }
-        
-        self.setStyleSheet(styles.get(self.button_type, styles["secondary"]))
-
 class AISuggestionPanel(QWidget):
-    """Panel flottant de suggestions IA avec interface moderne."""
+    """Panel de suggestions IA moderne."""
     
     response_approved = pyqtSignal(str, object)  # response_text, email
     response_rejected = pyqtSignal(object)  # email
-    action_requested = pyqtSignal(str, object)  # action_type, email
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_email = None
         self.current_analysis = None
-        self.is_visible = False
         
         self.setObjectName("ai-suggestion-panel")
         self.setFixedSize(450, 600)
@@ -147,7 +65,6 @@ class AISuggestionPanel(QWidget):
         
         self._setup_ui()
         self._apply_style()
-        self._setup_animations()
         
         # Effet d'ombre
         shadow = QGraphicsDropShadowEffect()
@@ -157,8 +74,8 @@ class AISuggestionPanel(QWidget):
         self.setGraphicsEffect(shadow)
     
     def _setup_ui(self):
-        """Configure l'interface du panel."""
-        # Container principal avec bordures arrondies
+        """Configure l'interface."""
+        # Container principal
         self.main_container = QFrame()
         self.main_container.setObjectName("main-container")
         
@@ -166,7 +83,6 @@ class AISuggestionPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.main_container)
         
-        # Layout du container
         container_layout = QVBoxLayout(self.main_container)
         container_layout.setContentsMargins(20, 20, 20, 20)
         container_layout.setSpacing(16)
@@ -175,57 +91,34 @@ class AISuggestionPanel(QWidget):
         header = self._create_header()
         container_layout.addWidget(header)
         
-        # Zone de scroll pour le contenu
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        
-        # Widget de contenu
-        content_widget = QWidget()
-        self.content_layout = QVBoxLayout(content_widget)
-        self.content_layout.setSpacing(16)
-        
-        # Sections du contenu
+        # Analyse IA
         self.analysis_section = self._create_analysis_section()
-        self.content_layout.addWidget(self.analysis_section)
+        container_layout.addWidget(self.analysis_section)
         
+        # Réponse suggérée
         self.response_section = self._create_response_section()
-        self.content_layout.addWidget(self.response_section)
+        container_layout.addWidget(self.response_section)
         
-        self.actions_section = self._create_actions_section()
-        self.content_layout.addWidget(self.actions_section)
-        
-        self.content_layout.addStretch()
-        
-        scroll_area.setWidget(content_widget)
-        container_layout.addWidget(scroll_area)
-        
-        # Footer avec boutons principaux
+        # Footer avec boutons
         footer = self._create_footer()
         container_layout.addWidget(footer)
     
     def _create_header(self) -> QWidget:
-        """Crée le header du panel."""
+        """Crée le header."""
         header = QFrame()
-        header.setObjectName("panel-header")
-        
         layout = QHBoxLayout(header)
         layout.setContentsMargins(0, 0, 0, 16)
         
-        # Titre avec icône
-        title_layout = QHBoxLayout()
-        
+        # Titre
         icon_label = QLabel("🤖")
         icon_label.setFont(QFont("Arial", 20))
-        title_layout.addWidget(icon_label)
+        layout.addWidget(icon_label)
         
         title_label = QLabel("Assistant IA")
         title_label.setObjectName("panel-title")
         title_label.setFont(QFont("Inter", 18, QFont.Weight.Bold))
-        title_layout.addWidget(title_label)
+        layout.addWidget(title_label)
         
-        layout.addLayout(title_layout)
         layout.addStretch()
         
         # Bouton fermer
@@ -238,20 +131,19 @@ class AISuggestionPanel(QWidget):
         return header
     
     def _create_analysis_section(self) -> QWidget:
-        """Crée la section d'analyse IA."""
+        """Crée la section d'analyse."""
         section = QFrame()
         section.setObjectName("analysis-section")
-        
         layout = QVBoxLayout(section)
         layout.setSpacing(12)
         
-        # Titre de section
+        # Titre
         title = QLabel("📊 Analyse IA")
         title.setObjectName("section-title")
         title.setFont(QFont("Inter", 14, QFont.Weight.Bold))
         layout.addWidget(title)
         
-        # Catégorie détectée
+        # Catégorie
         self.category_label = QLabel()
         self.category_label.setObjectName("category-label")
         self.category_label.setFont(QFont("Inter", 13))
@@ -272,13 +164,7 @@ class AISuggestionPanel(QWidget):
         
         layout.addLayout(confidence_layout)
         
-        # Priorité
-        self.priority_label = QLabel()
-        self.priority_label.setObjectName("priority-label")
-        self.priority_label.setFont(QFont("Inter", 12))
-        layout.addWidget(self.priority_label)
-        
-        # Raisonnement IA
+        # Raisonnement
         reasoning_title = QLabel("🧠 Raisonnement:")
         reasoning_title.setFont(QFont("Inter", 12, QFont.Weight.Bold))
         layout.addWidget(reasoning_title)
@@ -293,46 +179,35 @@ class AISuggestionPanel(QWidget):
         return section
     
     def _create_response_section(self) -> QWidget:
-        """Crée la section de réponse suggérée."""
+        """Crée la section de réponse."""
         section = QFrame()
         section.setObjectName("response-section")
-        
         layout = QVBoxLayout(section)
         layout.setSpacing(12)
         
-        # Titre avec checkbox
-        header_layout = QHBoxLayout()
-        
+        # Titre
         title = QLabel("✉️ Réponse suggérée")
         title.setObjectName("section-title")
         title.setFont(QFont("Inter", 14, QFont.Weight.Bold))
-        header_layout.addWidget(title)
-        
-        header_layout.addStretch()
-        
-        self.auto_send_checkbox = QCheckBox("Envoi automatique")
-        self.auto_send_checkbox.setFont(QFont("Inter", 11))
-        header_layout.addWidget(self.auto_send_checkbox)
-        
-        layout.addLayout(header_layout)
+        layout.addWidget(title)
         
         # Zone de texte éditable
         self.response_editor = QTextEdit()
         self.response_editor.setObjectName("response-editor")
         self.response_editor.setFont(QFont("Inter", 12))
-        self.response_editor.setMaximumHeight(150)
+        self.response_editor.setMaximumHeight(200)
         self.response_editor.setPlaceholderText("Aucune réponse suggérée...")
         layout.addWidget(self.response_editor)
         
-        # Slider pour le délai d'envoi
+        # Délai d'envoi
         delay_layout = QHBoxLayout()
         delay_label = QLabel("Délai d'envoi:")
         delay_label.setFont(QFont("Inter", 11))
         delay_layout.addWidget(delay_label)
         
         self.delay_slider = QSlider(Qt.Orientation.Horizontal)
-        self.delay_slider.setRange(0, 60)  # 0 à 60 minutes
-        self.delay_slider.setValue(5)  # 5 minutes par défaut
+        self.delay_slider.setRange(0, 60)
+        self.delay_slider.setValue(5)
         self.delay_slider.valueChanged.connect(self._update_delay_label)
         delay_layout.addWidget(self.delay_slider)
         
@@ -344,62 +219,31 @@ class AISuggestionPanel(QWidget):
         
         return section
     
-    def _create_actions_section(self) -> QWidget:
-        """Crée la section d'actions rapides."""
-        section = QFrame()
-        section.setObjectName("actions-section")
-        
-        layout = QVBoxLayout(section)
-        layout.setSpacing(12)
-        
-        # Titre
-        title = QLabel("⚡ Actions rapides")
-        title.setObjectName("section-title")
-        title.setFont(QFont("Inter", 14, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        # Container pour les boutons d'actions
-        self.actions_container = QWidget()
-        self.actions_layout = QVBoxLayout(self.actions_container)
-        self.actions_layout.setSpacing(8)
-        layout.addWidget(self.actions_container)
-        
-        return section
-    
     def _create_footer(self) -> QWidget:
-        """Crée le footer avec boutons principaux."""
+        """Crée le footer avec boutons."""
         footer = QFrame()
-        footer.setObjectName("panel-footer")
-        
         layout = QHBoxLayout(footer)
         layout.setContentsMargins(0, 16, 0, 0)
         layout.setSpacing(12)
         
         # Bouton rejeter
-        reject_btn = ActionButton("Ignorer", "❌", "outline")
+        reject_btn = QPushButton("❌ Ignorer")
+        reject_btn.setObjectName("reject-btn")
         reject_btn.clicked.connect(self._reject_suggestion)
         layout.addWidget(reject_btn)
         
         layout.addStretch()
         
         # Bouton approuver
-        self.approve_btn = ActionButton("Envoyer réponse", "✅", "success")
+        self.approve_btn = QPushButton("✅ Envoyer")
+        self.approve_btn.setObjectName("approve-btn")
         self.approve_btn.clicked.connect(self._approve_suggestion)
         layout.addWidget(self.approve_btn)
         
         return footer
     
-    def _setup_animations(self):
-        """Configure les animations."""
-        self.slide_animation = QPropertyAnimation(self, b"geometry")
-        self.slide_animation.setDuration(300)
-        self.slide_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        
-        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_animation.setDuration(200)
-    
     def _apply_style(self):
-        """Applique le style au panel."""
+        """Applique le style."""
         self.setStyleSheet("""
             #main-container {
                 background-color: #ffffff;
@@ -425,7 +269,7 @@ class AISuggestionPanel(QWidget):
                 color: #495057;
             }
             
-            #analysis-section, #response-section, #actions-section {
+            #analysis-section, #response-section {
                 background-color: #f8f9fa;
                 border: 1px solid #e9ecef;
                 border-radius: 12px;
@@ -440,10 +284,6 @@ class AISuggestionPanel(QWidget):
             #category-label {
                 color: #007bff;
                 font-weight: 600;
-            }
-            
-            #priority-label {
-                color: #6c757d;
             }
             
             #reasoning-text {
@@ -462,25 +302,32 @@ class AISuggestionPanel(QWidget):
                 color: #495057;
             }
             
-            QScrollArea {
+            #approve-btn {
+                background-color: #28a745;
+                color: white;
                 border: none;
-                background-color: transparent;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: 600;
+                min-width: 100px;
             }
             
-            QScrollBar:vertical {
-                background-color: #f8f9fa;
-                width: 8px;
-                border-radius: 4px;
+            #approve-btn:hover {
+                background-color: #1e7e34;
             }
             
-            QScrollBar::handle:vertical {
-                background-color: #dee2e6;
-                border-radius: 4px;
-                min-height: 20px;
+            #reject-btn {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: 600;
+                min-width: 80px;
             }
             
-            QCheckBox {
-                color: #495057;
+            #reject-btn:hover {
+                background-color: #545b62;
             }
             
             QSlider::groove:horizontal {
@@ -498,31 +345,19 @@ class AISuggestionPanel(QWidget):
             }
         """)
     
-    def show_suggestion(self, email: Email, analysis: EmailAnalysis):
-        """Affiche le panel avec les suggestions pour un email."""
+    def show_suggestion(self, email: Email, analysis):
+        """Affiche le panel avec suggestions."""
         self.current_email = email
         self.current_analysis = analysis
         
-        # Mettre à jour l'analyse
         self._update_analysis_display(analysis)
-        
-        # Mettre à jour la réponse suggérée
         self._update_response_display(analysis)
         
-        # Mettre à jour les actions rapides
-        self._update_actions_display(analysis)
-        
-        # Positionner le panel
-        self._position_panel()
-        
-        # Afficher avec animation
-        self._animate_show()
-        
+        self.show()
         logger.info(f"Panel IA affiché pour email {email.id}")
     
-    def _update_analysis_display(self, analysis: EmailAnalysis):
+    def _update_analysis_display(self, analysis):
         """Met à jour l'affichage de l'analyse."""
-        # Catégorie
         category_names = {
             'cv': '📄 Candidature / CV',
             'rdv': '📅 Rendez-vous',
@@ -541,130 +376,19 @@ class AISuggestionPanel(QWidget):
         self.confidence_bar.update()
         self.confidence_percent.setText(f"{confidence_percent}%")
         
-        # Priorité
-        priority_names = {
-            1: "🔴 Très urgent",
-            2: "🟠 Urgent", 
-            3: "🟡 Normal",
-            4: "🟢 Faible",
-            5: "⚪ Très faible"
-        }
-        
-        priority_display = priority_names.get(analysis.priority, f"Priorité {analysis.priority}")
-        self.priority_label.setText(f"Priorité: {priority_display}")
-        
         # Raisonnement
-        self.reasoning_text.setText(analysis.reasoning or "Analyse automatique basée sur le contenu de l'email.")
+        self.reasoning_text.setText(analysis.reasoning or "Analyse automatique basée sur le contenu.")
     
-    def _update_response_display(self, analysis: EmailAnalysis):
+    def _update_response_display(self, analysis):
         """Met à jour l'affichage de la réponse."""
         if analysis.suggested_response and analysis.should_auto_respond:
             self.response_editor.setPlainText(analysis.suggested_response)
             self.response_editor.setEnabled(True)
             self.approve_btn.setEnabled(True)
-            self.auto_send_checkbox.setEnabled(True)
         else:
             self.response_editor.setPlainText("Aucune réponse automatique suggérée pour ce type d'email.")
             self.response_editor.setEnabled(False)
             self.approve_btn.setEnabled(False)
-            self.auto_send_checkbox.setEnabled(False)
-    
-    def _update_actions_display(self, analysis: EmailAnalysis):
-        """Met à jour les actions rapides disponibles."""
-        # Vider les actions existantes
-        for i in reversed(range(self.actions_layout.count())):
-            child = self.actions_layout.itemAt(i).widget()
-            if child:
-                child.setParent(None)
-        
-        # Actions selon la catégorie
-        actions = []
-        
-        if analysis.category == 'cv':
-            actions = [
-                ("📁 Archiver CV", "archive_cv"),
-                ("👥 Ajouter au CRM", "add_to_crm"),
-                ("📧 Programmer rappel", "schedule_reminder")
-            ]
-        elif analysis.category == 'rdv':
-            actions = [
-                ("📅 Ajouter au calendrier", "add_to_calendar"),
-                ("🔄 Proposer créneaux", "suggest_slots"),
-                ("📧 Confirmer RDV", "confirm_meeting")
-            ]
-        elif analysis.category == 'support':
-            actions = [
-                ("🎫 Créer ticket", "create_ticket"),
-                ("📞 Programmer appel", "schedule_call"),
-                ("📚 Envoyer FAQ", "send_faq")
-            ]
-        elif analysis.category == 'facture':
-            actions = [
-                ("💳 Marquer payé", "mark_paid"),
-                ("📊 Ajouter comptabilité", "add_accounting"),
-                ("⏰ Programmer rappel", "payment_reminder")
-            ]
-        
-        # Actions communes
-        actions.extend([
-            ("🏷️ Ajouter étiquette", "add_label"),
-            ("📋 Copier dans presse-papier", "copy_content")
-        ])
-        
-        # Créer les boutons d'actions
-        for action_text, action_type in actions:
-            btn = ActionButton(action_text, "", "outline")
-            btn.clicked.connect(lambda checked, at=action_type: self.action_requested.emit(at, self.current_email))
-            self.actions_layout.addWidget(btn)
-    
-    def _position_panel(self):
-        """Positionne le panel sur l'écran."""
-        if self.parent():
-            parent_rect = self.parent().geometry()
-            # Positionner à droite de la fenêtre parent
-            x = parent_rect.right() - self.width() - 20
-            y = parent_rect.top() + 100
-        else:
-            # Position par défaut
-            x = 100
-            y = 100
-        
-        self.move(x, y)
-    
-    def _animate_show(self):
-        """Anime l'apparition du panel."""
-        # Position de départ (hors écran à droite)
-        start_rect = self.geometry()
-        start_rect.moveLeft(start_rect.left() + 300)
-        
-        # Position finale
-        end_rect = self.geometry()
-        
-        self.setGeometry(start_rect)
-        self.show()
-        
-        # Animation de glissement
-        self.slide_animation.setStartValue(start_rect)
-        self.slide_animation.setEndValue(end_rect)
-        self.slide_animation.start()
-        
-        # Animation de fade-in
-        self.setWindowOpacity(0.0)
-        self.fade_animation.setStartValue(0.0)
-        self.fade_animation.setEndValue(1.0)
-        self.fade_animation.start()
-        
-        self.is_visible = True
-    
-    def _animate_hide(self):
-        """Anime la disparition du panel."""
-        # Animation de fade-out
-        self.fade_animation.setStartValue(1.0)
-        self.fade_animation.setEndValue(0.0)
-        self.fade_animation.finished.connect(self.hide)
-        self.fade_animation.start()
-        
-        self.is_visible = False
     
     def _update_delay_label(self, value: int):
         """Met à jour le label du délai."""
@@ -684,29 +408,14 @@ class AISuggestionPanel(QWidget):
         if not response_text:
             return
         
-        # Émettre le signal avec la réponse modifiée
         self.response_approved.emit(response_text, self.current_email)
-        
-        # Fermer le panel
-        self._animate_hide()
-        
-        logger.info("Réponse IA approuvée et envoyée")
+        self.hide()
+        logger.info("Réponse IA approuvée")
     
     def _reject_suggestion(self):
         """Rejette la suggestion."""
         if self.current_email:
             self.response_rejected.emit(self.current_email)
         
-        self._animate_hide()
+        self.hide()
         logger.info("Suggestion IA rejetée")
-    
-    def hide(self):
-        """Cache le panel."""
-        super().hide()
-        self.is_visible = False
-    
-    def keyPressEvent(self, event):
-        """Gère les touches clavier."""
-        if event.key() == Qt.Key.Key_Escape:
-            self._animate_hide()
-        super().keyPressEvent(event)
