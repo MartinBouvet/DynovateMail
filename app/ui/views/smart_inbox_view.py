@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Vue Smart Inbox avec tri intelligent et filtres IA fonctionnels.
+Vue Smart Inbox corrigée avec interface fonctionnelle.
 """
 import logging
 from typing import List, Dict, Optional
@@ -24,7 +24,7 @@ class EmailLoaderThread(QThread):
     
     emails_loaded = pyqtSignal(list)
     analysis_complete = pyqtSignal()
-    progress_updated = pyqtSignal(int, int)  # current, total
+    progress_updated = pyqtSignal(int, int)
     
     def __init__(self, gmail_client: GmailClient, ai_processor: AIProcessor):
         super().__init__()
@@ -36,11 +36,9 @@ class EmailLoaderThread(QThread):
     def run(self):
         """Charge et analyse les emails."""
         try:
-            # Charger les emails
             emails = self.gmail_client.get_recent_emails(limit=50)
             self.emails_loaded.emit(emails)
             
-            # Analyser chaque email avec l'IA
             self.emails_with_analysis = []
             total_emails = len(emails)
             
@@ -48,15 +46,11 @@ class EmailLoaderThread(QThread):
                 if self.should_stop:
                     break
                 
-                # Analyser avec l'IA
                 analysis = self.ai_processor.process_email(email)
                 email.ai_analysis = analysis
                 self.emails_with_analysis.append(email)
                 
-                # Émettre le progrès
                 self.progress_updated.emit(i + 1, total_emails)
-                
-                # Petite pause pour ne pas surcharger
                 self.msleep(50)
             
             self.analysis_complete.emit()
@@ -70,23 +64,24 @@ class EmailLoaderThread(QThread):
         self.should_stop = True
 
 class CategoryFilter(QPushButton):
-    """Bouton de filtre par catégorie."""
+    """Bouton de filtre par catégorie corrigé."""
     
     def __init__(self, name: str, category: str, count: int = 0):
         super().__init__(f"{name} ({count})")
         self.category = category
         self.count = count
         self.is_active = False
+        self.original_name = name
         
         self.setCheckable(True)
-        self.setFixedHeight(36)
+        self.setMinimumHeight(40)
+        self.setMinimumWidth(100)
         self._apply_style()
     
     def update_count(self, count: int):
         """Met à jour le compteur."""
         self.count = count
-        name = self.text().split(' (')[0]
-        self.setText(f"{name} ({count})")
+        self.setText(f"{self.original_name} ({count})")
     
     def set_active(self, active: bool):
         """Active/désactive le filtre."""
@@ -102,9 +97,11 @@ class CategoryFilter(QPushButton):
                     background-color: #000000;
                     color: #ffffff;
                     border: none;
-                    border-radius: 18px;
+                    border-radius: 20px;
                     font-weight: 600;
-                    padding: 8px 16px;
+                    font-size: 14px;
+                    padding: 10px 20px;
+                    margin: 2px;
                 }
             """
         else:
@@ -113,9 +110,11 @@ class CategoryFilter(QPushButton):
                     background-color: #f8f9fa;
                     color: #495057;
                     border: 1px solid #dee2e6;
-                    border-radius: 18px;
+                    border-radius: 20px;
                     font-weight: 500;
-                    padding: 8px 16px;
+                    font-size: 14px;
+                    padding: 10px 20px;
+                    margin: 2px;
                 }
                 
                 QPushButton:hover {
@@ -127,10 +126,10 @@ class CategoryFilter(QPushButton):
         self.setStyleSheet(style)
 
 class SmartInboxView(QWidget):
-    """Vue Smart Inbox avec IA fonctionnelle."""
+    """Vue Smart Inbox corrigée."""
     
     email_selected = pyqtSignal(object)
-    ai_suggestion_requested = pyqtSignal(object)  # Signal ajouté
+    ai_suggestion_requested = pyqtSignal(object)
     
     def __init__(self, gmail_client: GmailClient, ai_processor: AIProcessor):
         super().__init__()
@@ -175,18 +174,19 @@ class SmartInboxView(QWidget):
         splitter.addWidget(self.detail_view)
         
         # Proportions du splitter
-        splitter.setSizes([400, 600])
+        splitter.setSizes([500, 700])
         layout.addWidget(splitter)
     
     def _create_filters(self) -> QWidget:
-        """Crée la section des filtres."""
+        """Crée la section des filtres corrigée."""
         filters_frame = QFrame()
         filters_frame.setObjectName("filters-section")
-        filters_frame.setFixedHeight(70)
+        filters_frame.setMinimumHeight(80)
+        filters_frame.setMaximumHeight(80)
         
         layout = QHBoxLayout(filters_frame)
         layout.setContentsMargins(20, 15, 20, 15)
-        layout.setSpacing(12)
+        layout.setSpacing(15)
         
         # Groupe de boutons pour exclusivité
         self.filter_group = QButtonGroup()
@@ -219,16 +219,19 @@ class SmartInboxView(QWidget):
         
         # Bouton de refresh
         refresh_btn = QPushButton("🔄 Actualiser")
-        refresh_btn.setFixedHeight(36)
+        refresh_btn.setMinimumHeight(40)
+        refresh_btn.setMinimumWidth(120)
         refresh_btn.clicked.connect(self.refresh_emails)
         refresh_btn.setStyleSheet("""
             QPushButton {
                 background-color: #007bff;
                 color: white;
                 border: none;
-                border-radius: 18px;
+                border-radius: 20px;
                 font-weight: 600;
-                padding: 8px 16px;
+                font-size: 14px;
+                padding: 10px 20px;
+                margin: 2px;
             }
             QPushButton:hover {
                 background-color: #0056b3;
@@ -239,7 +242,7 @@ class SmartInboxView(QWidget):
         filters_frame.setStyleSheet("""
             #filters-section {
                 background-color: #ffffff;
-                border-bottom: 1px solid #e9ecef;
+                border-bottom: 2px solid #e9ecef;
             }
         """)
         
@@ -251,7 +254,7 @@ class SmartInboxView(QWidget):
         container.setObjectName("email-list-container")
         
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(0)
         
         # Zone de scroll
@@ -263,21 +266,38 @@ class SmartInboxView(QWidget):
         # Widget contenant les cartes d'emails
         self.email_container = QWidget()
         self.email_layout = QVBoxLayout(self.email_container)
-        self.email_layout.setSpacing(8)
+        self.email_layout.setSpacing(12)
         self.email_layout.setContentsMargins(0, 0, 0, 0)
         
         # Message de chargement
         self.loading_label = QLabel("🔄 Chargement des emails...")
         self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.loading_label.setFont(QFont("Arial", 14))
-        self.loading_label.setStyleSheet("color: #6c757d; padding: 40px;")
+        self.loading_label.setFont(QFont("Inter", 16, QFont.Weight.Medium))
+        self.loading_label.setStyleSheet("""
+            QLabel {
+                color: #6c757d; 
+                padding: 60px;
+                background-color: #f8f9fa;
+                border-radius: 12px;
+                border: 1px solid #e9ecef;
+                margin: 20px 0;
+            }
+        """)
         self.email_layout.addWidget(self.loading_label)
         
         # Barre de progression
         self.progress_label = QLabel("")
         self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.progress_label.setFont(QFont("Arial", 12))
-        self.progress_label.setStyleSheet("color: #007bff; padding: 10px;")
+        self.progress_label.setFont(QFont("Inter", 14))
+        self.progress_label.setStyleSheet("""
+            QLabel {
+                color: #007bff; 
+                padding: 20px;
+                background-color: #e3f2fd;
+                border-radius: 8px;
+                margin: 10px 0;
+            }
+        """)
         self.progress_label.hide()
         self.email_layout.addWidget(self.progress_label)
         
@@ -289,7 +309,7 @@ class SmartInboxView(QWidget):
         container.setStyleSheet("""
             #email-list-container {
                 background-color: #ffffff;
-                border-right: 1px solid #e9ecef;
+                border-right: 2px solid #e9ecef;
             }
         """)
         
@@ -317,10 +337,8 @@ class SmartInboxView(QWidget):
         
         # Réinitialiser le filtre
         self.current_filter = "all"
-        self.category_filters["all"].set_active(True)
         for cat, btn in self.category_filters.items():
-            if cat != "all":
-                btn.set_active(False)
+            btn.set_active(cat == "all")
         
         # Démarrer le chargement
         self.email_loader.start()
@@ -329,7 +347,7 @@ class SmartInboxView(QWidget):
         """Gère la réception des emails."""
         self.all_emails = emails
         self.loading_label.setText("🤖 Analyse IA en cours...")
-        self.progress_label.setText("Analyse 0 / 0")
+        self.progress_label.setText("Analyse IA: 0 / 0")
         self.progress_label.show()
         
         logger.info(f"{len(emails)} emails chargés, analyse IA en cours...")
@@ -340,7 +358,6 @@ class SmartInboxView(QWidget):
     
     def _on_analysis_complete(self):
         """Gère la fin de l'analyse IA."""
-        # Récupérer les emails avec analyse
         self.all_emails = self.email_loader.emails_with_analysis
         
         # Cacher les messages de chargement
@@ -367,8 +384,17 @@ class SmartInboxView(QWidget):
             # Message si aucun email
             no_email_label = QLabel("📭 Aucun email à afficher")
             no_email_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            no_email_label.setFont(QFont("Arial", 14))
-            no_email_label.setStyleSheet("color: #6c757d; padding: 40px;")
+            no_email_label.setFont(QFont("Inter", 16, QFont.Weight.Medium))
+            no_email_label.setStyleSheet("""
+                QLabel {
+                    color: #6c757d; 
+                    padding: 60px;
+                    background-color: #f8f9fa;
+                    border-radius: 12px;
+                    border: 1px solid #e9ecef;
+                    margin: 20px 0;
+                }
+            """)
             self.email_layout.insertWidget(self.email_layout.count() - 1, no_email_label)
             return
         
@@ -391,7 +417,7 @@ class SmartInboxView(QWidget):
         self.email_cards.clear()
         
         # Nettoyer aussi les autres widgets
-        for i in reversed(range(self.email_layout.count() - 1)):  # Garder le stretch
+        for i in reversed(range(self.email_layout.count() - 1)):
             item = self.email_layout.itemAt(i)
             if item and item.widget():
                 widget = item.widget()
@@ -411,14 +437,12 @@ class SmartInboxView(QWidget):
         if category == "all":
             self.filtered_emails = self.all_emails.copy()
         elif category == "urgent":
-            # Emails avec priorité <= 2
             self.filtered_emails = [
                 email for email in self.all_emails 
                 if hasattr(email, 'ai_analysis') and email.ai_analysis and 
                 getattr(email.ai_analysis, 'priority', 5) <= 2
             ]
         else:
-            # Filtrer par catégorie IA
             self.filtered_emails = [
                 email for email in self.all_emails 
                 if hasattr(email, 'ai_analysis') and email.ai_analysis and 
@@ -522,12 +546,10 @@ class SmartInboxView(QWidget):
         try:
             from ui.compose_view import ComposeView
             
-            # Préparer la réponse
             subject = email.subject or ""
             if not subject.lower().startswith('re:'):
                 subject = f"Re: {subject}"
             
-            # Créer le corps de réponse
             original_body = email.body or email.snippet or ""
             if len(original_body) > 500:
                 original_body = original_body[:500] + "..."
@@ -587,7 +609,6 @@ class SmartInboxView(QWidget):
     
     def _add_to_calendar(self, email: Email):
         """Ajoute un événement au calendrier depuis l'email."""
-        # TODO: Implémenter l'extraction automatique de RDV avec l'IA
         logger.info(f"Ajout au calendrier pour email {email.id} - À implémenter")
     
     def _mark_urgent(self, email: Email):
@@ -606,7 +627,6 @@ class SmartInboxView(QWidget):
     
     def _report_spam(self, email: Email):
         """Signale un email comme spam."""
-        # TODO: Implémenter signalement spam
         logger.info(f"Email {email.id} signalé comme spam - À implémenter")
     
     def filter_emails(self, search_text: str):
