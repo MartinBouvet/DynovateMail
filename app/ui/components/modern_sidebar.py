@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sidebar moderne collapsible avec statistiques en temps réel.
+Sidebar moderne CORRIGÉE avec affichage propre et lisible.
 """
 import logging
 from typing import Dict, List
@@ -14,27 +14,28 @@ from PyQt6.QtGui import QFont, QIcon
 logger = logging.getLogger(__name__)
 
 class StatCard(QFrame):
-    """Carte de statistique moderne."""
+    """Carte de statistique CORRIGÉE."""
     
     def __init__(self, title: str, value: str = "0", icon: str = "📊"):
         super().__init__()
         self.setObjectName("stat-card")
-        self.setFixedHeight(80)
+        self.setFixedHeight(70)
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(4)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
         
         # Header avec icône
         header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
         
         icon_label = QLabel(icon)
-        icon_label.setFont(QFont("Arial", 16))
+        icon_label.setFont(QFont("Arial", 14))
         header_layout.addWidget(icon_label)
         
         title_label = QLabel(title)
         title_label.setObjectName("stat-title")
-        title_label.setFont(QFont("Inter", 11, QFont.Weight.Medium))
+        title_label.setFont(QFont("Inter", 10, QFont.Weight.Medium))
         header_layout.addWidget(title_label)
         
         header_layout.addStretch()
@@ -43,43 +44,43 @@ class StatCard(QFrame):
         # Valeur
         self.value_label = QLabel(value)
         self.value_label.setObjectName("stat-value")
-        self.value_label.setFont(QFont("Inter", 20, QFont.Weight.Bold))
+        self.value_label.setFont(QFont("Inter", 16, QFont.Weight.Bold))
         layout.addWidget(self.value_label)
         
         self._apply_style()
     
     def update_value(self, value: str):
-        """Met à jour la valeur avec animation."""
+        """Met à jour la valeur."""
         self.value_label.setText(value)
     
     def _apply_style(self):
-        """Applique le style à la carte."""
+        """Applique le style CORRIGÉ."""
         self.setStyleSheet("""
-            #stat-card {
+            QFrame#stat-card {
                 background-color: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 12px;
+                border: 1px solid #e0e0e0;
+                border-radius: 10px;
                 margin: 4px 0;
             }
             
-            #stat-card:hover {
-                background-color: #e9ecef;
-                border-color: #adb5bd;
+            QFrame#stat-card:hover {
+                background-color: #f0f0f0;
+                border-color: #bdbdbd;
             }
             
-            #stat-title {
-                color: #6c757d;
+            QLabel#stat-title {
+                color: #757575;
                 font-weight: 500;
             }
             
-            #stat-value {
-                color: #000000;
+            QLabel#stat-value {
+                color: #1a1a1a;
                 font-weight: 700;
             }
         """)
 
 class NavButton(QPushButton):
-    """Bouton de navigation moderne."""
+    """Bouton de navigation CORRIGÉ."""
     
     def __init__(self, text: str, icon: str, view_name: str):
         super().__init__()
@@ -88,22 +89,22 @@ class NavButton(QPushButton):
         
         # Layout avec icône et texte
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setContentsMargins(16, 10, 16, 10)
         layout.setSpacing(12)
         
         # Icône
         self.icon_label = QLabel(icon)
-        self.icon_label.setFont(QFont("Arial", 18))
+        self.icon_label.setFont(QFont("Arial", 16))
         layout.addWidget(self.icon_label)
         
         # Texte
         self.text_label = QLabel(text)
-        self.text_label.setFont(QFont("Inter", 14, QFont.Weight.Medium))
+        self.text_label.setFont(QFont("Inter", 13, QFont.Weight.Medium))
         layout.addWidget(self.text_label)
         
         layout.addStretch()
         
-        self.setFixedHeight(50)
+        self.setFixedHeight(45)
         self._apply_style()
     
     def set_active(self, active: bool):
@@ -112,11 +113,11 @@ class NavButton(QPushButton):
         self._apply_style()
     
     def _apply_style(self):
-        """Applique le style selon l'état."""
+        """Applique le style CORRIGÉ selon l'état."""
         if self.is_active:
             style = """
                 QPushButton {
-                    background-color: #000000;
+                    background-color: #1976d2;
                     border: none;
                     border-radius: 8px;
                     text-align: left;
@@ -134,24 +135,27 @@ class NavButton(QPushButton):
                     text-align: left;
                 }
                 QPushButton:hover {
-                    background-color: #f8f9fa;
+                    background-color: #f5f5f5;
                 }
                 QLabel {
-                    color: #000000;
+                    color: #424242;
+                }
+                QLabel:hover {
+                    color: #1976d2;
                 }
             """
         
         self.setStyleSheet(style)
 
 class ModernSidebar(QWidget):
-    """Sidebar moderne avec navigation et statistiques."""
+    """Sidebar moderne CORRIGÉE avec navigation et statistiques."""
     
     view_changed = pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
         self.setObjectName("sidebar")
-        self.setFixedWidth(280)
+        self.setFixedWidth(260)
         
         self.nav_buttons = {}
         self.stat_cards = {}
@@ -161,22 +165,22 @@ class ModernSidebar(QWidget):
         self._apply_style()
     
     def _setup_ui(self):
-        """Configure l'interface de la sidebar."""
+        """Configure l'interface CORRIGÉE."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 30, 20, 30)
+        layout.setContentsMargins(16, 20, 16, 20)
         layout.setSpacing(0)
         
         # Logo et titre
         header = self._create_header()
         layout.addWidget(header)
         
-        layout.addSpacing(40)
+        layout.addSpacing(30)
         
         # Navigation principale
         nav_section = self._create_navigation()
         layout.addWidget(nav_section)
         
-        layout.addSpacing(40)
+        layout.addSpacing(30)
         
         # Statistiques
         stats_section = self._create_stats()
@@ -190,44 +194,45 @@ class ModernSidebar(QWidget):
         layout.addWidget(user_section)
     
     def _create_header(self) -> QWidget:
-        """Crée le header avec logo et titre."""
+        """Crée le header CORRIGÉ."""
         header = QFrame()
         layout = QVBoxLayout(header)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
         
         # Logo
         logo = QLabel("⚡")
-        logo.setFont(QFont("Arial", 32))
+        logo.setFont(QFont("Arial", 28))
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet("color: #1976d2;")
         layout.addWidget(logo)
         
         # Titre
         title = QLabel("Dynovate")
         title.setObjectName("app-title")
-        title.setFont(QFont("Inter", 18, QFont.Weight.Bold))
+        title.setFont(QFont("Inter", 16, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
         
         # Sous-titre
         subtitle = QLabel("Mail Assistant IA")
         subtitle.setObjectName("app-subtitle")
-        subtitle.setFont(QFont("Inter", 12, QFont.Weight.Normal))
+        subtitle.setFont(QFont("Inter", 11, QFont.Weight.Normal))
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(subtitle)
         
         return header
     
     def _create_navigation(self) -> QWidget:
-        """Crée la section de navigation."""
+        """Crée la section de navigation CORRIGÉE."""
         nav_frame = QFrame()
         nav_frame.setObjectName("nav-section")
         layout = QVBoxLayout(nav_frame)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
         
         # Titre de section
         section_title = QLabel("Navigation")
         section_title.setObjectName("section-title")
-        section_title.setFont(QFont("Inter", 13, QFont.Weight.Bold))
+        section_title.setFont(QFont("Inter", 12, QFont.Weight.Bold))
         layout.addWidget(section_title)
         
         layout.addSpacing(8)
@@ -252,16 +257,16 @@ class ModernSidebar(QWidget):
         return nav_frame
     
     def _create_stats(self) -> QWidget:
-        """Crée la section des statistiques."""
+        """Crée la section des statistiques CORRIGÉE."""
         stats_frame = QFrame()
         stats_frame.setObjectName("stats-section")
         layout = QVBoxLayout(stats_frame)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
         
         # Titre de section
         section_title = QLabel("Statistiques")
         section_title.setObjectName("section-title")
-        section_title.setFont(QFont("Inter", 13, QFont.Weight.Bold))
+        section_title.setFont(QFont("Inter", 12, QFont.Weight.Bold))
         layout.addWidget(section_title)
         
         layout.addSpacing(8)
@@ -281,61 +286,66 @@ class ModernSidebar(QWidget):
         return stats_frame
     
     def _create_user_info(self) -> QWidget:
-        """Crée la section d'informations utilisateur."""
+        """Crée la section d'informations utilisateur CORRIGÉE."""
         user_frame = QFrame()
         user_frame.setObjectName("user-section")
         layout = QVBoxLayout(user_frame)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
         
         # Avatar
         avatar = QLabel("👤")
-        avatar.setFont(QFont("Arial", 24))
+        avatar.setFont(QFont("Arial", 20))
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(avatar)
         
         # Nom utilisateur
         username = QLabel("Utilisateur")
         username.setObjectName("username")
-        username.setFont(QFont("Inter", 14, QFont.Weight.Medium))
+        username.setFont(QFont("Inter", 12, QFont.Weight.Medium))
         username.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(username)
         
         # Status
         status = QLabel("🟢 En ligne")
         status.setObjectName("user-status")
-        status.setFont(QFont("Inter", 11))
+        status.setFont(QFont("Inter", 10))
         status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(status)
         
         return user_frame
     
     def _apply_style(self):
-        """Applique le style à la sidebar."""
+        """Applique le style CORRIGÉ à la sidebar."""
         self.setStyleSheet("""
-            #sidebar {
+            QWidget#sidebar {
                 background-color: #ffffff;
-                border-right: 1px solid #e9ecef;
+                border-right: 2px solid #e0e0e0;
             }
             
-            #app-title {
-                color: #000000;
+            QLabel#app-title {
+                color: #1a1a1a;
+                font-weight: 700;
             }
             
-            #app-subtitle {
-                color: #6c757d;
+            QLabel#app-subtitle {
+                color: #757575;
+                font-weight: 400;
             }
             
-            #section-title {
-                color: #000000;
-                margin-bottom: 8px;
+            QLabel#section-title {
+                color: #1a1a1a;
+                margin-bottom: 6px;
+                font-weight: 600;
             }
             
-            #username {
-                color: #000000;
+            QLabel#username {
+                color: #1a1a1a;
+                font-weight: 500;
             }
             
-            #user-status {
-                color: #6c757d;
+            QLabel#user-status {
+                color: #757575;
+                font-weight: 400;
             }
         """)
     
