@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Client Gmail CORRIGÉ avec gestion complète des emails HTML et pièces jointes.
+Client Gmail CORRIGÉ avec rendu HTML complet et images intégrées.
 """
 import logging
 import os
@@ -8,7 +8,7 @@ import base64
 import pickle
 import html
 import re
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -29,7 +29,7 @@ from models.email_model import Email, EmailAttachment
 logger = logging.getLogger(__name__)
 
 class GmailClient:
-    """Client Gmail CORRIGÉ pour accéder aux vrais emails avec pièces jointes."""
+    """Client Gmail CORRIGÉ pour rendu HTML complet avec images."""
     
     def __init__(self, credentials_file: str = "client_secret.json", mock_mode: bool = False):
         """
@@ -43,6 +43,9 @@ class GmailClient:
         self.mock_mode = mock_mode
         self.authenticated = False
         self.service = None
+        
+        # Cache pour les images intégrées
+        self.image_cache = {}
         
         # Scopes Gmail nécessaires
         self.SCOPES = [
@@ -117,7 +120,7 @@ class GmailClient:
             return False
     
     def get_recent_emails(self, limit: int = 50) -> List[Email]:
-        """Récupère les emails récents avec contenu COMPLET."""
+        """Récupère les emails récents avec contenu HTML complet."""
         if self.mock_mode:
             logger.warning("Mode mock activé - aucun vrai email ne sera récupéré")
             return []
@@ -161,7 +164,7 @@ class GmailClient:
             return []
     
     def _get_email_details(self, message_id: str) -> Optional[Email]:
-        """Récupère les détails COMPLETS d'un email avec pièces jointes."""
+        """Récupère les détails COMPLETS d'un email avec HTML et images."""
         try:
             message = self.service.users().messages().get(
                 userId='me', 
@@ -189,8 +192,12 @@ class GmailClient:
                 elif name == 'date':
                     date_str = header['value']
             
-            # Extraire le corps et les pièces jointes
-            body, attachments = self._extract_body_and_attachments(payload, message_id)
+            # Extraire le corps avec HTML et les pièces jointes
+            html_content, plain_content, attachments = self._extract_content_and_attachments(payload, message_id)
+            
+            # Préférer le HTML si disponible, sinon plain text
+            body = html_content if html_content else plain_content
+            
             snippet = message.get('snippet', '')
             
             # Convertir la date en datetime naive
@@ -200,7 +207,7 @@ class GmailClient:
             labels = message.get('labelIds', [])
             is_read = 'UNREAD' not in labels
             
-            return Email(
+            email = Email(
                 id=message_id,
                 subject=subject or "(Aucun sujet)",
                 sender=sender,
@@ -213,42 +220,71 @@ class GmailClient:
                 is_read=is_read,
                 attachments=attachments
             )
+            
+            # Ajouter un attribut pour indiquer si c'est du HTML
+            email.is_html = bool(html_content)
+            
+            return email
         
         except Exception as e:
             logger.error(f"Erreur détails email {message_id}: {e}")
             return None
     
-    def _extract_body_and_attachments(self, payload, message_id: str) -> tuple:
-        """Extrait le corps et les pièces jointes COMPLÈTES."""
-        body = ""
+    def _extract_content_and_attachments(self, payload, message_id: str) -> Tuple[str, str, List[EmailAttachment]]:
+        """Extrait le contenu HTML/text et les pièces jointes."""
+        html_content = ""
+        plain_content = ""
         attachments = []
+        inline_images = {}
         
         try:
             # Fonction récursive pour traiter toutes les parties
             def process_part(part, part_id=""):
-                nonlocal body, attachments
+                nonlocal html_content, plain_content, attachments, inline_images
                 
                 mime_type = part.get('mimeType', '')
                 filename = part.get('filename', '')
+                headers = part.get('headers', [])
                 
-                # Si c'est une pièce jointe
-                if filename:
+                # Récupérer le Content-ID pour les images inline
+                content_id = None
+                content_disposition = None
+                for header in headers:
+                    if header['name'].lower() == 'content-id':
+                        content_id = header['value'].strip('<>')
+                    elif header['name'].lower() == 'content-disposition':
+                        content_disposition = header['value']
+                
+                # Si c'est une pièce jointe ou image inline
+                if filename or (mime_type.startswith('image/') and content_id):
                     attachment = self._create_attachment(part, message_id, part_id)
                     if attachment:
                         attachments.append(attachment)
+                        
+                        # Si c'est une image inline, la télécharger pour l'intégrer
+                        if content_id and mime_type.startswith('image/'):
+                            image_data = self._download_inline_image(message_id, attachment.attachment_id)
+                            if image_data:
+                                # Créer une data URL
+                                data_url = f"data:{mime_type};base64," + base64.b64encode(image_data).decode()
+                                inline_images[content_id] = data_url
+                                # Aussi essayer avec cid: prefix
+                                inline_images[f"cid:{content_id}"] = data_url
                 
                 # Si c'est du contenu textuel
                 elif mime_type in ['text/plain', 'text/html']:
-                    part_body = self._extract_text_from_part(part)
-                    if part_body:
+                    part_content = self._extract_text_from_part(part)
+                    if part_content:
                         if mime_type == 'text/html':
-                            # Convertir HTML en texte lisible
-                            part_body = self._html_to_text(part_body)
-                        
-                        if body:
-                            body += "\n\n" + part_body
-                        else:
-                            body = part_body
+                            if html_content:
+                                html_content += "\n\n" + part_content
+                            else:
+                                html_content = part_content
+                        else:  # text/plain
+                            if plain_content:
+                                plain_content += "\n\n" + part_content
+                            else:
+                                plain_content = part_content
                 
                 # Traiter les parties imbriquées
                 if 'parts' in part:
@@ -259,11 +295,70 @@ class GmailClient:
             # Commencer le traitement
             process_part(payload)
             
-            return body.strip(), attachments
+            # Intégrer les images inline dans le HTML
+            if html_content and inline_images:
+                html_content = self._integrate_inline_images(html_content, inline_images)
+            
+            return html_content.strip(), plain_content.strip(), attachments
             
         except Exception as e:
-            logger.error(f"Erreur extraction corps/pièces jointes: {e}")
-            return "", []
+            logger.error(f"Erreur extraction contenu: {e}")
+            return "", "", []
+    
+    def _download_inline_image(self, message_id: str, attachment_id: str) -> Optional[bytes]:
+        """Télécharge une image inline pour l'intégrer."""
+        try:
+            if not attachment_id:
+                return None
+                
+            attachment = self.service.users().messages().attachments().get(
+                userId='me',
+                messageId=message_id,
+                id=attachment_id
+            ).execute()
+            
+            data = attachment['data']
+            return base64.urlsafe_b64decode(data)
+            
+        except Exception as e:
+            logger.error(f"Erreur téléchargement image inline: {e}")
+            return None
+    
+    def _integrate_inline_images(self, html_content: str, inline_images: dict) -> str:
+        """Intègre les images inline dans le HTML."""
+        try:
+            # Remplacer les références cid: par les data URLs
+            for cid, data_url in inline_images.items():
+                # Plusieurs patterns possibles
+                patterns = [
+                    f'src="cid:{cid}"',
+                    f"src='cid:{cid}'",
+                    f'src="cid:{cid.strip()}"',
+                    f"src='cid:{cid.strip()}'",
+                    f'src="{cid}"',
+                    f"src='{cid}'"
+                ]
+                
+                for pattern in patterns:
+                    html_content = html_content.replace(pattern, f'src="{data_url}"')
+            
+            # Aussi traiter les background-image en CSS
+            for cid, data_url in inline_images.items():
+                css_patterns = [
+                    f'background-image:url(cid:{cid})',
+                    f'background-image: url(cid:{cid})',
+                    f"background-image:url('cid:{cid}')",
+                    f'background-image:url("cid:{cid}")'
+                ]
+                
+                for pattern in css_patterns:
+                    html_content = html_content.replace(pattern, f'background-image:url("{data_url}")')
+            
+            return html_content
+            
+        except Exception as e:
+            logger.error(f"Erreur intégration images: {e}")
+            return html_content
     
     def _extract_text_from_part(self, part) -> str:
         """Extrait le texte d'une partie d'email."""
@@ -277,131 +372,19 @@ class GmailClient:
             logger.error(f"Erreur extraction texte: {e}")
             return ""
     
-    def _html_to_text(self, html_content: str) -> str:
-        """Convertit HTML en texte lisible ULTRA-AMÉLIORÉ."""
-        try:
-            # Décoder les entités HTML d'abord
-            text = html.unescape(html_content)
-            
-            # Supprimer complètement les scripts, styles et commentaires
-            text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
-            
-            # Supprimer les balises meta, link, etc.
-            text = re.sub(r'<(meta|link|base|area|embed|source|track|wbr)[^>]*/?>', '', text, flags=re.IGNORECASE)
-            
-            # Remplacer les séparateurs visuels par des sauts de ligne simples
-            text = re.sub(r'={10,}', '\n', text)  # Enlever les longues lignes de =====
-            text = re.sub(r'-{10,}', '\n', text)  # Enlever les longues lignes de -----
-            text = re.sub(r'_{10,}', '\n', text)  # Enlever les longues lignes de _____
-            
-            # Remplacer les balises de structure par des sauts de ligne appropriés
-            text = re.sub(r'</(div|p|section|article|header|footer|main|aside)>', '\n\n', text, flags=re.IGNORECASE)
-            text = re.sub(r'<(div|p|section|article|header|footer|main|aside)[^>]*>', '\n', text, flags=re.IGNORECASE)
-            
-            # Traiter les titres
-            text = re.sub(r'</h[1-6]>', '\n\n', text, flags=re.IGNORECASE)
-            text = re.sub(r'<h[1-6][^>]*>', '\n\n', text, flags=re.IGNORECASE)
-            
-            # Traiter les listes
-            text = re.sub(r'<li[^>]*>', '\n• ', text, flags=re.IGNORECASE)
-            text = re.sub(r'</li>', '', text, flags=re.IGNORECASE)
-            text = re.sub(r'</(ul|ol)>', '\n\n', text, flags=re.IGNORECASE)
-            text = re.sub(r'<(ul|ol)[^>]*>', '\n', text, flags=re.IGNORECASE)
-            
-            # Traiter les sauts de ligne
-            text = re.sub(r'<br[^>]*/?>', '\n', text, flags=re.IGNORECASE)
-            text = re.sub(r'<hr[^>]*/?>', '\n---\n', text, flags=re.IGNORECASE)
-            
-            # Traiter les liens - garder le texte et l'URL si différents
-            def replace_link(match):
-                href = match.group(1) if match.group(1) else ''
-                link_text = match.group(2).strip()
-                if href and href != link_text and not link_text.startswith('http'):
-                    return f"{link_text} ({href})"
-                else:
-                    return link_text
-            
-            text = re.sub(r'<a[^>]*href=["\']?([^"\'>\s]+)["\']?[^>]*>(.*?)</a>', replace_link, text, flags=re.IGNORECASE | re.DOTALL)
-            
-            # Traiter le formatage de texte
-            text = re.sub(r'<(strong|b)[^>]*>(.*?)</\1>', r'**\2**', text, flags=re.IGNORECASE | re.DOTALL)
-            text = re.sub(r'<(em|i)[^>]*>(.*?)</\1>', r'*\2*', text, flags=re.IGNORECASE | re.DOTALL)
-            
-            # Supprimer toutes les autres balises HTML restantes
-            text = re.sub(r'<[^>]+>', '', text)
-            
-            # Nettoyer les entités HTML restantes
-            html_entities = {
-                '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', 
-                '&quot;': '"', '&#39;': "'", '&apos;': "'", '&copy;': '©',
-                '&reg;': '®', '&trade;': '™', '&euro;': '€', '&pound;': '£',
-                '&yen;': '¥', '&cent;': '¢', '&sect;': '§', '&para;': '¶',
-                '&dagger;': '†', '&Dagger;': '‡', '&bull;': '•', '&hellip;': '…',
-                '&prime;': '′', '&Prime;': '″', '&lsaquo;': '‹', '&rsaquo;': '›',
-                '&laquo;': '«', '&raquo;': '»', '&lsquo;': ''', '&rsquo;': ''',
-                '&ldquo;': '"', '&rdquo;': '"', '&ndash;': '–', '&mdash;': '—'
-            }
-            
-            for entity, replacement in html_entities.items():
-                text = text.replace(entity, replacement)
-            
-            # Nettoyer les espaces et sauts de ligne
-            # Supprimer les espaces en début/fin de ligne
-            text = re.sub(r'[ \t]+\n', '\n', text)
-            text = re.sub(r'\n[ \t]+', '\n', text)
-            
-            # Réduire les espaces multiples sur une ligne
-            text = re.sub(r'[ \t]{2,}', ' ', text)
-            
-            # Limiter les sauts de ligne consécutifs
-            text = re.sub(r'\n{4,}', '\n\n\n', text)  # Max 3 sauts de ligne
-            
-            # Supprimer les lignes vides avec seulement des espaces
-            text = re.sub(r'\n\s*\n', '\n\n', text)
-            
-            # Nettoyer le début et la fin
-            text = text.strip()
-            
-            # Post-traitement spécial pour éliminer les artefacts de mise en page
-            lines = text.split('\n')
-            cleaned_lines = []
-            
-            for line in lines:
-                line = line.strip()
-                # Ignorer les lignes très courtes qui sont probablement des artefacts
-                if len(line) <= 2 and line not in ['•', '-', '*', '>', '|']:
-                    continue
-                # Ignorer les lignes qui ne contiennent que des caractères de ponctuation répétés
-                if re.match(r'^[=\-_*#]{3,}$', line):
-                    continue
-                cleaned_lines.append(line)
-            
-            # Rejoindre avec des sauts de ligne appropriés
-            result = '\n'.join(cleaned_lines)
-            
-            # Dernière passe pour éliminer les doublons de sauts de ligne
-            result = re.sub(r'\n{3,}', '\n\n', result)
-            
-            return result.strip()
-            
-        except Exception as e:
-            logger.error(f"Erreur conversion HTML améliorée: {e}")
-            # Fallback: nettoyage basique
-            fallback = re.sub(r'<[^>]+>', '', html_content)
-            fallback = re.sub(r'={10,}', '\n', fallback)
-            fallback = re.sub(r'\s+', ' ', fallback)
-            return fallback.strip()
-    
     def _create_attachment(self, part, message_id: str, part_id: str) -> Optional[EmailAttachment]:
         """Crée un objet EmailAttachment."""
         try:
             filename = part.get('filename', '')
             mime_type = part.get('mimeType', '')
             
-            if not filename:
+            if not filename and not mime_type.startswith('image/'):
                 return None
+            
+            # Pour les images inline sans filename
+            if not filename and mime_type.startswith('image/'):
+                extension = mime_type.split('/')[-1]
+                filename = f"image_inline.{extension}"
             
             # Informations sur la taille
             body = part.get('body', {})
@@ -424,6 +407,42 @@ class GmailClient:
         except Exception as e:
             logger.error(f"Erreur création pièce jointe: {e}")
             return None
+    
+    def _parse_email_date(self, date_str: str) -> datetime:
+        """Parse une date d'email et la convertit en datetime naive local."""
+        try:
+            if not date_str:
+                return datetime.now()
+            
+            # Parser la date avec timezone
+            parsed_date = parsedate_to_datetime(date_str)
+            
+            # Convertir en timestamp puis en datetime local naive
+            if parsed_date.tzinfo is not None:
+                timestamp = parsed_date.timestamp()
+                local_date = datetime.fromtimestamp(timestamp)
+                return local_date
+            else:
+                return parsed_date
+                
+        except Exception as e:
+            logger.error(f"Erreur parsing date '{date_str}': {e}")
+            return datetime.now()
+    
+    def _format_file_size(self, size_bytes: int) -> str:
+        """Formate la taille d'un fichier."""
+        if size_bytes == 0:
+            return "0 B"
+        
+        size_names = ["B", "KB", "MB", "GB"]
+        i = 0
+        size = float(size_bytes)
+        
+        while size >= 1024.0 and i < len(size_names) - 1:
+            size /= 1024.0
+            i += 1
+        
+        return f"{size:.1f} {size_names[i]}"
     
     def download_attachment(self, message_id: str, attachment_id: str, filename: str) -> Optional[bytes]:
         """Télécharge une pièce jointe."""
@@ -481,42 +500,6 @@ class GmailClient:
         except Exception as e:
             logger.error(f"Erreur sauvegarde pièce jointe: {e}")
             return False
-    
-    def _parse_email_date(self, date_str: str) -> datetime:
-        """Parse une date d'email et la convertit en datetime naive local."""
-        try:
-            if not date_str:
-                return datetime.now()
-            
-            # Parser la date avec timezone
-            parsed_date = parsedate_to_datetime(date_str)
-            
-            # Convertir en timestamp puis en datetime local naive
-            if parsed_date.tzinfo is not None:
-                timestamp = parsed_date.timestamp()
-                local_date = datetime.fromtimestamp(timestamp)
-                return local_date
-            else:
-                return parsed_date
-                
-        except Exception as e:
-            logger.error(f"Erreur parsing date '{date_str}': {e}")
-            return datetime.now()
-    
-    def _format_file_size(self, size_bytes: int) -> str:
-        """Formate la taille d'un fichier."""
-        if size_bytes == 0:
-            return "0 B"
-        
-        size_names = ["B", "KB", "MB", "GB"]
-        i = 0
-        size = float(size_bytes)
-        
-        while size >= 1024.0 and i < len(size_names) - 1:
-            size /= 1024.0
-            i += 1
-        
-        return f"{size:.1f} {size_names[i]}"
     
     def send_email(self, to: str, subject: str, body: str, 
                    cc: Optional[List[str]] = None, 

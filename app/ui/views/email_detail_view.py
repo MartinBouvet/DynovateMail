@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Vue détaillée d'un email CORRIGÉE avec gestion des pièces jointes.
+Vue détaillée d'un email CORRIGÉE avec rendu HTML complet et images.
 """
 import logging
 from typing import Optional
@@ -9,8 +9,9 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QFrame, QScrollArea, QFileDialog, QMessageBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QUrl
 from PyQt6.QtGui import QFont
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from models.email_model import Email, EmailAttachment
 from gmail_client import GmailClient
@@ -128,8 +129,335 @@ class AttachmentCard(QFrame):
             }
         """)
 
+class EmailContentDisplay(QWidget):
+    """Widget d'affichage du contenu email avec rendu HTML."""
+    
+    def __init__(self):
+        super().__init__()
+        self.current_content = ""
+        self.is_html = False
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        """Configure l'interface."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Toggle pour basculer entre HTML et texte
+        self.toggle_frame = QFrame()
+        self.toggle_frame.setObjectName("toggle-frame")
+        self.toggle_frame.setFixedHeight(40)
+        
+        toggle_layout = QHBoxLayout(self.toggle_frame)
+        toggle_layout.setContentsMargins(15, 5, 15, 5)
+        toggle_layout.setSpacing(10)
+        
+        self.format_label = QLabel("📄 Format:")
+        self.format_label.setFont(QFont("Inter", 11, QFont.Weight.Medium))
+        toggle_layout.addWidget(self.format_label)
+        
+        self.html_btn = QPushButton("🌐 HTML")
+        self.html_btn.setObjectName("format-btn")
+        self.html_btn.setFixedSize(80, 28)
+        self.html_btn.setCheckable(True)
+        self.html_btn.clicked.connect(lambda: self._set_display_mode(True))
+        toggle_layout.addWidget(self.html_btn)
+        
+        self.text_btn = QPushButton("📝 Texte")
+        self.text_btn.setObjectName("format-btn")
+        self.text_btn.setFixedSize(80, 28)
+        self.text_btn.setCheckable(True)
+        self.text_btn.clicked.connect(lambda: self._set_display_mode(False))
+        toggle_layout.addWidget(self.text_btn)
+        
+        toggle_layout.addStretch()
+        
+        layout.addWidget(self.toggle_frame)
+        
+        # Vue web pour HTML
+        try:
+            self.web_view = QWebEngineView()
+            self.web_view.setObjectName("email-web-view")
+            layout.addWidget(self.web_view)
+        except ImportError:
+            logger.warning("QWebEngineView non disponible - rendu HTML désactivé")
+            self.web_view = None
+        
+        # Vue texte pour fallback
+        self.text_view = QTextEdit()
+        self.text_view.setObjectName("email-text-view")
+        self.text_view.setReadOnly(True)
+        self.text_view.setFont(QFont("Inter", 13))
+        self.text_view.hide()
+        layout.addWidget(self.text_view)
+        
+        # Appliquer les styles
+        self._apply_styles()
+    
+    def _apply_styles(self):
+        """Applique les styles."""
+        self.setStyleSheet("""
+            QFrame#toggle-frame {
+                background-color: #f8f9fa;
+                border-bottom: 2px solid #e9ecef;
+            }
+            
+            QPushButton#format-btn {
+                background-color: #ffffff;
+                border: 2px solid #dee2e6;
+                border-radius: 14px;
+                color: #495057;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 4px 8px;
+            }
+            
+            QPushButton#format-btn:checked {
+                background-color: #007bff;
+                border-color: #007bff;
+                color: #ffffff;
+            }
+            
+            QPushButton#format-btn:hover {
+                border-color: #adb5bd;
+            }
+            
+            QWebEngineView#email-web-view {
+                border: none;
+                background-color: #ffffff;
+            }
+            
+            QTextEdit#email-text-view {
+                background-color: #ffffff;
+                border: none;
+                padding: 20px;
+                color: #495057;
+                line-height: 1.7;
+                font-family: 'Inter', Arial, sans-serif;
+            }
+        """)
+    
+    def set_content(self, content: str, is_html: bool = False):
+        """Définit le contenu à afficher."""
+        self.current_content = content
+        self.is_html = is_html
+        
+        # Afficher/masquer les boutons selon le type de contenu
+        if is_html and self.web_view:
+            self.toggle_frame.show()
+            self._set_display_mode(True)  # Commencer en mode HTML
+        else:
+            self.toggle_frame.hide()
+            self._set_display_mode(False)  # Mode texte uniquement
+    
+    def _set_display_mode(self, html_mode: bool):
+        """Bascule entre mode HTML et texte."""
+        if html_mode and self.is_html and self.web_view:
+            # Mode HTML
+            self.html_btn.setChecked(True)
+            self.text_btn.setChecked(False)
+            
+            # Créer un HTML complet avec styles
+            full_html = self._create_full_html(self.current_content)
+            self.web_view.setHtml(full_html)
+            
+            self.web_view.show()
+            self.text_view.hide()
+        else:
+            # Mode texte
+            self.html_btn.setChecked(False)
+            self.text_btn.setChecked(True)
+            
+            # Convertir HTML en texte si nécessaire
+            if self.is_html:
+                text_content = self._html_to_text(self.current_content)
+            else:
+                text_content = self.current_content
+            
+            self.text_view.setPlainText(text_content)
+            
+            self.web_view.hide() if self.web_view else None
+            self.text_view.show()
+    
+    def _create_full_html(self, content: str) -> str:
+        """Crée un document HTML complet avec styles."""
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    color: #495057;
+                    margin: 20px;
+                    background-color: #ffffff;
+                }}
+                
+                img {{
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 6px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    margin: 8px 0;
+                }}
+                
+                a {{
+                    color: #007bff;
+                    text-decoration: none;
+                }}
+                
+                a:hover {{
+                    text-decoration: underline;
+                }}
+                
+                table {{
+                    border-collapse: collapse;
+                    width: 100%;
+                    margin: 12px 0;
+                }}
+                
+                table, th, td {{
+                    border: 1px solid #dee2e6;
+                }}
+                
+                th, td {{
+                    padding: 8px 12px;
+                    text-align: left;
+                }}
+                
+                th {{
+                    background-color: #f8f9fa;
+                    font-weight: 600;
+                }}
+                
+                blockquote {{
+                    border-left: 4px solid #007bff;
+                    margin: 16px 0;
+                    padding: 8px 16px;
+                    background-color: #f8f9fa;
+                    font-style: italic;
+                }}
+                
+                pre {{
+                    background-color: #f8f9fa;
+                    border: 1px solid #e9ecef;
+                    border-radius: 6px;
+                    padding: 12px;
+                    overflow-x: auto;
+                    font-family: 'Courier New', monospace;
+                }}
+                
+                code {{
+                    background-color: #f8f9fa;
+                    padding: 2px 4px;
+                    border-radius: 3px;
+                    font-family: 'Courier New', monospace;
+                }}
+                
+                .email-signature {{
+                    border-top: 1px solid #dee2e6;
+                    margin-top: 20px;
+                    padding-top: 12px;
+                    font-size: 12px;
+                    color: #6c757d;
+                }}
+                
+                /* Styles pour les emails Outlook/Exchange */
+                .MsoNormal {{
+                    margin: 0 !important;
+                    padding: 4px 0 !important;
+                }}
+                
+                /* Réduire l'espacement excessif */
+                p {{
+                    margin: 8px 0;
+                }}
+                
+                div {{
+                    margin: 4px 0;
+                }}
+                
+                /* Masquer les éléments de tracking */
+                img[width="1"], img[height="1"] {{
+                    display: none !important;
+                }}
+            </style>
+        </head>
+        <body>
+            {content}
+        </body>
+        </html>
+        """
+    
+    def _html_to_text(self, html_content: str) -> str:
+        """Convertit HTML en texte lisible."""
+        try:
+            import re
+            import html
+            
+            # Décoder les entités HTML
+            text = html.unescape(html_content)
+            
+            # Supprimer les scripts, styles et commentaires
+            text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+            
+            # Traiter les balises de structure
+            text = re.sub(r'</(div|p|section|article|header|footer|main|aside)>', '\n\n', text, flags=re.IGNORECASE)
+            text = re.sub(r'<(div|p|section|article|header|footer|main|aside)[^>]*>', '\n', text, flags=re.IGNORECASE)
+            
+            # Traiter les titres
+            text = re.sub(r'</h[1-6]>', '\n\n', text, flags=re.IGNORECASE)
+            text = re.sub(r'<h[1-6][^>]*>', '\n\n', text, flags=re.IGNORECASE)
+            
+            # Traiter les listes
+            text = re.sub(r'<li[^>]*>', '\n• ', text, flags=re.IGNORECASE)
+            text = re.sub(r'</li>', '', text, flags=re.IGNORECASE)
+            text = re.sub(r'</(ul|ol)>', '\n\n', text, flags=re.IGNORECASE)
+            text = re.sub(r'<(ul|ol)[^>]*>', '\n', text, flags=re.IGNORECASE)
+            
+            # Traiter les sauts de ligne
+            text = re.sub(r'<br[^>]*/?>', '\n', text, flags=re.IGNORECASE)
+            text = re.sub(r'<hr[^>]*/?>', '\n---\n', text, flags=re.IGNORECASE)
+            
+            # Traiter les liens
+            def replace_link(match):
+                href = match.group(1) if match.group(1) else ''
+                link_text = match.group(2).strip()
+                if href and href != link_text and not link_text.startswith('http'):
+                    return f"{link_text} ({href})"
+                else:
+                    return link_text
+            
+            text = re.sub(r'<a[^>]*href=["\']?([^"\'>\s]+)["\']?[^>]*>(.*?)</a>', 
+                         replace_link, text, flags=re.IGNORECASE | re.DOTALL)
+            
+            # Traiter le formatage
+            text = re.sub(r'<(strong|b)[^>]*>(.*?)</\1>', r'**\2**', text, flags=re.IGNORECASE | re.DOTALL)
+            text = re.sub(r'<(em|i)[^>]*>(.*?)</\1>', r'*\2*', text, flags=re.IGNORECASE | re.DOTALL)
+            
+            # Supprimer toutes les autres balises
+            text = re.sub(r'<[^>]+>', '', text)
+            
+            # Nettoyer les espaces
+            text = re.sub(r'[ \t]+\n', '\n', text)
+            text = re.sub(r'\n[ \t]+', '\n', text)
+            text = re.sub(r'[ \t]{2,}', ' ', text)
+            text = re.sub(r'\n{3,}', '\n\n', text)
+            
+            return text.strip()
+            
+        except Exception as e:
+            logger.error(f"Erreur conversion HTML: {e}")
+            return html_content
+
 class EmailDetailView(QWidget):
-    """Vue détaillée CORRIGÉE d'un email avec gestion des pièces jointes."""
+    """Vue détaillée CORRIGÉE d'un email avec rendu HTML complet."""
     
     action_requested = pyqtSignal(str, object)
     
@@ -143,7 +471,7 @@ class EmailDetailView(QWidget):
         self._apply_style()
     
     def _setup_ui(self):
-        """Configure l'interface CORRIGÉE avec gestion des pièces jointes."""
+        """Configure l'interface CORRIGÉE avec rendu HTML."""
         # Layout principal
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -212,7 +540,7 @@ class EmailDetailView(QWidget):
         center_layout.addWidget(title_label)
         
         # Texte descriptif
-        desc_label = QLabel("Cliquez sur un email dans la liste de gauche pour voir son contenu détaillé et les pièces jointes.")
+        desc_label = QLabel("Cliquez sur un email dans la liste de gauche pour voir son contenu avec le rendu HTML complet et les images intégrées.")
         desc_label.setFont(QFont("Inter", 14))
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_label.setWordWrap(True)
@@ -233,7 +561,7 @@ class EmailDetailView(QWidget):
         return widget
     
     def _create_email_content_widget(self) -> QWidget:
-        """Widget de contenu d'email CORRIGÉ avec pièces jointes."""
+        """Widget de contenu d'email CORRIGÉ avec rendu HTML."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(25)
@@ -252,9 +580,9 @@ class EmailDetailView(QWidget):
         self.email_actions = self._create_email_actions()
         layout.addWidget(self.email_actions)
         
-        # Contenu
-        self.email_body = self._create_email_body()
-        layout.addWidget(self.email_body)
+        # Contenu avec rendu HTML
+        self.email_content_display = EmailContentDisplay()
+        layout.addWidget(self.email_content_display)
         
         # Analyse IA
         self.ai_analysis_section = self._create_ai_analysis_section()
@@ -400,32 +728,6 @@ class EmailDetailView(QWidget):
         main_layout.addStretch(1)
         
         return actions
-    
-    def _create_email_body(self) -> QFrame:
-        """Zone de contenu CORRIGÉE."""
-        body_frame = QFrame()
-        body_frame.setObjectName("email-body-frame")
-        body_frame.setMinimumHeight(300)
-        
-        layout = QVBoxLayout(body_frame)
-        layout.setSpacing(15)
-        layout.setContentsMargins(25, 20, 25, 20)
-        
-        # Titre
-        title = QLabel("📄 Contenu de l'email")
-        title.setObjectName("section-title")
-        title.setFont(QFont("Inter", 16, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        # Zone de texte avec scroll interne
-        self.content_display = QTextEdit()
-        self.content_display.setObjectName("email-content")
-        self.content_display.setReadOnly(True)
-        self.content_display.setFont(QFont("Inter", 13))
-        self.content_display.setMinimumHeight(250)
-        layout.addWidget(self.content_display)
-        
-        return body_frame
     
     def _create_ai_analysis_section(self) -> QFrame:
         """Section d'analyse IA."""
@@ -590,12 +892,12 @@ class EmailDetailView(QWidget):
                 transform: translateY(0px);
             }
             
-            /* === CONTENU EMAIL === */
-            QFrame#email-body-frame {
-                background-color: #ffffff;
-                border: 3px solid #e8eaf6;
+            /* === ANALYSE IA === */
+            QFrame#ai-analysis-frame {
+                background-color: #f3e5f5;
+                border: 3px solid #ce93d8;
                 border-radius: 15px;
-                margin-bottom: 15px;
+                margin-bottom: 20px;
             }
             
             QLabel#section-title {
@@ -603,30 +905,6 @@ class EmailDetailView(QWidget):
                 font-weight: 700;
                 margin-bottom: 10px;
                 padding: 5px 0;
-            }
-            
-            QTextEdit#email-content {
-                background-color: #fafbfc;
-                border: 2px solid #e3f2fd;
-                border-radius: 12px;
-                padding: 20px;
-                color: #263238;
-                line-height: 1.7;
-                font-family: 'Inter', Arial, sans-serif;
-                font-size: 13px;
-            }
-            
-            QTextEdit#email-content:focus {
-                border-color: #1976d2;
-                background-color: #ffffff;
-            }
-            
-            /* === ANALYSE IA === */
-            QFrame#ai-analysis-frame {
-                background-color: #f3e5f5;
-                border: 3px solid #ce93d8;
-                border-radius: 15px;
-                margin-bottom: 20px;
             }
             
             QLabel#ai-analysis-content {
@@ -643,7 +921,7 @@ class EmailDetailView(QWidget):
         """)
     
     def show_email(self, email: Email):
-        """Affiche un email CORRIGÉ avec pièces jointes."""
+        """Affiche un email CORRIGÉ avec rendu HTML complet."""
         self.current_email = email
         
         # Cacher le message par défaut, afficher le contenu
@@ -668,11 +946,12 @@ class EmailDetailView(QWidget):
         # Mettre à jour les pièces jointes
         self._update_attachments()
         
-        # Mettre à jour le contenu
-        body_text = email.body or email.snippet or "(Aucun contenu)"
+        # Mettre à jour le contenu avec rendu HTML
+        body_content = email.body or email.snippet or "(Aucun contenu)"
+        is_html = getattr(email, 'is_html', False)
         
-        # Le contenu est déjà nettoyé par le GmailClient
-        self.content_display.setPlainText(body_text)
+        # Définir le contenu dans le display HTML/texte
+        self.email_content_display.set_content(body_content, is_html)
         
         # Mettre à jour l'analyse IA
         self._update_ai_analysis()
@@ -680,7 +959,7 @@ class EmailDetailView(QWidget):
         # Scroller vers le haut
         self.scroll_area.verticalScrollBar().setValue(0)
         
-        logger.info(f"Affichage email: {email.id} avec {len(email.attachments)} pièces jointes")
+        logger.info(f"Affichage email: {email.id} avec rendu {'HTML' if is_html else 'texte'}")
     
     def _update_attachments(self):
         """Met à jour l'affichage des pièces jointes."""
@@ -792,7 +1071,7 @@ class EmailDetailView(QWidget):
         ai_text = f"""📂 CATÉGORIE DÉTECTÉE
     {category_display}
 
-    📊 NIVEAU DE CONFIANCE
+📊 NIVEAU DE CONFIANCE
     {confidence:.0f}% de certitude
 
 ⚡ NIVEAU DE PRIORITÉ
@@ -804,7 +1083,7 @@ class EmailDetailView(QWidget):
 🧠 ANALYSE DÉTAILLÉE
     {reasoning}"""
        
-       # Ajouter des informations extraites si disponibles
+        # Ajouter des informations extraites si disponibles
         extracted_info = getattr(analysis, 'extracted_info', {})
         if extracted_info:
             ai_text += "\n\n📋 INFORMATIONS EXTRAITES"
