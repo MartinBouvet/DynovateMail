@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Carte d'email intelligente CORRIGÉE - Affichage propre et lisible.
+Carte d'email intelligente CORRIGÉE avec indicateur de pièces jointes.
 """
 import logging
 from typing import Optional
@@ -17,7 +17,7 @@ from models.email_model import Email
 logger = logging.getLogger(__name__)
 
 class SmartEmailCard(QFrame):
-    """Carte d'email intelligente avec affichage CORRIGÉ."""
+    """Carte d'email intelligente CORRIGÉE avec indicateur de pièces jointes."""
     
     clicked = pyqtSignal(object)
     action_requested = pyqtSignal(str, object)
@@ -30,7 +30,7 @@ class SmartEmailCard(QFrame):
         self.is_hovered = False
         
         self.setObjectName("email-card")
-        self.setFixedHeight(120)  # Hauteur réduite et fixe
+        self.setFixedHeight(135)  # Hauteur légèrement augmentée pour les pièces jointes
         self.setMinimumWidth(350)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         
@@ -46,7 +46,7 @@ class SmartEmailCard(QFrame):
         self.setGraphicsEffect(shadow)
     
     def _setup_ui(self):
-        """Configure l'interface de la carte."""
+        """Configure l'interface de la carte avec pièces jointes."""
         # Layout principal
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(16, 12, 16, 12)
@@ -67,6 +67,14 @@ class SmartEmailCard(QFrame):
         header_layout.addWidget(self.sender_label)
         
         header_layout.addStretch()
+        
+        # Indicateur pièces jointes
+        if self.email.has_attachments:
+            attachments_icon = QLabel("📎")
+            attachments_icon.setObjectName("attachments-icon")
+            attachments_icon.setFont(QFont("Arial", 12))
+            attachments_icon.setToolTip(f"{self.email.attachments_count} pièce(s) jointe(s)")
+            header_layout.addWidget(attachments_icon)
         
         # Date
         date_str = self._format_date(self.email.received_date)
@@ -109,7 +117,7 @@ class SmartEmailCard(QFrame):
         self.preview_label.setFont(QFont("Inter", 12))
         main_layout.addWidget(self.preview_label)
         
-        # Ligne 4: Badge et actions
+        # Ligne 4: Badge et actions (avec info pièces jointes si nécessaire)
         footer_layout = QHBoxLayout()
         footer_layout.setSpacing(8)
         
@@ -117,6 +125,14 @@ class SmartEmailCard(QFrame):
         if self.ai_analysis and hasattr(self.ai_analysis, 'category'):
             category_badge = self._create_category_badge()
             footer_layout.addWidget(category_badge)
+        
+        # Informations pièces jointes détaillées (si plus d'une)
+        if self.email.has_attachments and self.email.attachments_count > 1:
+            attachments_info = QLabel(f"📎 {self.email.attachments_count}")
+            attachments_info.setObjectName("attachments-info")
+            attachments_info.setFont(QFont("Inter", 10, QFont.Weight.Medium))
+            attachments_info.setToolTip(self.email.format_attachments_summary())
+            footer_layout.addWidget(attachments_info)
         
         footer_layout.addStretch()
         
@@ -220,7 +236,7 @@ class SmartEmailCard(QFrame):
             return date.strftime("%d/%m")
     
     def _apply_style(self):
-        """Applique le style à la carte."""
+        """Applique le style à la carte avec indicateurs de pièces jointes."""
         # Style de base
         base_style = """
             QFrame#email-card {
@@ -254,6 +270,20 @@ class SmartEmailCard(QFrame):
                 font-weight: 400;
             }
             
+            QLabel#attachments-icon {
+                color: #ff9800;
+                font-size: 12px;
+            }
+            
+            QLabel#attachments-info {
+                color: #ff9800;
+                background-color: #fff3e0;
+                border: 1px solid #ffcc02;
+                border-radius: 10px;
+                padding: 2px 6px;
+                font-weight: 600;
+            }
+            
             QPushButton#ai-action-btn {
                 background-color: #e3f2fd;
                 color: #1976d2;
@@ -274,6 +304,14 @@ class SmartEmailCard(QFrame):
                 QFrame#email-card {
                     border-left: 3px solid #007bff;
                     background-color: #f8fbff;
+                }
+            """
+        
+        # Indicateur spécial pour les emails avec pièces jointes
+        if self.email.has_attachments:
+            base_style += """
+                QFrame#email-card {
+                    border-top: 2px solid #ff9800;
                 }
             """
         

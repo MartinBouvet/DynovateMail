@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Vue Smart Inbox CORRIGÉE - Alignement parfait des filtres et de tous les éléments.
+Vue Smart Inbox CORRIGÉE - Avec vue détaillée mise à jour pour les pièces jointes.
 """
 import logging
 from typing import List, Dict, Optional
@@ -74,8 +74,8 @@ class CategoryFilter(QPushButton):
         self.original_name = name
         
         self.setCheckable(True)
-        self.setFixedHeight(38)  # Hauteur fixe pour alignement parfait
-        self.setMinimumWidth(90)  # Largeur minimum
+        self.setFixedHeight(38)
+        self.setMinimumWidth(90)
         self._apply_style()
     
     def update_count(self, count: int):
@@ -451,6 +451,10 @@ class AIResponsePanel(QFrame):
 📂 Catégorie: {category_display}
 📋 Sujet: {subject}"""
         
+        # Ajouter info sur les pièces jointes si présentes
+        if email.has_attachments:
+            email_info += f"\n📎 Pièces jointes: {email.format_attachments_summary()}"
+        
         self.email_info_label.setText(email_info)
         
         # === RÉPONSE SUGGÉRÉE ===
@@ -493,7 +497,7 @@ class AIResponsePanel(QFrame):
         self.hide()
 
 class SmartInboxView(QWidget):
-    """Vue Smart Inbox CORRIGÉE avec alignement parfait des filtres."""
+    """Vue Smart Inbox CORRIGÉE avec gestion des pièces jointes."""
     
     email_selected = pyqtSignal(object)
     
@@ -541,8 +545,8 @@ class SmartInboxView(QWidget):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
         
-        # Vue détail email (HAUT)
-        self.detail_view = EmailDetailView()
+        # Vue détail email (HAUT) - AVEC SUPPORT DES PIÈCES JOINTES
+        self.detail_view = EmailDetailView(gmail_client=self.gmail_client)
         self.detail_view.action_requested.connect(self._handle_email_action)
         right_layout.addWidget(self.detail_view)
         
@@ -562,7 +566,7 @@ class SmartInboxView(QWidget):
         """Crée les filtres PARFAITEMENT ALIGNÉS ET CENTRÉS."""
         filters_frame = QFrame()
         filters_frame.setObjectName("filters-section")
-        filters_frame.setFixedHeight(75)  # Hauteur fixe
+        filters_frame.setFixedHeight(75)
         
         # Layout principal avec centrage parfait
         main_layout = QVBoxLayout(filters_frame)
@@ -591,7 +595,8 @@ class SmartInboxView(QWidget):
             ("🔴 Urgent", "urgent", 0),
             ("📄 CV", "cv", 0),
             ("📅 RDV", "rdv", 0),
-            ("🛠️ Support", "support", 0)
+            ("🛠️ Support", "support", 0),
+            ("📎 Avec PJ", "attachments", 0)  # NOUVEAU FILTRE
         ]
         
         self.category_filters = {}
@@ -616,7 +621,7 @@ class SmartInboxView(QWidget):
         
         # Bouton refresh
         refresh_btn = QPushButton("🔄 Actualiser")
-        refresh_btn.setFixedSize(120, 38)  # Même hauteur que les filtres
+        refresh_btn.setFixedSize(120, 38)
         refresh_btn.clicked.connect(self.refresh_emails)
         refresh_btn.setStyleSheet("""
             QPushButton {
@@ -643,8 +648,6 @@ class SmartInboxView(QWidget):
         filters_layout.addStretch(1)
         
         main_layout.addWidget(filters_container)
-        
-        # Spacer vertical pour centrer
         main_layout.addStretch(1)
         
         # Style du container
@@ -811,18 +814,23 @@ class SmartInboxView(QWidget):
         
         self.is_loading = False
         
-        # Log des suggestions IA
+        # Log des suggestions IA et pièces jointes
         ai_suggestions_count = len([e for e in self.all_emails 
                                    if hasattr(e, 'ai_analysis') and e.ai_analysis and 
                                    getattr(e.ai_analysis, 'should_auto_respond', False)])
         
+        attachments_count = len([e for e in self.all_emails if e.has_attachments])
+        
         if ai_suggestions_count > 0:
             logger.info(f"🤖 {ai_suggestions_count} réponses IA disponibles")
+        
+        if attachments_count > 0:
+            logger.info(f"📎 {attachments_count} emails avec pièces jointes")
         
         logger.info(f"Interface mise à jour avec {len(self.all_emails)} emails")
     
     def _create_email_cards(self):
-        """Crée les cartes d'emails."""
+        """Crée les cartes d'emails avec indicateur de pièces jointes."""
         self._clear_email_list()
         
         emails_to_show = self.filtered_emails if self.filtered_emails else self.all_emails
@@ -846,7 +854,7 @@ class SmartInboxView(QWidget):
             return
         
         for email in emails_to_show:
-            # Créer la carte
+            # Créer la carte avec analyse IA
             card = SmartEmailCard(email, getattr(email, 'ai_analysis', None))
             card.clicked.connect(self._on_email_card_clicked)
             card.action_requested.connect(self._handle_email_action)
@@ -895,6 +903,11 @@ class SmartInboxView(QWidget):
                 if hasattr(email, 'ai_analysis') and email.ai_analysis and 
                 getattr(email.ai_analysis, 'priority', 5) <= 2
             ]
+        elif category == "attachments":  # NOUVEAU FILTRE
+            self.filtered_emails = [
+                email for email in self.all_emails 
+                if email.has_attachments
+            ]
         else:
             self.filtered_emails = [
                 email for email in self.all_emails 
@@ -915,11 +928,16 @@ class SmartInboxView(QWidget):
             "urgent": 0,
             "cv": 0,
             "rdv": 0,
-            "support": 0
+            "support": 0,
+            "attachments": 0  # NOUVEAU COMPTEUR
         }
         
         # Compter par catégorie
         for email in self.all_emails:
+            # Pièces jointes
+            if email.has_attachments:
+                counts["attachments"] += 1
+            
             if hasattr(email, 'ai_analysis') and email.ai_analysis:
                 analysis = email.ai_analysis
                 
@@ -953,7 +971,7 @@ class SmartInboxView(QWidget):
                 card.set_selected(True)
                 break
         
-        # Afficher les détails
+        # Afficher les détails AVEC PIÈCES JOINTES
         self.detail_view.show_email(email)
         self.selected_email = email
         
@@ -983,7 +1001,9 @@ class SmartInboxView(QWidget):
         # Émettre le signal
         self.email_selected.emit(email)
         
-        logger.info(f"Email sélectionné: {email.id}")
+        # Log avec informations sur les pièces jointes
+        attachment_info = f" (📎 {email.attachments_count} PJ)" if email.has_attachments else ""
+        logger.info(f"Email sélectionné: {email.id}{attachment_info}")
     
     def _on_ai_response_approved(self, response_text: str, email: Email):
         """Gère l'approbation d'une réponse IA."""
@@ -1136,17 +1156,19 @@ class SmartInboxView(QWidget):
         self._create_email_cards()
     
     def get_stats(self) -> Dict:
-        """Retourne les statistiques."""
+        """Retourne les statistiques avec pièces jointes."""
         unread_count = len([e for e in self.all_emails if not e.is_read])
         analyzed_count = len([e for e in self.all_emails if hasattr(e, 'ai_analysis') and e.ai_analysis])
         ai_suggestions_count = len([e for e in self.all_emails 
                                    if hasattr(e, 'ai_analysis') and e.ai_analysis and 
                                    getattr(e.ai_analysis, 'should_auto_respond', False)])
+        attachments_count = len([e for e in self.all_emails if e.has_attachments])
         
         return {
             'total_emails': len(self.all_emails),
             'unread_emails': unread_count,
             'analyzed_emails': analyzed_count,
             'ai_suggestions': ai_suggestions_count,
+            'emails_with_attachments': attachments_count,
             'ai_accuracy': analyzed_count / len(self.all_emails) if self.all_emails else 0
         }
