@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Vue Smart Inbox avec Panel IA de réponse CORRIGÉ - Parfaitement lisible.
+Vue Smart Inbox avec Layout VERTICAL CORRIGÉ - Tout est parfaitement visible.
 """
 import logging
 from typing import List, Dict, Optional
@@ -127,7 +127,7 @@ class CategoryFilter(QPushButton):
         self.setStyleSheet(style)
 
 class AIResponsePanel(QFrame):
-    """Panel de réponse IA ULTRA-CORRIGÉ - Design simplifié et parfaitement lisible."""
+    """Panel de réponse IA ULTRA-CORRIGÉ avec hauteur appropriée."""
     
     response_approved = pyqtSignal(str, object)
     response_rejected = pyqtSignal(object)
@@ -138,18 +138,30 @@ class AIResponsePanel(QFrame):
         self.current_analysis = None
         
         self.setObjectName("ai-response-panel")
-        self.setFixedHeight(380)  # Hauteur un peu plus grande
+        self.setMinimumHeight(400)  # Hauteur minimum confortable
         
         self._setup_ui()
         self._apply_style()
         self.hide()
     
     def _setup_ui(self):
-        """Interface ULTRA-SIMPLE et LISIBLE."""
-        # Layout principal avec des marges importantes
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(20)
+        """Interface PARFAITEMENT LISIBLE avec scroll interne."""
+        # Layout principal
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Zone de scroll pour le contenu du panel
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Widget de contenu
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(30, 25, 30, 25)
+        content_layout.setSpacing(20)
         
         # === TITRE ET CONFIANCE ===
         header_frame = QFrame()
@@ -170,14 +182,15 @@ class AIResponsePanel(QFrame):
         self.confidence_label.setFont(QFont("Inter", 14, QFont.Weight.Bold))
         header_layout.addWidget(self.confidence_label)
         
-        layout.addWidget(header_frame)
+        content_layout.addWidget(header_frame)
         
         # === INFOS EMAIL ===
         info_frame = QFrame()
         info_frame.setObjectName("info-frame")
+        info_frame.setMinimumHeight(80)
         info_layout = QVBoxLayout(info_frame)
         info_layout.setContentsMargins(20, 15, 20, 15)
-        info_layout.setSpacing(8)
+        info_layout.setSpacing(10)
         
         info_title = QLabel("📧 Informations de l'email")
         info_title.setObjectName("section-title")
@@ -191,14 +204,15 @@ class AIResponsePanel(QFrame):
         self.email_info_label.setMinimumHeight(50)
         info_layout.addWidget(self.email_info_label)
         
-        layout.addWidget(info_frame)
+        content_layout.addWidget(info_frame)
         
         # === ZONE DE RÉPONSE ===
         response_frame = QFrame()
         response_frame.setObjectName("response-frame")
+        response_frame.setMinimumHeight(180)
         response_layout = QVBoxLayout(response_frame)
         response_layout.setContentsMargins(20, 15, 20, 15)
-        response_layout.setSpacing(10)
+        response_layout.setSpacing(12)
         
         response_title = QLabel("✏️ Réponse suggérée (modifiable)")
         response_title.setObjectName("section-title")
@@ -208,23 +222,24 @@ class AIResponsePanel(QFrame):
         self.response_text = QTextEdit()
         self.response_text.setObjectName("response-text")
         self.response_text.setFont(QFont("Inter", 13))
-        self.response_text.setFixedHeight(120)
+        self.response_text.setMinimumHeight(120)
         self.response_text.setPlaceholderText("Aucune réponse suggérée...")
         response_layout.addWidget(self.response_text)
         
-        layout.addWidget(response_frame)
+        content_layout.addWidget(response_frame)
         
         # === BOUTONS ===
         buttons_frame = QFrame()
         buttons_frame.setObjectName("buttons-frame")
+        buttons_frame.setFixedHeight(80)
         buttons_layout = QHBoxLayout(buttons_frame)
-        buttons_layout.setContentsMargins(10, 10, 10, 10)
-        buttons_layout.setSpacing(15)
+        buttons_layout.setContentsMargins(15, 15, 15, 15)
+        buttons_layout.setSpacing(20)
         
         self.reject_btn = QPushButton("❌ Ignorer cette suggestion")
         self.reject_btn.setObjectName("reject-btn")
         self.reject_btn.setFont(QFont("Inter", 13, QFont.Weight.Bold))
-        self.reject_btn.setFixedHeight(45)
+        self.reject_btn.setFixedHeight(50)
         self.reject_btn.setMinimumWidth(200)
         self.reject_btn.clicked.connect(self._reject_response)
         buttons_layout.addWidget(self.reject_btn)
@@ -234,12 +249,16 @@ class AIResponsePanel(QFrame):
         self.approve_btn = QPushButton("✅ Envoyer cette réponse")
         self.approve_btn.setObjectName("approve-btn")
         self.approve_btn.setFont(QFont("Inter", 13, QFont.Weight.Bold))
-        self.approve_btn.setFixedHeight(45)
+        self.approve_btn.setFixedHeight(50)
         self.approve_btn.setMinimumWidth(220)
         self.approve_btn.clicked.connect(self._approve_response)
         buttons_layout.addWidget(self.approve_btn)
         
-        layout.addWidget(buttons_frame)
+        content_layout.addWidget(buttons_frame)
+        
+        # Configurer le scroll
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
     
     def _apply_style(self):
         """Style ULTRA-SIMPLIFIÉ pour lisibilité maximale."""
@@ -249,7 +268,31 @@ class AIResponsePanel(QFrame):
                 background-color: #e8f8e8;
                 border: 4px solid #4caf50;
                 border-radius: 20px;
-                margin: 15px 0;
+                margin: 10px 0;
+            }
+            
+            /* === SCROLLBAR === */
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            
+            QScrollBar:vertical {
+                background-color: #f0f8f0;
+                width: 12px;
+                border-radius: 6px;
+                margin: 2px;
+            }
+            
+            QScrollBar::handle:vertical {
+                background-color: #4caf50;
+                border-radius: 6px;
+                min-height: 25px;
+                margin: 1px;
+            }
+            
+            QScrollBar::handle:vertical:hover {
+                background-color: #45a049;
             }
             
             /* === TITRE PRINCIPAL === */
@@ -265,7 +308,7 @@ class AIResponsePanel(QFrame):
             QLabel#confidence-badge {
                 background-color: #4caf50;
                 color: #ffffff;
-                padding: 10px 20px;
+                padding: 12px 20px;
                 border-radius: 25px;
                 font-weight: 700;
                 text-align: center;
@@ -299,11 +342,11 @@ class AIResponsePanel(QFrame):
             /* === INFOS EMAIL === */
             QLabel#email-info {
                 color: #212121;
-                background-color: #f8f8f8;
+                background-color: #f8fdf8;
                 border: 2px solid #c8e6c9;
                 border-radius: 10px;
                 padding: 15px;
-                line-height: 1.5;
+                line-height: 1.6;
                 font-weight: 500;
             }
             
@@ -329,55 +372,40 @@ class AIResponsePanel(QFrame):
                 background-color: #4caf50;
                 color: #ffffff;
                 border: none;
-                border-radius: 20px;
-                padding: 12px 25px;
+                border-radius: 25px;
+                padding: 15px 30px;
                 font-weight: 700;
                 font-size: 13px;
             }
             
             QPushButton#approve-btn:hover {
                 background-color: #45a049;
+                transform: translateY(-2px);
             }
             
             QPushButton#approve-btn:pressed {
                 background-color: #3d8b40;
+                transform: translateY(0px);
             }
             
             QPushButton#reject-btn {
                 background-color: #f44336;
                 color: #ffffff;
                 border: none;
-                border-radius: 20px;
-                padding: 12px 25px;
+                border-radius: 25px;
+                padding: 15px 30px;
                 font-weight: 700;
                 font-size: 13px;
             }
             
             QPushButton#reject-btn:hover {
                 background-color: #e53935;
+                transform: translateY(-2px);
             }
             
             QPushButton#reject-btn:pressed {
                 background-color: #d32f2f;
-            }
-            
-            /* === SCROLLBARS === */
-            QScrollBar:vertical {
-                background-color: #f0f0f0;
-                width: 12px;
-                border-radius: 6px;
-                margin: 2px;
-            }
-            
-            QScrollBar::handle:vertical {
-                background-color: #4caf50;
-                border-radius: 6px;
-                min-height: 25px;
-                margin: 1px;
-            }
-            
-            QScrollBar::handle:vertical:hover {
-                background-color: #45a049;
+                transform: translateY(0px);
             }
         """)
     
@@ -454,7 +482,7 @@ class AIResponsePanel(QFrame):
         self.hide()
 
 class SmartInboxView(QWidget):
-    """Vue Smart Inbox avec Panel IA CORRIGÉ."""
+    """Vue Smart Inbox avec Layout VERTICAL CORRIGÉ - Parfaitement visible."""
     
     email_selected = pyqtSignal(object)
     
@@ -479,49 +507,45 @@ class SmartInboxView(QWidget):
         self.refresh_timer.start(300000)
     
     def _setup_ui(self):
-        """Configure l'interface."""
+        """Configuration LAYOUT VERTICAL - Tout est visible."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Filtres
+        # Filtres en haut
         filters_section = self._create_filters()
         layout.addWidget(filters_section)
         
-        # Splitter principal
+        # Layout HORIZONTAL pour le contenu principal
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter.setHandleWidth(2)
         
-        # Liste emails
+        # === COLONNE GAUCHE: Liste emails ===
         email_list = self._create_email_list()
         main_splitter.addWidget(email_list)
         
-        # Panel droit
-        right_panel = self._create_right_panel()
-        main_splitter.addWidget(right_panel)
+        # === COLONNE DROITE: Layout VERTICAL ===
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
         
-        # Proportions
-        main_splitter.setSizes([400, 600])
-        layout.addWidget(main_splitter)
-    
-    def _create_right_panel(self) -> QWidget:
-        """Crée le panel de droite avec vue détail + panel IA."""
-        right_widget = QWidget()
-        layout = QVBoxLayout(right_widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        
-        # Vue détail email (partie haute)
+        # Vue détail email (HAUT)
         self.detail_view = EmailDetailView()
         self.detail_view.action_requested.connect(self._handle_email_action)
-        layout.addWidget(self.detail_view)
+        right_layout.addWidget(self.detail_view)
         
-        # Panel IA de réponse (partie basse - CORRIGÉ)
+        # Panel IA de réponse (BAS) - HAUTEUR FIXE
         self.ai_response_panel = AIResponsePanel()
         self.ai_response_panel.response_approved.connect(self._on_ai_response_approved)
         self.ai_response_panel.response_rejected.connect(self._on_ai_response_rejected)
-        layout.addWidget(self.ai_response_panel)
+        right_layout.addWidget(self.ai_response_panel)
         
-        return right_widget
+        main_splitter.addWidget(right_panel)
+        
+        # Proportions: Liste (35%) - Détail+IA (65%)
+        main_splitter.setSizes([400, 700])
+        layout.addWidget(main_splitter)
     
     def _create_filters(self) -> QWidget:
         """Crée les filtres."""
