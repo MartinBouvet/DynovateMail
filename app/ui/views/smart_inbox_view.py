@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Vue Smart Inbox avec Layout VERTICAL CORRIGÉ - Tout est parfaitement visible.
+Vue Smart Inbox CORRIGÉE - Alignement parfait des filtres et de tous les éléments.
 """
 import logging
 from typing import List, Dict, Optional
@@ -64,7 +64,7 @@ class EmailLoaderThread(QThread):
         self.should_stop = True
 
 class CategoryFilter(QPushButton):
-    """Bouton de filtre par catégorie."""
+    """Bouton de filtre PARFAITEMENT ALIGNÉ."""
     
     def __init__(self, name: str, category: str, count: int = 0):
         super().__init__(f"{name} ({count})")
@@ -74,8 +74,8 @@ class CategoryFilter(QPushButton):
         self.original_name = name
         
         self.setCheckable(True)
-        self.setFixedHeight(35)
-        self.setMinimumWidth(80)
+        self.setFixedHeight(38)  # Hauteur fixe pour alignement parfait
+        self.setMinimumWidth(90)  # Largeur minimum
         self._apply_style()
     
     def update_count(self, count: int):
@@ -90,18 +90,19 @@ class CategoryFilter(QPushButton):
         self._apply_style()
     
     def _apply_style(self):
-        """Style pour une bonne lisibilité."""
+        """Style pour un alignement parfait."""
         if self.is_active:
             style = """
                 QPushButton {
                     background-color: #1976d2;
                     color: #ffffff;
                     border: 2px solid #1976d2;
-                    border-radius: 17px;
+                    border-radius: 19px;
                     font-weight: 600;
                     font-size: 12px;
-                    padding: 6px 14px;
-                    margin: 2px;
+                    padding: 8px 16px;
+                    margin: 0px;
+                    text-align: center;
                 }
             """
         else:
@@ -110,11 +111,12 @@ class CategoryFilter(QPushButton):
                     background-color: #ffffff;
                     color: #424242;
                     border: 2px solid #e0e0e0;
-                    border-radius: 17px;
+                    border-radius: 19px;
                     font-weight: 500;
                     font-size: 12px;
-                    padding: 6px 14px;
-                    margin: 2px;
+                    padding: 8px 16px;
+                    margin: 0px;
+                    text-align: center;
                 }
                 
                 QPushButton:hover {
@@ -138,7 +140,7 @@ class AIResponsePanel(QFrame):
         self.current_analysis = None
         
         self.setObjectName("ai-response-panel")
-        self.setMinimumHeight(400)  # Hauteur minimum confortable
+        self.setMinimumHeight(400)
         
         self._setup_ui()
         self._apply_style()
@@ -228,31 +230,35 @@ class AIResponsePanel(QFrame):
         
         content_layout.addWidget(response_frame)
         
-        # === BOUTONS ===
+        # === BOUTONS PARFAITEMENT CENTRÉS ===
         buttons_frame = QFrame()
         buttons_frame.setObjectName("buttons-frame")
         buttons_frame.setFixedHeight(80)
         buttons_layout = QHBoxLayout(buttons_frame)
-        buttons_layout.setContentsMargins(15, 15, 15, 15)
-        buttons_layout.setSpacing(20)
+        buttons_layout.setContentsMargins(0, 20, 0, 20)
+        buttons_layout.setSpacing(0)
+        
+        # Centrage parfait avec des spacers
+        buttons_layout.addStretch(1)
         
         self.reject_btn = QPushButton("❌ Ignorer cette suggestion")
         self.reject_btn.setObjectName("reject-btn")
         self.reject_btn.setFont(QFont("Inter", 13, QFont.Weight.Bold))
-        self.reject_btn.setFixedHeight(50)
-        self.reject_btn.setMinimumWidth(200)
+        self.reject_btn.setFixedSize(220, 45)
         self.reject_btn.clicked.connect(self._reject_response)
         buttons_layout.addWidget(self.reject_btn)
         
-        buttons_layout.addStretch()
+        # Espacer entre les boutons
+        buttons_layout.addSpacing(30)
         
         self.approve_btn = QPushButton("✅ Envoyer cette réponse")
         self.approve_btn.setObjectName("approve-btn")
         self.approve_btn.setFont(QFont("Inter", 13, QFont.Weight.Bold))
-        self.approve_btn.setFixedHeight(50)
-        self.approve_btn.setMinimumWidth(220)
+        self.approve_btn.setFixedSize(220, 45)
         self.approve_btn.clicked.connect(self._approve_response)
         buttons_layout.addWidget(self.approve_btn)
+        
+        buttons_layout.addStretch(1)
         
         content_layout.addWidget(buttons_frame)
         
@@ -302,6 +308,7 @@ class AIResponsePanel(QFrame):
                 background-color: transparent;
                 border: none;
                 padding: 5px 0;
+                margin: 0;
             }
             
             /* === BADGE CONFIANCE === */
@@ -314,6 +321,7 @@ class AIResponsePanel(QFrame):
                 text-align: center;
                 min-width: 120px;
                 border: none;
+                margin: 0;
             }
             
             /* === FRAMES DE SECTION === */
@@ -327,6 +335,7 @@ class AIResponsePanel(QFrame):
             QFrame#header-frame, QFrame#buttons-frame {
                 background-color: transparent;
                 border: none;
+                margin: 0;
             }
             
             /* === TITRES DE SECTION === */
@@ -348,6 +357,7 @@ class AIResponsePanel(QFrame):
                 padding: 15px;
                 line-height: 1.6;
                 font-weight: 500;
+                margin: 0;
             }
             
             /* === ZONE DE TEXTE === */
@@ -360,6 +370,7 @@ class AIResponsePanel(QFrame):
                 font-size: 13px;
                 line-height: 1.6;
                 selection-background-color: #c8e6c9;
+                margin: 0;
             }
             
             QTextEdit#response-text:focus {
@@ -367,45 +378,45 @@ class AIResponsePanel(QFrame):
                 background-color: #fefffe;
             }
             
-            /* === BOUTONS === */
+            /* === BOUTONS PARFAITEMENT CENTRÉS === */
             QPushButton#approve-btn {
                 background-color: #4caf50;
                 color: #ffffff;
                 border: none;
-                border-radius: 25px;
-                padding: 15px 30px;
+                border-radius: 22px;
+                padding: 12px 20px;
                 font-weight: 700;
                 font-size: 13px;
+                margin: 0;
+                text-align: center;
             }
             
             QPushButton#approve-btn:hover {
                 background-color: #45a049;
-                transform: translateY(-2px);
             }
             
             QPushButton#approve-btn:pressed {
                 background-color: #3d8b40;
-                transform: translateY(0px);
             }
             
             QPushButton#reject-btn {
                 background-color: #f44336;
                 color: #ffffff;
                 border: none;
-                border-radius: 25px;
-                padding: 15px 30px;
+                border-radius: 22px;
+                padding: 12px 20px;
                 font-weight: 700;
                 font-size: 13px;
+                margin: 0;
+                text-align: center;
             }
             
             QPushButton#reject-btn:hover {
                 background-color: #e53935;
-                transform: translateY(-2px);
             }
             
             QPushButton#reject-btn:pressed {
                 background-color: #d32f2f;
-                transform: translateY(0px);
             }
         """)
     
@@ -424,11 +435,11 @@ class AIResponsePanel(QFrame):
             sender_name = sender_name[:37] + "..."
         
         category_names = {
-            'cv': 'Candidature/CV',
-            'rdv': 'Rendez-vous', 
-            'support': 'Support technique',
-            'facture': 'Facture',
-            'general': 'Email général'
+            'cv': '📄 Candidature/CV',
+            'rdv': '📅 Rendez-vous', 
+            'support': '🛠️ Support technique',
+            'facture': '💰 Facture',
+            'general': '📧 Email général'
         }
         category_display = category_names.get(analysis.category, analysis.category)
         
@@ -482,7 +493,7 @@ class AIResponsePanel(QFrame):
         self.hide()
 
 class SmartInboxView(QWidget):
-    """Vue Smart Inbox avec Layout VERTICAL CORRIGÉ - Parfaitement visible."""
+    """Vue Smart Inbox CORRIGÉE avec alignement parfait des filtres."""
     
     email_selected = pyqtSignal(object)
     
@@ -507,12 +518,12 @@ class SmartInboxView(QWidget):
         self.refresh_timer.start(300000)
     
     def _setup_ui(self):
-        """Configuration LAYOUT VERTICAL - Tout est visible."""
+        """Configuration LAYOUT VERTICAL - Alignement parfait."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Filtres en haut
+        # Filtres en haut - PARFAITEMENT ALIGNÉS
         filters_section = self._create_filters()
         layout.addWidget(filters_section)
         
@@ -548,19 +559,32 @@ class SmartInboxView(QWidget):
         layout.addWidget(main_splitter)
     
     def _create_filters(self) -> QWidget:
-        """Crée les filtres."""
+        """Crée les filtres PARFAITEMENT ALIGNÉS ET CENTRÉS."""
         filters_frame = QFrame()
         filters_frame.setObjectName("filters-section")
-        filters_frame.setFixedHeight(70)
+        filters_frame.setFixedHeight(75)  # Hauteur fixe
         
-        layout = QHBoxLayout(filters_frame)
-        layout.setContentsMargins(20, 15, 20, 15)
-        layout.setSpacing(12)
+        # Layout principal avec centrage parfait
+        main_layout = QVBoxLayout(filters_frame)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Spacer vertical pour centrer
+        main_layout.addStretch(1)
+        
+        # Container des filtres
+        filters_container = QWidget()
+        filters_layout = QHBoxLayout(filters_container)
+        filters_layout.setContentsMargins(25, 0, 25, 0)
+        filters_layout.setSpacing(0)
         
         # Groupe de boutons
         self.filter_group = QButtonGroup()
         
-        # Filtres
+        # Spacer gauche pour centrer le groupe de filtres
+        filters_layout.addStretch(1)
+        
+        # Filtres avec espacement uniforme
         filters_data = [
             ("Tous", "all", 0),
             ("⚡ Réponses IA", "ai_suggestions", 0),
@@ -572,39 +596,56 @@ class SmartInboxView(QWidget):
         
         self.category_filters = {}
         
-        for name, category, count in filters_data:
+        for i, (name, category, count) in enumerate(filters_data):
             filter_btn = CategoryFilter(name, category, count)
             filter_btn.clicked.connect(lambda checked, cat=category: self._apply_filter(cat))
             
             self.filter_group.addButton(filter_btn)
             self.category_filters[category] = filter_btn
-            layout.addWidget(filter_btn)
+            filters_layout.addWidget(filter_btn)
+            
+            # Espacement uniforme entre les boutons (sauf après le dernier)
+            if i < len(filters_data) - 1:
+                filters_layout.addSpacing(12)
             
             if category == "all":
                 filter_btn.set_active(True)
         
-        layout.addStretch()
+        # Spacer large avant le bouton refresh
+        filters_layout.addSpacing(40)
         
         # Bouton refresh
         refresh_btn = QPushButton("🔄 Actualiser")
-        refresh_btn.setFixedHeight(35)
-        refresh_btn.setMinimumWidth(100)
+        refresh_btn.setFixedSize(120, 38)  # Même hauteur que les filtres
         refresh_btn.clicked.connect(self.refresh_emails)
         refresh_btn.setStyleSheet("""
             QPushButton {
                 background-color: #1976d2;
                 color: white;
                 border: none;
-                border-radius: 17px;
+                border-radius: 19px;
                 font-weight: 600;
                 font-size: 12px;
                 padding: 8px 16px;
+                margin: 0px;
+                text-align: center;
             }
             QPushButton:hover {
                 background-color: #1565c0;
             }
+            QPushButton:pressed {
+                background-color: #0d47a1;
+            }
         """)
-        layout.addWidget(refresh_btn)
+        filters_layout.addWidget(refresh_btn)
+        
+        # Spacer droit pour équilibrer
+        filters_layout.addStretch(1)
+        
+        main_layout.addWidget(filters_container)
+        
+        # Spacer vertical pour centrer
+        main_layout.addStretch(1)
         
         # Style du container
         filters_frame.setStyleSheet("""

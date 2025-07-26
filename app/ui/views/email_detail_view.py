@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Vue détaillée d'un email CORRIGÉE - Affichage parfaitement lisible avec scroll.
+Vue détaillée d'un email CORRIGÉE - Alignement parfait des boutons et du texte.
 """
 import logging
 from typing import Optional
@@ -17,7 +17,7 @@ from models.email_model import Email
 logger = logging.getLogger(__name__)
 
 class EmailDetailView(QWidget):
-    """Vue détaillée CORRIGÉE d'un email avec scroll vertical."""
+    """Vue détaillée CORRIGÉE d'un email avec alignement parfait."""
     
     action_requested = pyqtSignal(str, object)
     
@@ -30,7 +30,7 @@ class EmailDetailView(QWidget):
         self._apply_style()
     
     def _setup_ui(self):
-        """Configure l'interface CORRIGÉE avec scroll."""
+        """Configure l'interface CORRIGÉE avec alignement parfait."""
         # Layout principal
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -65,33 +65,57 @@ class EmailDetailView(QWidget):
         main_layout.addWidget(self.scroll_area)
     
     def _create_no_selection_widget(self) -> QWidget:
-        """Widget affiché quand aucun email n'est sélectionné."""
+        """Widget PARFAITEMENT CENTRÉ quand aucun email n'est sélectionné."""
         widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(40, 100, 40, 100)
-        layout.setSpacing(25)
+        widget.setObjectName("no-selection-widget")
+        
+        # Layout principal centré
+        main_layout = QVBoxLayout(widget)
+        main_layout.setContentsMargins(40, 0, 40, 0)
+        main_layout.setSpacing(0)
+        
+        # Spacer du haut pour centrer verticalement
+        main_layout.addStretch(1)
+        
+        # Container centré
+        center_container = QWidget()
+        center_container.setFixedSize(500, 300)  # Taille fixe pour un centrage parfait
+        center_layout = QVBoxLayout(center_container)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(25)
         
         # Icône
         icon_label = QLabel("📧")
         icon_label.setFont(QFont("Arial", 64))
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_label.setStyleSheet("color: #e0e0e0;")
-        layout.addWidget(icon_label)
+        center_layout.addWidget(icon_label)
         
         # Texte principal
         title_label = QLabel("Sélectionnez un email")
         title_label.setFont(QFont("Inter", 22, QFont.Weight.Bold))
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: #616161; margin: 20px 0;")
-        layout.addWidget(title_label)
+        title_label.setStyleSheet("color: #616161; margin: 0;")
+        center_layout.addWidget(title_label)
         
         # Texte descriptif
         desc_label = QLabel("Cliquez sur un email dans la liste de gauche pour voir son contenu détaillé et les suggestions IA.")
         desc_label.setFont(QFont("Inter", 14))
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #9e9e9e; line-height: 1.6; max-width: 400px;")
-        layout.addWidget(desc_label)
+        desc_label.setStyleSheet("color: #9e9e9e; line-height: 1.6; margin: 0; padding: 0;")
+        center_layout.addWidget(desc_label)
+        
+        # Centrer le container horizontalement
+        h_layout = QHBoxLayout()
+        h_layout.addStretch(1)
+        h_layout.addWidget(center_container)
+        h_layout.addStretch(1)
+        
+        main_layout.addLayout(h_layout)
+        
+        # Spacer du bas pour centrer verticalement
+        main_layout.addStretch(1)
         
         return widget
     
@@ -124,7 +148,7 @@ class EmailDetailView(QWidget):
         """Header de l'email CORRIGÉ avec plus d'espace."""
         header = QFrame()
         header.setObjectName("email-header")
-        header.setMinimumHeight(140)  # Hauteur fixe suffisante
+        header.setMinimumHeight(140)
         
         layout = QVBoxLayout(header)
         layout.setContentsMargins(25, 20, 25, 20)
@@ -161,54 +185,75 @@ class EmailDetailView(QWidget):
         self.subject_label.setObjectName("email-subject")
         self.subject_label.setFont(QFont("Inter", 20, QFont.Weight.Bold))
         self.subject_label.setWordWrap(True)
-        self.subject_label.setMinimumHeight(50)  # Hauteur minimum
+        self.subject_label.setMinimumHeight(50)
         layout.addWidget(self.subject_label)
         
         return header
     
     def _create_email_actions(self) -> QFrame:
-        """Barre d'actions CORRIGÉE avec alignement centré parfait."""
+        """Barre d'actions PARFAITEMENT CENTRÉE et alignée."""
         actions = QFrame()
         actions.setObjectName("email-actions")
-        actions.setFixedHeight(80)  # Hauteur augmentée
+        actions.setFixedHeight(80)
         
-        layout = QHBoxLayout(actions)
-        layout.setContentsMargins(25, 20, 25, 20)  # Marges symétriques
-        layout.setSpacing(20)  # Espacement uniforme
+        # Layout principal avec centrage parfait
+        main_layout = QVBoxLayout(actions)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         
-        # Spacer gauche pour centrer
-        layout.addStretch(1)
+        # Spacer vertical pour centrer
+        main_layout.addStretch(1)
         
-        # Boutons d'action principaux - tailles identiques
+        # Container des boutons
+        buttons_container = QWidget()
+        buttons_layout = QHBoxLayout(buttons_container)
+        buttons_layout.setContentsMargins(25, 0, 25, 0)
+        buttons_layout.setSpacing(0)  # Pas d'espacement par défaut
+        
+        # Centrage parfait avec des spacers
+        buttons_layout.addStretch(2)  # Spacer gauche large
+        
+        # Boutons principaux - TAILLES ET ESPACEMENTS IDENTIQUES
         self.reply_btn = QPushButton("↩️ Répondre")
         self.reply_btn.setObjectName("action-btn")
-        self.reply_btn.setFixedSize(140, 45)  # Taille fixe identique
+        self.reply_btn.setFixedSize(140, 45)
         self.reply_btn.clicked.connect(lambda: self.action_requested.emit("reply", self.current_email))
-        layout.addWidget(self.reply_btn)
+        buttons_layout.addWidget(self.reply_btn)
+        
+        # Spacer identique entre chaque bouton
+        buttons_layout.addSpacing(15)
         
         self.forward_btn = QPushButton("➡️ Transférer")
         self.forward_btn.setObjectName("action-btn")
-        self.forward_btn.setFixedSize(140, 45)  # Taille fixe identique
+        self.forward_btn.setFixedSize(140, 45)
         self.forward_btn.clicked.connect(lambda: self.action_requested.emit("forward", self.current_email))
-        layout.addWidget(self.forward_btn)
+        buttons_layout.addWidget(self.forward_btn)
+        
+        # Spacer identique
+        buttons_layout.addSpacing(15)
         
         self.archive_btn = QPushButton("📁 Archiver")
         self.archive_btn.setObjectName("action-btn")
-        self.archive_btn.setFixedSize(140, 45)  # Taille fixe identique
+        self.archive_btn.setFixedSize(140, 45)
         self.archive_btn.clicked.connect(lambda: self.action_requested.emit("archive", self.current_email))
-        layout.addWidget(self.archive_btn)
+        buttons_layout.addWidget(self.archive_btn)
         
-        # Spacer central pour séparer le bouton supprimer
-        layout.addStretch(2)
+        # Spacer plus large avant le bouton supprimer
+        buttons_layout.addSpacing(30)
         
         self.delete_btn = QPushButton("🗑️ Supprimer")
         self.delete_btn.setObjectName("delete-btn")
-        self.delete_btn.setFixedSize(140, 45)  # Taille fixe identique
+        self.delete_btn.setFixedSize(140, 45)
         self.delete_btn.clicked.connect(lambda: self.action_requested.emit("delete", self.current_email))
-        layout.addWidget(self.delete_btn)
+        buttons_layout.addWidget(self.delete_btn)
         
         # Spacer droit pour équilibrer
-        layout.addStretch(1)
+        buttons_layout.addStretch(2)
+        
+        main_layout.addWidget(buttons_container)
+        
+        # Spacer vertical pour centrer
+        main_layout.addStretch(1)
         
         return actions
     
@@ -216,7 +261,7 @@ class EmailDetailView(QWidget):
         """Zone de contenu CORRIGÉE avec hauteur appropriée."""
         body_frame = QFrame()
         body_frame.setObjectName("email-body-frame")
-        body_frame.setMinimumHeight(300)  # Hauteur minimum
+        body_frame.setMinimumHeight(300)
         
         layout = QVBoxLayout(body_frame)
         layout.setSpacing(15)
@@ -233,7 +278,7 @@ class EmailDetailView(QWidget):
         self.content_display.setObjectName("email-content")
         self.content_display.setReadOnly(True)
         self.content_display.setFont(QFont("Inter", 13))
-        self.content_display.setMinimumHeight(250)  # Hauteur minimum confortable
+        self.content_display.setMinimumHeight(250)
         layout.addWidget(self.content_display)
         
         return body_frame
@@ -242,7 +287,7 @@ class EmailDetailView(QWidget):
         """Section d'analyse IA CORRIGÉE avec plus d'espace."""
         ai_frame = QFrame()
         ai_frame.setObjectName("ai-analysis-frame")
-        ai_frame.setMinimumHeight(200)  # Hauteur minimum
+        ai_frame.setMinimumHeight(200)
         
         layout = QVBoxLayout(ai_frame)
         layout.setSpacing(15)
@@ -259,16 +304,21 @@ class EmailDetailView(QWidget):
         self.ai_content.setObjectName("ai-analysis-content")
         self.ai_content.setWordWrap(True)
         self.ai_content.setFont(QFont("Inter", 13))
-        self.ai_content.setMinimumHeight(120)  # Hauteur minimum
+        self.ai_content.setMinimumHeight(120)
         self.ai_content.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self.ai_content)
         
         return ai_frame
     
     def _apply_style(self):
-        """Style CORRIGÉ pour une excellente lisibilité."""
+        """Style CORRIGÉ pour une excellente lisibilité et alignement parfait."""
         self.setStyleSheet("""
             QWidget#email-detail-view {
+                background-color: #ffffff;
+            }
+            
+            /* === MESSAGE DE SÉLECTION === */
+            QWidget#no-selection-widget {
                 background-color: #ffffff;
             }
             
@@ -337,7 +387,7 @@ class EmailDetailView(QWidget):
                 padding: 10px 0;
             }
             
-            /* === ACTIONS === */
+            /* === ACTIONS - CENTRAGE PARFAIT === */
             QFrame#email-actions {
                 background-color: #f8f9fa;
                 border: 2px solid #e3f2fd;
@@ -354,18 +404,17 @@ class EmailDetailView(QWidget):
                 font-weight: 700;
                 font-size: 13px;
                 text-align: center;
+                margin: 0px;  /* Pas de marge pour un alignement parfait */
             }
             
             QPushButton#action-btn:hover {
                 background-color: #1565c0;
-                transform: translateY(-2px);
-                box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+                transform: translateY(-1px);
             }
             
             QPushButton#action-btn:pressed {
                 background-color: #0d47a1;
                 transform: translateY(0px);
-                box-shadow: none;
             }
             
             QPushButton#delete-btn {
@@ -377,18 +426,17 @@ class EmailDetailView(QWidget):
                 font-weight: 700;
                 font-size: 13px;
                 text-align: center;
+                margin: 0px;  /* Pas de marge pour un alignement parfait */
             }
             
             QPushButton#delete-btn:hover {
                 background-color: #c62828;
-                transform: translateY(-2px);
-                box-shadow: 0 4px 8px rgba(211, 47, 47, 0.3);
+                transform: translateY(-1px);
             }
             
             QPushButton#delete-btn:pressed {
                 background-color: #b71c1c;
                 transform: translateY(0px);
-                box-shadow: none;
             }
             
             /* === CONTENU EMAIL === */
