@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Client Gmail CORRIGÉ avec rendu HTML complet et images intégrées.
+Client Gmail CORRIGÉ - VRAIS EMAILS UNIQUEMENT + gestion archives/supprimés.
 """
 import logging
 import os
@@ -29,18 +29,15 @@ from models.email_model import Email, EmailAttachment
 logger = logging.getLogger(__name__)
 
 class GmailClient:
-    """Client Gmail CORRIGÉ pour rendu HTML complet avec images."""
+    """Client Gmail CORRIGÉ - VRAIS EMAILS UNIQUEMENT."""
     
     def __init__(self, credentials_file: str = "client_secret.json", mock_mode: bool = False):
         """
-        Initialise le client Gmail.
-        
-        Args:
-            credentials_file: Chemin vers le fichier de credentials
-            mock_mode: Mode mock pour tests (par défaut False)
+        Initialise le client Gmail - FORCE MODE PRODUCTION.
         """
         self.credentials_file = credentials_file
-        self.mock_mode = mock_mode
+        # FORCER LE MODE PRODUCTION - JAMAIS DE MOCK
+        self.mock_mode = False  # TOUJOURS False
         self.authenticated = False
         self.service = None
         
@@ -55,26 +52,14 @@ class GmailClient:
         ]
         
         if not HAS_GMAIL_API:
-            logger.error("Gmail API non disponible - basculement en mode mock")
-            self.mock_mode = True
+            logger.error("ERREUR FATALE: Gmail API non disponible - installez google-api-python-client")
+            raise ImportError("Gmail API requis pour fonctionner")
         
-        if self.mock_mode:
-            logger.info("Client Gmail en mode mock")
-            self.authenticated = True
-        else:
-            logger.info("Client Gmail en mode production")
-            self.authenticate()
+        logger.info("Client Gmail PRODUCTION UNIQUEMENT initialisé")
+        self.authenticate()
     
     def authenticate(self) -> bool:
-        """Authentifie l'utilisateur avec Gmail."""
-        if self.mock_mode:
-            self.authenticated = True
-            return True
-        
-        if not HAS_GMAIL_API:
-            logger.error("Gmail API non disponible")
-            return False
-        
+        """Authentifie l'utilisateur avec Gmail - OBLIGATOIRE."""
         try:
             creds = None
             token_path = Path('token.pickle')
@@ -96,8 +81,8 @@ class GmailClient:
                 
                 if not creds:
                     if not os.path.exists(self.credentials_file):
-                        logger.error(f"Fichier credentials manquant: {self.credentials_file}")
-                        return False
+                        logger.error(f"ERREUR: Fichier credentials manquant: {self.credentials_file}")
+                        raise FileNotFoundError(f"Fichier {self.credentials_file} requis")
                     
                     flow = InstalledAppFlow.from_client_secrets_file(
                         self.credentials_file, self.SCOPES)
@@ -112,35 +97,48 @@ class GmailClient:
             # Créer le service Gmail
             self.service = build('gmail', 'v1', credentials=creds)
             self.authenticated = True
-            logger.info("Service Gmail initialisé avec succès")
+            logger.info("✅ Service Gmail authentifié avec succès")
             return True
         
         except Exception as e:
-            logger.error(f"Erreur authentification Gmail: {e}")
-            return False
+            logger.error(f"ERREUR FATALE authentification Gmail: {e}")
+            raise e
     
-    def get_recent_emails(self, limit: int = 50) -> List[Email]:
-        """Récupère les emails récents avec contenu HTML complet."""
-        if self.mock_mode:
-            logger.warning("Mode mock activé - aucun vrai email ne sera récupéré")
-            return []
-        
+    def get_recent_emails(self, limit: int = 50, label_id: str = "INBOX") -> List[Email]:
+        """Récupère les emails réels depuis Gmail."""
         if not self.authenticated or not self.service:
             logger.error("Client Gmail non authentifié")
-            return []
+            raise RuntimeError("Gmail non authentifié")
         
         try:
-            # Requête pour récupérer les emails
-            results = self.service.users().messages().list(
-                userId='me',
-                maxResults=limit,
-                q='in:inbox'  # Boîte de réception uniquement
-            ).execute()
+            # Construire la requête selon le label
+            query_params = {
+                'userId': 'me',
+                'maxResults': limit
+            }
+            
+            if label_id == "INBOX":
+                query_params['q'] = 'in:inbox'
+            elif label_id == "SENT":
+                query_params['q'] = 'in:sent'
+            elif label_id == "DRAFT":
+                query_params['q'] = 'in:draft'
+            elif label_id == "TRASH":
+                query_params['q'] = 'in:trash'
+            elif label_id == "SPAM":
+                query_params['q'] = 'in:spam'
+            elif label_id == "ARCHIVED":
+                query_params['q'] = '-in:inbox -in:trash -in:spam'
+            else:
+                query_params['labelIds'] = [label_id]
+            
+            # Requête Gmail API
+            results = self.service.users().messages().list(**query_params).execute()
             
             messages = results.get('messages', [])
             emails = []
             
-            logger.info(f"Récupération de {len(messages)} emails...")
+            logger.info(f"Récupération de {len(messages)} emails RÉELS depuis {label_id}...")
             
             for i, message in enumerate(messages):
                 try:
@@ -150,21 +148,41 @@ class GmailClient:
                     
                     # Log de progression
                     if (i + 1) % 5 == 0:
-                        logger.info(f"Traité {i + 1}/{len(messages)} emails")
+                        logger.info(f"Traité {i + 1}/{len(messages)} emails réels")
                         
                 except Exception as e:
                     logger.error(f"Erreur traitement email {message['id']}: {e}")
                     continue
             
-            logger.info(f"{len(emails)} emails récupérés depuis Gmail")
+            logger.info(f"✅ {len(emails)} emails RÉELS récupérés depuis {label_id}")
             return emails
         
         except Exception as e:
             logger.error(f"Erreur récupération emails: {e}")
-            return []
+            raise e
+    
+    def get_inbox_emails(self, limit: int = 50) -> List[Email]:
+        """Récupère les emails de la boîte de réception."""
+        return self.get_recent_emails(limit, "INBOX")
+    
+    def get_sent_emails(self, limit: int = 50) -> List[Email]:
+        """Récupère les emails envoyés."""
+        return self.get_recent_emails(limit, "SENT")
+    
+    def get_archived_emails(self, limit: int = 50) -> List[Email]:
+        """Récupère les emails archivés."""
+        return self.get_recent_emails(limit, "ARCHIVED")
+    
+    def get_trash_emails(self, limit: int = 50) -> List[Email]:
+        """Récupère les emails supprimés."""
+        return self.get_recent_emails(limit, "TRASH")
+    
+    def get_spam_emails(self, limit: int = 50) -> List[Email]:
+        """Récupère les emails spam."""
+        return self.get_recent_emails(limit, "SPAM")
     
     def _get_email_details(self, message_id: str) -> Optional[Email]:
-        """Récupère les détails COMPLETS d'un email avec HTML et images."""
+        """Récupère les détails COMPLETS d'un email réel."""
         try:
             message = self.service.users().messages().get(
                 userId='me', 
@@ -206,6 +224,7 @@ class GmailClient:
             # Vérifier si lu
             labels = message.get('labelIds', [])
             is_read = 'UNREAD' not in labels
+            is_sent = 'SENT' in labels
             
             email = Email(
                 id=message_id,
@@ -218,17 +237,261 @@ class GmailClient:
                 thread_id=message.get('threadId', ''),
                 snippet=snippet,
                 is_read=is_read,
+                is_sent=is_sent,
                 attachments=attachments
             )
             
             # Ajouter un attribut pour indiquer si c'est du HTML
             email.is_html = bool(html_content)
+            email.plain_text_body = plain_content
             
             return email
         
         except Exception as e:
             logger.error(f"Erreur détails email {message_id}: {e}")
             return None
+    
+    def save_attachment(self, message_id: str, attachment_id: str, filename: str, save_path: str = None) -> bool:
+        """Sauvegarde une pièce jointe sur le disque - CORRIGÉE."""
+        try:
+            if not self.authenticated or not self.service:
+                logger.error("Gmail non authentifié")
+                return False
+            
+            # Définir le chemin de sauvegarde
+            if not save_path:
+                # Utiliser le dossier Downloads par défaut
+                downloads_dir = Path.home() / "Downloads"
+                downloads_dir.mkdir(exist_ok=True)
+                save_path = downloads_dir / filename
+            else:
+                save_path = Path(save_path)
+            
+            # Télécharger la pièce jointe
+            file_data = self.download_attachment(message_id, attachment_id, filename)
+            if not file_data:
+                logger.error("Impossible de télécharger la pièce jointe")
+                return False
+            
+            # Créer le dossier parent si nécessaire
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Éviter l'écrasement en ajoutant un numéro
+            original_path = save_path
+            counter = 1
+            while save_path.exists():
+                stem = original_path.stem
+                suffix = original_path.suffix
+                save_path = original_path.parent / f"{stem}_{counter}{suffix}"
+                counter += 1
+            
+            # Sauvegarder le fichier
+            with open(save_path, 'wb') as f:
+                f.write(file_data)
+            
+            logger.info(f"✅ Pièce jointe sauvegardée: {save_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Erreur sauvegarde pièce jointe: {e}")
+            return False
+    
+    def download_attachment(self, message_id: str, attachment_id: str, filename: str) -> Optional[bytes]:
+        """Télécharge une pièce jointe."""
+        if not self.authenticated or not self.service:
+            return None
+        
+        try:
+            attachment = self.service.users().messages().attachments().get(
+                userId='me',
+                messageId=message_id,
+                id=attachment_id
+            ).execute()
+            
+            data = attachment['data']
+            file_data = base64.urlsafe_b64decode(data)
+            
+            logger.info(f"Pièce jointe {filename} téléchargée ({len(file_data)} bytes)")
+            return file_data
+            
+        except Exception as e:
+            logger.error(f"Erreur téléchargement pièce jointe: {e}")
+            return None
+    
+    def send_email(self, to: str, subject: str, body: str, 
+                   cc: Optional[List[str]] = None, 
+                   bcc: Optional[List[str]] = None) -> bool:
+        """Envoie un email RÉEL."""
+        if not self.authenticated or not self.service:
+            logger.error("Client Gmail non authentifié")
+            return False
+        
+        try:
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            
+            # Créer le message
+            message = MIMEMultipart()
+            message['to'] = to
+            message['subject'] = subject
+            
+            if cc:
+                message['cc'] = ', '.join(cc)
+            if bcc:
+                message['bcc'] = ', '.join(bcc)
+            
+            # Ajouter le corps
+            message.attach(MIMEText(body, 'plain', 'utf-8'))
+            
+            # Encoder le message
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+            
+            # Envoyer via Gmail API
+            send_result = self.service.users().messages().send(
+                userId='me',
+                body={'raw': raw_message}
+            ).execute()
+            
+            logger.info(f"✅ Email RÉEL envoyé à {to}, ID: {send_result['id']}")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Erreur envoi email: {e}")
+            return False
+    
+    def mark_as_read(self, email_id: str) -> bool:
+        """Marque un email comme lu."""
+        if not self.authenticated or not self.service:
+            return False
+        
+        try:
+            self.service.users().messages().modify(
+                userId='me',
+                id=email_id,
+                body={'removeLabelIds': ['UNREAD']}
+            ).execute()
+            
+            logger.info(f"✅ Email {email_id} marqué comme lu")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Erreur marquage lu {email_id}: {e}")
+            return False
+    
+    def archive_email(self, email_id: str) -> bool:
+        """Archive un email (retire de INBOX)."""
+        if not self.authenticated or not self.service:
+            return False
+        
+        try:
+            self.service.users().messages().modify(
+                userId='me',
+                id=email_id,
+                body={'removeLabelIds': ['INBOX']}
+            ).execute()
+            
+            logger.info(f"✅ Email {email_id} archivé")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Erreur archivage {email_id}: {e}")
+            return False
+    
+    def delete_email(self, email_id: str) -> bool:
+        """Déplace un email vers la corbeille."""
+        if not self.authenticated or not self.service:
+            return False
+        
+        try:
+            self.service.users().messages().modify(
+                userId='me',
+                id=email_id,
+                body={'addLabelIds': ['TRASH'], 'removeLabelIds': ['INBOX']}
+            ).execute()
+            
+            logger.info(f"✅ Email {email_id} déplacé vers la corbeille")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Erreur suppression {email_id}: {e}")
+            return False
+    
+    def restore_from_trash(self, email_id: str) -> bool:
+        """Restaure un email depuis la corbeille."""
+        if not self.authenticated or not self.service:
+            return False
+        
+        try:
+            self.service.users().messages().modify(
+                userId='me',
+                id=email_id,
+                body={'removeLabelIds': ['TRASH'], 'addLabelIds': ['INBOX']}
+            ).execute()
+            
+            logger.info(f"✅ Email {email_id} restauré depuis la corbeille")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Erreur restauration {email_id}: {e}")
+            return False
+    
+    def permanently_delete_email(self, email_id: str) -> bool:
+        """Supprime définitivement un email."""
+        if not self.authenticated or not self.service:
+            return False
+        
+        try:
+            self.service.users().messages().delete(
+                userId='me',
+                id=email_id
+            ).execute()
+            
+            logger.info(f"✅ Email {email_id} supprimé définitivement")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Erreur suppression définitive {email_id}: {e}")
+            return False
+    
+    def search_emails(self, query: str, max_results: int = 50) -> List[Email]:
+        """Recherche des emails selon une requête."""
+        if not self.authenticated or not self.service:
+            return []
+        
+        try:
+            results = self.service.users().messages().list(
+                userId='me',
+                maxResults=max_results,
+                q=query
+            ).execute()
+            
+            messages = results.get('messages', [])
+            emails = []
+            
+            for message in messages:
+                email_data = self._get_email_details(message['id'])
+                if email_data:
+                    emails.append(email_data)
+            
+            logger.info(f"Recherche '{query}': {len(emails)} résultats")
+            return emails
+        
+        except Exception as e:
+            logger.error(f"Erreur recherche: {e}")
+            return []
+    
+    def get_connection_status(self) -> dict:
+        """Retourne le statut de la connexion."""
+        return {
+            'authenticated': self.authenticated,
+            'mock_mode': False,  # TOUJOURS False
+            'credentials_file': self.credentials_file,
+            'has_service': self.service is not None,
+            'last_sync': datetime.now().isoformat() if self.authenticated else None,
+            'real_gmail_only': True  # NOUVEAU : Confirme que seuls les vrais emails sont utilisés
+        }
+    
+    # === MÉTHODES PRIVÉES CONSERVÉES ===
     
     def _extract_content_and_attachments(self, payload, message_id: str) -> Tuple[str, str, List[EmailAttachment]]:
         """Extrait le contenu HTML/text et les pièces jointes."""
@@ -238,7 +501,6 @@ class GmailClient:
         inline_images = {}
         
         try:
-            # Fonction récursive pour traiter toutes les parties
             def process_part(part, part_id=""):
                 nonlocal html_content, plain_content, attachments, inline_images
                 
@@ -246,7 +508,6 @@ class GmailClient:
                 filename = part.get('filename', '')
                 headers = part.get('headers', [])
                 
-                # Récupérer le Content-ID pour les images inline
                 content_id = None
                 content_disposition = None
                 for header in headers:
@@ -255,23 +516,18 @@ class GmailClient:
                     elif header['name'].lower() == 'content-disposition':
                         content_disposition = header['value']
                 
-                # Si c'est une pièce jointe ou image inline
                 if filename or (mime_type.startswith('image/') and content_id):
                     attachment = self._create_attachment(part, message_id, part_id)
                     if attachment:
                         attachments.append(attachment)
                         
-                        # Si c'est une image inline, la télécharger pour l'intégrer
                         if content_id and mime_type.startswith('image/'):
                             image_data = self._download_inline_image(message_id, attachment.attachment_id)
                             if image_data:
-                                # Créer une data URL
                                 data_url = f"data:{mime_type};base64," + base64.b64encode(image_data).decode()
                                 inline_images[content_id] = data_url
-                                # Aussi essayer avec cid: prefix
                                 inline_images[f"cid:{content_id}"] = data_url
                 
-                # Si c'est du contenu textuel
                 elif mime_type in ['text/plain', 'text/html']:
                     part_content = self._extract_text_from_part(part)
                     if part_content:
@@ -280,22 +536,19 @@ class GmailClient:
                                 html_content += "\n\n" + part_content
                             else:
                                 html_content = part_content
-                        else:  # text/plain
+                        else:
                             if plain_content:
                                 plain_content += "\n\n" + part_content
                             else:
                                 plain_content = part_content
                 
-                # Traiter les parties imbriquées
                 if 'parts' in part:
                     for i, subpart in enumerate(part['parts']):
                         sub_part_id = f"{part_id}.{i}" if part_id else str(i)
                         process_part(subpart, sub_part_id)
             
-            # Commencer le traitement
             process_part(payload)
             
-            # Intégrer les images inline dans le HTML
             if html_content and inline_images:
                 html_content = self._integrate_inline_images(html_content, inline_images)
             
@@ -306,7 +559,7 @@ class GmailClient:
             return "", "", []
     
     def _download_inline_image(self, message_id: str, attachment_id: str) -> Optional[bytes]:
-        """Télécharge une image inline pour l'intégrer."""
+        """Télécharge une image inline."""
         try:
             if not attachment_id:
                 return None
@@ -327,9 +580,7 @@ class GmailClient:
     def _integrate_inline_images(self, html_content: str, inline_images: dict) -> str:
         """Intègre les images inline dans le HTML."""
         try:
-            # Remplacer les références cid: par les data URLs
             for cid, data_url in inline_images.items():
-                # Plusieurs patterns possibles
                 patterns = [
                     f'src="cid:{cid}"',
                     f"src='cid:{cid}'",
@@ -342,7 +593,6 @@ class GmailClient:
                 for pattern in patterns:
                     html_content = html_content.replace(pattern, f'src="{data_url}"')
             
-            # Aussi traiter les background-image en CSS
             for cid, data_url in inline_images.items():
                 css_patterns = [
                     f'background-image:url(cid:{cid})',
@@ -381,17 +631,14 @@ class GmailClient:
             if not filename and not mime_type.startswith('image/'):
                 return None
             
-            # Pour les images inline sans filename
             if not filename and mime_type.startswith('image/'):
                 extension = mime_type.split('/')[-1]
                 filename = f"image_inline.{extension}"
             
-            # Informations sur la taille
             body = part.get('body', {})
             size_bytes = body.get('size', 0)
             attachment_id = body.get('attachmentId', '')
             
-            # Formater la taille
             size_str = self._format_file_size(size_bytes)
             
             return EmailAttachment(
@@ -409,15 +656,13 @@ class GmailClient:
             return None
     
     def _parse_email_date(self, date_str: str) -> datetime:
-        """Parse une date d'email et la convertit en datetime naive local."""
+        """Parse une date d'email."""
         try:
             if not date_str:
                 return datetime.now()
             
-            # Parser la date avec timezone
             parsed_date = parsedate_to_datetime(date_str)
             
-            # Convertir en timestamp puis en datetime local naive
             if parsed_date.tzinfo is not None:
                 timestamp = parsed_date.timestamp()
                 local_date = datetime.fromtimestamp(timestamp)
@@ -443,213 +688,3 @@ class GmailClient:
             i += 1
         
         return f"{size:.1f} {size_names[i]}"
-    
-    def download_attachment(self, message_id: str, attachment_id: str, filename: str) -> Optional[bytes]:
-        """Télécharge une pièce jointe."""
-        if self.mock_mode or not self.authenticated or not self.service:
-            return None
-        
-        try:
-            attachment = self.service.users().messages().attachments().get(
-                userId='me',
-                messageId=message_id,
-                id=attachment_id
-            ).execute()
-            
-            data = attachment['data']
-            file_data = base64.urlsafe_b64decode(data)
-            
-            logger.info(f"Pièce jointe {filename} téléchargée ({len(file_data)} bytes)")
-            return file_data
-            
-        except Exception as e:
-            logger.error(f"Erreur téléchargement pièce jointe: {e}")
-            return None
-    
-    def save_attachment(self, message_id: str, attachment_id: str, filename: str, save_path: str = None) -> bool:
-        """Sauvegarde une pièce jointe sur le disque."""
-        try:
-            if not save_path:
-                save_path = Path.home() / "Downloads" / filename
-            else:
-                save_path = Path(save_path)
-            
-            file_data = self.download_attachment(message_id, attachment_id, filename)
-            if not file_data:
-                return False
-            
-            # Créer le dossier si nécessaire
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Éviter l'écrasement
-            if save_path.exists():
-                base = save_path.stem
-                ext = save_path.suffix
-                counter = 1
-                while save_path.exists():
-                    save_path = save_path.parent / f"{base}_{counter}{ext}"
-                    counter += 1
-            
-            # Sauvegarder
-            with open(save_path, 'wb') as f:
-                f.write(file_data)
-            
-            logger.info(f"Pièce jointe sauvegardée: {save_path}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Erreur sauvegarde pièce jointe: {e}")
-            return False
-    
-    def send_email(self, to: str, subject: str, body: str, 
-                   cc: Optional[List[str]] = None, 
-                   bcc: Optional[List[str]] = None) -> bool:
-        """Envoie un email."""
-        if self.mock_mode:
-            logger.info(f"Email simulé envoyé à {to}: {subject}")
-            return True
-        
-        if not self.authenticated or not self.service:
-            logger.error("Client Gmail non authentifié")
-            return False
-        
-        try:
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-            
-            # Créer le message
-            message = MIMEMultipart()
-            message['to'] = to
-            message['subject'] = subject
-            
-            if cc:
-                message['cc'] = ', '.join(cc)
-            if bcc:
-                message['bcc'] = ', '.join(bcc)
-            
-            # Ajouter le corps
-            message.attach(MIMEText(body, 'plain', 'utf-8'))
-            
-            # Encoder le message
-            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
-            
-            # Envoyer
-            send_result = self.service.users().messages().send(
-                userId='me',
-                body={'raw': raw_message}
-            ).execute()
-            
-            logger.info(f"Email envoyé avec succès à {to}, ID: {send_result['id']}")
-            return True
-        
-        except Exception as e:
-            logger.error(f"Erreur envoi email: {e}")
-            return False
-    
-    def mark_as_read(self, email_id: str) -> bool:
-        """Marque un email comme lu."""
-        if self.mock_mode:
-            logger.info(f"Email {email_id} marqué comme lu (simulé)")
-            return True
-        
-        if not self.authenticated or not self.service:
-            return False
-        
-        try:
-            self.service.users().messages().modify(
-                userId='me',
-                id=email_id,
-                body={'removeLabelIds': ['UNREAD']}
-            ).execute()
-            
-            logger.info(f"Email {email_id} marqué comme lu")
-            return True
-        
-        except Exception as e:
-            logger.error(f"Erreur marquage lu {email_id}: {e}")
-            return False
-    
-    def archive_email(self, email_id: str) -> bool:
-        """Archive un email."""
-        if self.mock_mode:
-            logger.info(f"Email {email_id} archivé (simulé)")
-            return True
-        
-        if not self.authenticated or not self.service:
-            return False
-        
-        try:
-            self.service.users().messages().modify(
-                userId='me',
-                id=email_id,
-                body={'removeLabelIds': ['INBOX']}
-            ).execute()
-            
-            logger.info(f"Email {email_id} archivé")
-            return True
-        
-        except Exception as e:
-            logger.error(f"Erreur archivage {email_id}: {e}")
-            return False
-    
-    def delete_email(self, email_id: str) -> bool:
-        """Supprime un email."""
-        if self.mock_mode:
-            logger.info(f"Email {email_id} supprimé (simulé)")
-            return True
-        
-        if not self.authenticated or not self.service:
-            return False
-        
-        try:
-            self.service.users().messages().delete(
-                userId='me',
-                id=email_id
-            ).execute()
-            
-            logger.info(f"Email {email_id} supprimé")
-            return True
-        
-        except Exception as e:
-            logger.error(f"Erreur suppression {email_id}: {e}")
-            return False
-    
-    def search_emails(self, query: str, max_results: int = 50) -> List[Email]:
-        """Recherche des emails selon une requête."""
-        if self.mock_mode:
-            return []
-        
-        if not self.authenticated or not self.service:
-            return []
-        
-        try:
-            results = self.service.users().messages().list(
-                userId='me',
-                maxResults=max_results,
-                q=query
-            ).execute()
-            
-            messages = results.get('messages', [])
-            emails = []
-            
-            for message in messages:
-                email_data = self._get_email_details(message['id'])
-                if email_data:
-                    emails.append(email_data)
-            
-            logger.info(f"Recherche '{query}': {len(emails)} résultats")
-            return emails
-        
-        except Exception as e:
-            logger.error(f"Erreur recherche: {e}")
-            return []
-    
-    def get_connection_status(self) -> dict:
-        """Retourne le statut de la connexion."""
-        return {
-            'authenticated': self.authenticated,
-            'mock_mode': self.mock_mode,
-            'credentials_file': self.credentials_file,
-            'has_service': self.service is not None,
-            'last_sync': datetime.now().isoformat() if self.authenticated else None
-        }

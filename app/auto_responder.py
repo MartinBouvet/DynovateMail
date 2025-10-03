@@ -305,3 +305,21 @@ class AutoResponder:
             'status_breakdown': status_counts,
             'delay_minutes': self.delay_minutes
         }
+    def get_ai_response_for_email(self, email: Email) -> Optional[str]:
+        """Génère une réponse IA pour un email donné."""
+        try:
+            if not hasattr(email, 'ai_analysis') or not email.ai_analysis:
+            # Analyser l'email d'abord
+                email.ai_analysis = self.ai_processor.process_email(email)
+        
+            analysis = email.ai_analysis
+        
+            if (hasattr(analysis, 'should_auto_respond') and analysis.should_auto_respond and
+                hasattr(analysis, 'suggested_response') and analysis.suggested_response):
+                return analysis.suggested_response
+        
+            return None
+        
+        except Exception as e:
+            logger.error(f"Erreur génération réponse IA: {e}")
+            return None
