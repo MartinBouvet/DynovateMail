@@ -78,7 +78,7 @@ class EmailLoaderThread(QThread):
                 self.progress_updated.emit(total_emails, total_emails)
             
             self.analysis_complete.emit()
-            logger.info(f"✅ Chargement terminé pour {self.current_folder}: {len(self.emails_with_analysis)} emails")
+            logger.info(f"Chargement terminé pour {self.current_folder}: {len(self.emails_with_analysis)} emails")
             
         except Exception as e:
             logger.error(f"Erreur EmailLoaderThread: {e}")
@@ -86,6 +86,7 @@ class EmailLoaderThread(QThread):
     def stop(self):
         """Arrête le thread."""
         self.should_stop = True
+
 
 class CategoryFilter(QPushButton):
     """Bouton de filtre."""
@@ -144,8 +145,9 @@ class CategoryFilter(QPushButton):
             }
         """)
 
-    class SmartInboxView(QWidget):
-        """Vue Smart Inbox avec NAVIGATION COMPLÈTE."""
+
+class SmartInboxView(QWidget):
+    """Vue Smart Inbox avec NAVIGATION COMPLÈTE."""
     
     email_selected = pyqtSignal(object)
     
@@ -212,7 +214,7 @@ class CategoryFilter(QPushButton):
         folder_layout.setSpacing(15)
         
         # Label
-        folder_label = QLabel("📁 Dossier:")
+        folder_label = QLabel("Dossier:")
         folder_label.setFont(QFont("Inter", 13, QFont.Weight.Bold))
         folder_label.setStyleSheet("color: #1a1a1a;")
         folder_layout.addWidget(folder_label)
@@ -220,11 +222,11 @@ class CategoryFilter(QPushButton):
         # Sélecteur de dossier
         self.folder_selector = QComboBox()
         self.folder_selector.addItems([
-            "📥 Boîte de réception",
-            "📤 Envoyés", 
-            "📦 Archivés",
-            "🗑️ Supprimés",
-            "🚫 Spam"
+            "Boîte de réception",
+            "Envoyés", 
+            "Archivés",
+            "Supprimés",
+            "Spam"
         ])
         self.folder_selector.setMinimumWidth(200)
         self.folder_selector.setFixedHeight(35)
@@ -234,7 +236,7 @@ class CategoryFilter(QPushButton):
         folder_layout.addStretch()
         
         # Bouton actualiser
-        refresh_btn = QPushButton("🔄 Actualiser")
+        refresh_btn = QPushButton("Actualiser")
         refresh_btn.setObjectName("refresh-btn")
         refresh_btn.setFixedHeight(35)
         refresh_btn.setMinimumWidth(120)
@@ -248,7 +250,7 @@ class CategoryFilter(QPushButton):
         self.filters_container.setSpacing(12)
         
         # Label filtres
-        filter_label = QLabel("🏷️ Filtres:")
+        filter_label = QLabel("Filtres:")
         filter_label.setFont(QFont("Inter", 13, QFont.Weight.Bold))
         filter_label.setStyleSheet("color: #1a1a1a;")
         self.filters_container.addWidget(filter_label)
@@ -258,16 +260,16 @@ class CategoryFilter(QPushButton):
         self.category_filters = {}
         
         filter_definitions = [
-            ("Tous", "all", "📧"),
-            ("Urgent", "urgent", "🔥"),
-            ("RDV", "rdv", "📅"),
-            ("CV", "cv", "📄"),
-            ("Spam", "spam", "🚫"),
-            ("Pièces J.", "attachments", "📎")
+            ("Tous", "all", ""),
+            ("Urgent", "urgent", ""),
+            ("RDV", "rdv", ""),
+            ("CV", "cv", ""),
+            ("Spam", "spam", ""),
+            ("Pièces J.", "attachments", "")
         ]
         
         for name, category, emoji in filter_definitions:
-            filter_btn = CategoryFilter(f"{emoji} {name}", category, 0)
+            filter_btn = CategoryFilter(f"{name}", category, 0)
             filter_btn.clicked.connect(lambda checked, cat=category: self._on_filter_clicked(cat))
             
             self.filter_group.addButton(filter_btn)
@@ -366,7 +368,7 @@ class CategoryFilter(QPushButton):
         self.email_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
         # Messages de statut
-        self.loading_label = QLabel("🔄 Chargement des emails...")
+        self.loading_label = QLabel("Chargement des emails...")
         self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.loading_label.setFont(QFont("Inter", 14, QFont.Weight.Medium))
         self.loading_label.setObjectName("loading-label")
@@ -442,11 +444,11 @@ class CategoryFilter(QPushButton):
         """Gère le changement de dossier."""
         # Mapping des textes vers les codes
         folder_mapping = {
-            "📥 Boîte de réception": "INBOX",
-            "📤 Envoyés": "SENT", 
-            "📦 Archivés": "ARCHIVED",
-            "🗑️ Supprimés": "TRASH",
-            "🚫 Spam": "SPAM"
+            "Boîte de réception": "INBOX",
+            "Envoyés": "SENT", 
+            "Archivés": "ARCHIVED",
+            "Supprimés": "TRASH",
+            "Spam": "SPAM"
         }
         
         new_folder = folder_mapping.get(folder_text, "INBOX")
@@ -496,7 +498,7 @@ class CategoryFilter(QPushButton):
         }
         folder_name = folder_names.get(self.current_folder, "emails")
         
-        self.loading_label.setText(f"🔄 Chargement des {folder_name}...")
+        self.loading_label.setText(f"Chargement des {folder_name}...")
         self.loading_label.show()
         self.progress_label.hide()
         
@@ -519,21 +521,21 @@ class CategoryFilter(QPushButton):
         self.all_emails = emails
         
         if self.current_folder == "INBOX":
-            self.loading_label.setText("🤖 Analyse IA en cours...")
+            self.loading_label.setText("Analyse IA en cours...")
             self.progress_label.setText("Analyse IA: 0 / 0")
             self.progress_label.show()
         else:
             # Pas d'analyse IA pour les autres dossiers
-            self.loading_label.setText("📋 Organisation des emails...")
+            self.loading_label.setText("Organisation des emails...")
         
         logger.info(f"{len(emails)} emails chargés depuis {self.current_folder}")
     
     def _on_progress_updated(self, current: int, total: int):
         """Met à jour la progression."""
         if self.current_folder == "INBOX":
-            self.progress_label.setText(f"🤖 Analyse IA: {current} / {total}")
+            self.progress_label.setText(f"Analyse IA: {current} / {total}")
         else:
-            self.progress_label.setText(f"📋 Traitement: {current} / {total}")
+            self.progress_label.setText(f"Traitement: {current} / {total}")
     
     def _on_analysis_complete(self):
         """Fin de l'analyse."""
@@ -557,14 +559,14 @@ class CategoryFilter(QPushButton):
                                        getattr(e.ai_analysis, 'should_auto_respond', False)])
             
             if ai_suggestions_count > 0:
-                logger.info(f"🤖 {ai_suggestions_count} réponses IA disponibles")
+                logger.info(f"{ai_suggestions_count} réponses IA disponibles")
         
         attachments_count = len([e for e in self.all_emails if hasattr(e, 'attachments') and e.attachments])
         
         if attachments_count > 0:
-            logger.info(f"📎 {attachments_count} emails avec pièces jointes")
+            logger.info(f"{attachments_count} emails avec pièces jointes")
         
-        logger.info(f"✅ Interface mise à jour avec {len(self.all_emails)} emails ({self.current_folder})")
+        logger.info(f"Interface mise à jour avec {len(self.all_emails)} emails ({self.current_folder})")
     
     def _create_email_cards(self):
         """Crée les cartes d'emails."""
@@ -574,14 +576,14 @@ class CategoryFilter(QPushButton):
         
         if not emails_to_show:
             folder_messages = {
-                "INBOX": "📭 Aucun email dans la boîte de réception",
-                "SENT": "📤 Aucun email envoyé",
-                "ARCHIVED": "📦 Aucun email archivé", 
-                "TRASH": "🗑️ Aucun email dans la corbeille",
-                "SPAM": "🚫 Aucun email spam"
+                "INBOX": "Aucun email dans la boîte de réception",
+                "SENT": "Aucun email envoyé",
+                "ARCHIVED": "Aucun email archivé", 
+                "TRASH": "Aucun email dans la corbeille",
+                "SPAM": "Aucun email spam"
             }
             
-            no_email_label = QLabel(folder_messages.get(self.current_folder, "📭 Aucun email"))
+            no_email_label = QLabel(folder_messages.get(self.current_folder, "Aucun email"))
             no_email_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             no_email_label.setFont(QFont("Inter", 14, QFont.Weight.Medium))
             no_email_label.setStyleSheet("""
@@ -728,7 +730,7 @@ class CategoryFilter(QPushButton):
         # Émettre le signal
         self.email_selected.emit(email)
         
-        attachment_info = f" (📎 {len(email.attachments)} PJ)" if hasattr(email, 'attachments') and email.attachments else ""
+        attachment_info = f" ({len(email.attachments)} PJ)" if hasattr(email, 'attachments') and email.attachments else ""
         logger.info(f"Email sélectionné: {email.id}{attachment_info} ({self.current_folder})")
     
     def filter_emails(self, search_text: str):
