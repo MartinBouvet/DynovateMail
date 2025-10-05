@@ -1,193 +1,393 @@
 #!/usr/bin/env python3
 """
-Processeur IA principal avec classification intelligente et gestion contextuelle.
+Processeur IA pour l'analyse et le traitement des emails - VERSION CORRIGÉE
+Corrections: Analyse robuste, réponses contextuelles, extraction d'infos
 """
 import logging
+import re
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
-import asyncio
-import json
+from datetime import datetime
+from dataclasses import dataclass
 
-from ai.smart_classifier import SmartClassifier, EmailAnalysis
 from models.email_model import Email
-from utils.config import get_config_manager
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class EmailAnalysis:
+    """Résultat de l'analyse IA d'un email."""
+    category: str
+    confidence: float
+    priority: int  # 1-5
+    sentiment: str  # positive, negative, neutral
+    should_auto_respond: bool
+    suggested_response: Optional[str]
+    extracted_info: Dict[str, Any]
+    reasoning: str
+
+
 class AIProcessor:
-    """
-    Processeur IA principal avec classification intelligente et context awareness.
-    """
+    """Processeur IA pour analyser et traiter les emails - CORRIGÉ."""
     
     def __init__(self):
-        self.classifier = SmartClassifier()
-        self.config_manager = get_config_manager()
-        self.processing_queue = asyncio.Queue()
-        self.context_history = {}  # Historique des conversations
+        """Initialise le processeur IA."""
         
-        # Compteurs de performance
-        self.stats = {
-            'total_processed': 0,
-            'correct_classifications': 0,
-            'auto_responses_sent': 0,
-            'last_reset': datetime.now()
+        # Patterns de détection par catégorie
+        self.category_patterns = {
+            'cv': [
+                r'\bcv\b', r'curriculum', r'candidature', r'postuler',
+                r'poste', r'recrutement', r'embauche', r'lettre de motivation',
+                r'portfolio', r'expérience professionnelle'
+            ],
+            'rdv': [
+                r'rendez-vous', r'r[ée]union', r'rencontre', r'meeting',
+                r'disponible', r'disponibilit[ée]', r'calendrier',
+                r'conf[ée]rence', r'call', r'entretien', r'rendez vous'
+            ],
+            'facture': [
+                r'facture', r'paiement', r'montant', r'invoice',
+                r'devis', r'prix', r'tarif', r'€', r'euro',
+                r'virement', r'règlement', r'total', r'TVA'
+            ],
+            'support': [
+                r'probl[èe]me', r'bug', r'erreur', r'aide', r'support',
+                r'dysfonctionnement', r'ne fonctionne pas', r'panne',
+                r'assistance', r'question', r'comment', r'aide'
+            ],
+            'partenariat': [
+                r'partenariat', r'collaboration', r'coop[ée]ration',
+                r'projet commun', r'ensemble', r'proposition',
+                r'opportunit[ée]', r'synergie'
+            ],
+            'spam': [
+                r'gagner', r'gratuit', r'cliquez ici', r'urgent',
+                r'offre limit[ée]e', r'casino', r'viagra', r'crypto',
+                r'investissement garanti', r'loterie', r'héritage'
+            ]
         }
         
-        logger.info("AIProcessor initialisé avec classification avancée")
+        # Mots-clés de sentiment
+        self.sentiment_keywords = {
+            'positive': [
+                'merci', 'excellent', 'parfait', 'super', 'génial',
+                'bravo', 'félicitations', 'content', 'satisfait', 'ravi'
+            ],
+            'negative': [
+                'déçu', 'problème', 'mauvais', 'insatisfait', 'erreur',
+                'bug', 'inacceptable', 'frustré', 'mécontent'
+            ]
+        }
+        
+        logger.info("AIProcessor initialisé avec patterns améliorés")
     
     def process_email(self, email: Email) -> EmailAnalysis:
         """
-        Traite un email avec analyse complète et context awareness.
+        Traite et analyse un email - MÉTHODE PRINCIPALE CORRIGÉE.
         
         Args:
             email: L'email à analyser
             
         Returns:
-            EmailAnalysis avec toutes les informations extraites
+            EmailAnalysis: Résultat de l'analyse
         """
         try:
-            # Préparation des données pour l'IA
-            email_data = {
-                'subject': email.subject or '',
-                'body': email.body or '',
-                'sender': email.sender or '',
-                'sender_name': email.get_sender_name(),
-                'date': email.received_date,
-                'thread_id': email.thread_id
-            }
+            logger.info(f"Analyse IA de l'email: {email.id}")
             
-            # Ajouter le contexte de conversation si disponible
-            email_data['conversation_context'] = self._get_conversation_context(email.thread_id)
+            # Combiner sujet et corps pour l'analyse
+            text = f"{email.subject or ''} {email.body or ''} {email.snippet or ''}".lower()
             
-            # Classification intelligente
-            analysis = self.classifier.analyze_email(email_data)
+            # === CATÉGORISATION ===
+            category, confidence = self._categorize_email(text)
             
-            # Validation et ajustements contextuels
-            analysis = self._validate_and_adjust_analysis(email, analysis)
+            # === PRIORITÉ ===
+            priority = self._calculate_priority(email, text, category)
             
-            # Mise à jour des statistiques
-            self.stats['total_processed'] += 1
+            # === SENTIMENT ===
+            sentiment = self._analyze_sentiment(text)
             
-            # Sauvegarder le contexte
-            self._update_conversation_context(email.thread_id, analysis)
+            # === EXTRACTION D'INFORMATIONS ===
+            extracted_info = self._extract_information(text, category)
             
-            logger.info(f"Email traité: {analysis.category} (confiance: {analysis.confidence:.2f})")
+            # === DÉCISION DE RÉPONSE AUTO ===
+            should_auto_respond = self._should_auto_respond(
+                email, category, sentiment, extracted_info
+            )
+            
+            # === GÉNÉRATION DE RÉPONSE ===
+            suggested_response = None
+            if should_auto_respond:
+                suggested_response = self._generate_response(
+                    email, category, extracted_info, sentiment
+                )
+            
+            # === RAISONNEMENT ===
+            reasoning = self._generate_reasoning(
+                category, confidence, priority, sentiment, should_auto_respond
+            )
+            
+            analysis = EmailAnalysis(
+                category=category,
+                confidence=confidence,
+                priority=priority,
+                sentiment=sentiment,
+                should_auto_respond=should_auto_respond,
+                suggested_response=suggested_response,
+                extracted_info=extracted_info,
+                reasoning=reasoning
+            )
+            
+            logger.info(
+                f"Analyse terminée: {category} (confiance: {confidence:.2f}, "
+                f"priorité: {priority}, sentiment: {sentiment})"
+            )
+            
             return analysis
             
         except Exception as e:
-            logger.error(f"Erreur traitement email: {e}")
+            logger.error(f"Erreur lors de l'analyse IA: {e}")
             return self._create_fallback_analysis(email)
     
-    def _get_conversation_context(self, thread_id: str) -> Dict:
-        """Récupère le contexte de la conversation."""
-        if not thread_id:
-            return {}
+    def _categorize_email(self, text: str) -> tuple[str, float]:
+        """Catégorise l'email - CORRIGÉ."""
+        scores = {}
         
-        context = self.context_history.get(thread_id, {
-            'messages_count': 0,
-            'last_category': None,
-            'last_response_sent': None,
-            'participants': [],
-            'topics': []
-        })
-        
-        return context
-    
-    def _update_conversation_context(self, thread_id: str, analysis: EmailAnalysis):
-        """Met à jour le contexte de conversation."""
-        if not thread_id:
-            return
-        
-        if thread_id not in self.context_history:
-            self.context_history[thread_id] = {
-                'messages_count': 0,
-                'last_category': None,
-                'last_response_sent': None,
-                'participants': [],
-                'topics': []
-            }
-        
-        context = self.context_history[thread_id]
-        context['messages_count'] += 1
-        context['last_category'] = analysis.category
-        context['last_analysis'] = datetime.now()
-        
-        # Nettoyer l'historique ancien (> 30 jours)
-        cutoff_date = datetime.now() - timedelta(days=30)
-        self.context_history = {
-            tid: ctx for tid, ctx in self.context_history.items()
-            if ctx.get('last_analysis', datetime.now()) > cutoff_date
-        }
-    
-    def _validate_and_adjust_analysis(self, email: Email, analysis: EmailAnalysis) -> EmailAnalysis:
-        """Valide et ajuste l'analyse selon le contexte."""
-        # Vérifications de cohérence
-        
-        # 1. Anti-boucle : éviter de répondre aux réponses automatiques
-        if self._is_likely_auto_response(email):
-            analysis.should_auto_respond = False
-            analysis.reasoning += " [Auto-réponse détectée]"
-        
-        # 2. Limite de fréquence par expéditeur
-        if self._sender_response_limit_reached(email.sender):
-            analysis.should_auto_respond = False
-            analysis.reasoning += " [Limite réponses atteinte]"
-        
-        # 3. Ajustement de confiance selon l'historique
-        if hasattr(email, 'thread_id') and email.thread_id:
-            context = self._get_conversation_context(email.thread_id)
-            if context.get('last_category') == analysis.category:
-                analysis.confidence *= 1.2  # Bonus cohérence
+        for category, patterns in self.category_patterns.items():
+            score = 0
+            matches = 0
             
-        # 4. Validation de la réponse suggérée
-        if analysis.suggested_response:
-            analysis.suggested_response = self._improve_suggested_response(
-                analysis.suggested_response, email, analysis
-            )
+            for pattern in patterns:
+                count = len(re.findall(pattern, text, re.IGNORECASE))
+                if count > 0:
+                    matches += 1
+                    score += count
+            
+            # Score pondéré
+            if matches > 0:
+                scores[category] = (score, matches / len(patterns))
         
-        return analysis
+        if not scores:
+            return ('general', 0.3)
+        
+        # Trouver la catégorie avec le meilleur score
+        best_category = max(scores.items(), key=lambda x: (x[1][0], x[1][1]))
+        category = best_category[0]
+        confidence = min(0.95, 0.5 + (best_category[1][1] * 0.5))
+        
+        return (category, confidence)
+    
+    def _calculate_priority(self, email: Email, text: str, category: str) -> int:
+        """Calcule la priorité de l'email - CORRIGÉ."""
+        priority = 3  # Priorité par défaut
+        
+        # Mots-clés d'urgence
+        urgent_keywords = ['urgent', 'asap', 'immédiat', 'rapide', 'prioritaire']
+        if any(keyword in text for keyword in urgent_keywords):
+            priority += 2
+        
+        # Catégories prioritaires
+        if category in ['rdv', 'support', 'facture']:
+            priority += 1
+        
+        # Emails non lus
+        if not email.is_read:
+            priority += 1
+        
+        # Limiter entre 1 et 5
+        return max(1, min(5, priority))
+    
+    def _analyze_sentiment(self, text: str) -> str:
+        """Analyse le sentiment - CORRIGÉ."""
+        positive_count = sum(
+            1 for keyword in self.sentiment_keywords['positive']
+            if keyword in text
+        )
+        negative_count = sum(
+            1 for keyword in self.sentiment_keywords['negative']
+            if keyword in text
+        )
+        
+        if positive_count > negative_count:
+            return 'positive'
+        elif negative_count > positive_count:
+            return 'negative'
+        else:
+            return 'neutral'
+    
+    def _extract_information(self, text: str, category: str) -> Dict[str, Any]:
+        """Extrait des informations spécifiques - CORRIGÉ."""
+        info = {}
+        
+        # Dates potentielles
+        date_patterns = [
+            r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
+            r'\d{1,2}\s+(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)',
+        ]
+        dates = []
+        for pattern in date_patterns:
+            dates.extend(re.findall(pattern, text, re.IGNORECASE))
+        if dates:
+            info['potential_dates'] = dates[:3]  # Max 3
+        
+        # Heures
+        time_pattern = r'\d{1,2}h\d{0,2}'
+        times = re.findall(time_pattern, text)
+        if times:
+            info['potential_times'] = times[:3]
+        
+        # Montants (pour factures)
+        if category == 'facture':
+            money_pattern = r'\d+[,.]?\d*\s*€'
+            amounts = re.findall(money_pattern, text)
+            if amounts:
+                info['amounts'] = amounts
+        
+        # Emails dans le texte
+        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        emails = re.findall(email_pattern, text)
+        if emails:
+            info['mentioned_emails'] = emails[:3]
+        
+        # Téléphones
+        phone_pattern = r'(?:0|\+33)[1-9](?:[\s.-]?\d{2}){4}'
+        phones = re.findall(phone_pattern, text)
+        if phones:
+            info['phone_numbers'] = phones
+        
+        return info
+    
+    def _should_auto_respond(self, email: Email, category: str,
+                            sentiment: str, extracted_info: Dict) -> bool:
+        """Détermine si une réponse automatique est appropriée - CORRIGÉ."""
+        
+        # Ne jamais répondre aux emails probablement automatiques
+        if self._is_likely_auto_response(email):
+            return False
+        
+        # Ne pas répondre au spam
+        if category == 'spam':
+            return False
+        
+        # Répondre aux catégories appropriées
+        auto_respond_categories = ['cv', 'rdv', 'support', 'partenariat']
+        if category not in auto_respond_categories:
+            return False
+        
+        # Éviter les réponses en boucle
+        if self._sender_response_limit_reached(email.sender):
+            return False
+        
+        return True
+    
+    def _generate_response(self, email: Email, category: str,
+                          extracted_info: Dict, sentiment: str) -> str:
+        """Génère une réponse suggérée - CORRIGÉ."""
+        
+        sender_name = email.get_sender_name() if hasattr(email, 'get_sender_name') else email.sender.split('@')[0]
+        
+        # Templates de réponses par catégorie
+        templates = {
+            'cv': f"""Bonjour {sender_name},
+
+Merci pour votre candidature et votre intérêt pour notre entreprise.
+
+Nous avons bien reçu votre CV et votre lettre de motivation. Notre équipe de recrutement va examiner votre profil avec attention.
+
+Nous vous recontacterons dans les prochains jours si votre profil correspond à nos besoins actuels.
+
+Cordialement,
+L'équipe Dynovate""",
+            
+            'rdv': f"""Bonjour {sender_name},
+
+Merci pour votre message concernant un rendez-vous.
+
+Je suis disponible pour échanger avec vous. Pourriez-vous me proposer quelques créneaux qui vous conviennent ?
+
+Dans l'attente de votre retour.
+
+Cordialement""",
+            
+            'support': f"""Bonjour {sender_name},
+
+Merci de nous avoir contactés concernant votre demande d'assistance.
+
+Votre ticket a été enregistré et notre équipe support va traiter votre demande dans les plus brefs délais.
+
+Nous reviendrons vers vous rapidement avec une solution.
+
+Cordialement,
+L'équipe Support Dynovate""",
+            
+            'partenariat': f"""Bonjour {sender_name},
+
+Merci pour votre intérêt concernant une potentielle collaboration.
+
+Votre proposition nous intéresse. Nous aimerions en discuter plus en détail avec vous.
+
+Pourriez-vous nous proposer un créneau pour un premier échange téléphonique ou visioconférence ?
+
+Dans l'attente de votre retour.
+
+Cordialement,
+L'équipe Dynovate"""
+        }
+        
+        base_response = templates.get(category, f"""Bonjour {sender_name},
+
+Merci pour votre message. Nous l'avons bien reçu et y répondrons dans les plus brefs délais.
+
+Cordialement""")
+        
+        # Personnaliser selon les informations extraites
+        if category == 'rdv' and extracted_info.get('potential_dates'):
+            dates = ', '.join(extracted_info['potential_dates'][:2])
+            base_response += f"\n\nJ'ai noté les dates suivantes mentionnées : {dates}"
+        
+        return base_response
+    
+    def _generate_reasoning(self, category: str, confidence: float,
+                           priority: int, sentiment: str,
+                           should_auto_respond: bool) -> str:
+        """Génère une explication du raisonnement."""
+        reasons = []
+        
+        reasons.append(f"Catégorisé comme '{category}' avec {confidence*100:.0f}% de confiance")
+        reasons.append(f"Priorité {priority}/5")
+        reasons.append(f"Sentiment {sentiment}")
+        
+        if should_auto_respond:
+            reasons.append("Réponse automatique suggérée")
+        else:
+            reasons.append("Nécessite une attention humaine")
+        
+        return " | ".join(reasons)
     
     def _is_likely_auto_response(self, email: Email) -> bool:
         """Détecte si l'email est probablement une réponse automatique."""
         indicators = [
-            'noreply', 'no-reply', 'donotreply',
+            'noreply', 'no-reply', 'donotreply', 'ne-pas-repondre',
             'automatic', 'automatique', 'auto-generated',
-            'out of office', 'absent du bureau'
+            'out of office', 'absent du bureau', 'absence',
+            'notification', 'system', 'daemon'
         ]
         
         sender_lower = (email.sender or '').lower()
         subject_lower = (email.subject or '').lower()
-        body_lower = (email.body or '').lower()[:500]
+        body_lower = (email.body or '')[:500].lower()
         
-        return any(indicator in sender_lower or 
-                  indicator in subject_lower or 
-                  indicator in body_lower 
-                  for indicator in indicators)
+        return any(
+            indicator in sender_lower or 
+            indicator in subject_lower or 
+            indicator in body_lower 
+            for indicator in indicators
+        )
     
     def _sender_response_limit_reached(self, sender: str) -> bool:
         """Vérifie si la limite de réponses à cet expéditeur est atteinte."""
-        # Logique simple : max 3 réponses auto par jour par expéditeur
         # TODO: Implémenter avec une vraie base de données
+        # Pour l'instant, on retourne False (pas de limite)
         return False
-    
-    def _improve_suggested_response(self, response: str, email: Email, analysis: EmailAnalysis) -> str:
-        """Améliore la réponse suggérée avec des informations contextuelles."""
-        # Personnalisation basée sur l'heure
-        current_hour = datetime.now().hour
-        if current_hour < 12:
-            response = response.replace("Bonjour", "Bonjour")
-        elif current_hour < 18:
-            response = response.replace("Bonjour", "Bon après-midi")
-        else:
-            response = response.replace("Bonjour", "Bonsoir")
-        
-        # Ajouter des informations extraites si pertinentes
-        if analysis.category == 'rdv' and analysis.extracted_info.get('potential_dates'):
-            dates = analysis.extracted_info['potential_dates'][:2]
-            if dates:
-                response += f"\n\nP.S.: J'ai noté votre mention des dates suivantes : {', '.join(map(str, dates))}"
-        
-        return response
     
     def _create_fallback_analysis(self, email: Email) -> EmailAnalysis:
         """Crée une analyse de fallback en cas d'erreur."""
@@ -195,38 +395,17 @@ class AIProcessor:
             category='general',
             confidence=0.1,
             priority=3,
+            sentiment='neutral',
             should_auto_respond=False,
             suggested_response=None,
             extracted_info={},
-            reasoning="Analyse de fallback suite à une erreur"
+            reasoning="Analyse de secours suite à une erreur"
         )
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Retourne les statistiques de performance."""
-        accuracy = 0.0
-        if self.stats['total_processed'] > 0:
-            accuracy = self.stats['correct_classifications'] / self.stats['total_processed']
-        
+        """Retourne les statistiques du processeur IA."""
         return {
-            'total_processed': self.stats['total_processed'],
-            'accuracy': accuracy,
-            'auto_responses_sent': self.stats['auto_responses_sent'],
-            'last_reset': self.stats['last_reset'],
-            'context_history_size': len(self.context_history)
+            'categories_available': list(self.category_patterns.keys()),
+            'sentiment_types': ['positive', 'negative', 'neutral'],
+            'auto_response_enabled': True
         }
-    
-    def report_classification_accuracy(self, was_correct: bool):
-        """Rapporte la précision d'une classification pour les statistiques."""
-        if was_correct:
-            self.stats['correct_classifications'] += 1
-    
-    def learn_from_user_correction(self, email: Email, original_category: str, corrected_category: str):
-        """Apprend d'une correction utilisateur."""
-        email_data = {
-            'subject': email.subject or '',
-            'body': email.body or '',
-            'sender': email.sender or ''
-        }
-        
-        self.classifier.learn_from_correction(email_data, original_category, corrected_category)
-        logger.info(f"Correction apprise: {original_category} -> {corrected_category}")

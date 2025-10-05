@@ -68,7 +68,7 @@ def main():
         ai_processor = AIProcessor()
         calendar_manager = CalendarManager()
         pending_manager = PendingResponseManager()
-        auto_responder = AutoResponder(ai_processor, pending_manager)
+        auto_responder = AutoResponder(ai_processor)
         
         # Interface principale
         main_window = MainWindow(

@@ -374,3 +374,9 @@ Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de 
 **Développé avec ❤️ par l'équipe Dynovate**
 
 *Pour un avenir où l'IA simplifie votre gestion d'emails.*
+
+
+
+
+
+

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Vue Smart Inbox CORRIGÉE avec navigation Archives/Supprimés.
+Vue Smart Inbox - VERSION CORRIGÉE COMPLÈTE
+Corrections: Navigation dossiers, filtres, affichage
 """
 import logging
 from typing import List, Dict, Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, 
-    QLabel, QPushButton, QFrame, QButtonGroup, QSplitter, QTextEdit, QComboBox
+    QLabel, QPushButton, QFrame, QButtonGroup, QSplitter, QComboBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QFont
@@ -20,7 +21,7 @@ from ui.views.email_detail_view import EmailDetailView
 logger = logging.getLogger(__name__)
 
 class EmailLoaderThread(QThread):
-    """Thread pour charger et analyser les emails réels."""
+    """Thread pour charger et analyser les emails."""
     
     emails_loaded = pyqtSignal(list)
     analysis_complete = pyqtSignal()
@@ -39,141 +40,82 @@ class EmailLoaderThread(QThread):
         self.current_folder = folder
     
     def run(self):
-        """Charge et analyse les emails réels."""
+        """Charge et analyse les emails."""
         try:
+            logger.info(f"Chargement emails depuis {self.current_folder}...")
+            
             # Charger selon le dossier
             if self.current_folder == "INBOX":
-                emails = self.gmail_client.get_inbox_emails(limit=30)
-            elif self.current_folder == "SENT":
-                emails = self.gmail_client.get_sent_emails(limit=30)
-            elif self.current_folder == "ARCHIVED":
-                emails = self.gmail_client.get_archived_emails(limit=30)
+                emails = self.gmail_client.get_recent_emails(max_results=50)
+            elif self.current_folder == "ARCHIVES":
+                emails = self.gmail_client.get_archived_emails(max_results=50)
             elif self.current_folder == "TRASH":
-                emails = self.gmail_client.get_trash_emails(limit=30)
-            elif self.current_folder == "SPAM":
-                emails = self.gmail_client.get_spam_emails(limit=30)
+                emails = self.gmail_client.get_trashed_emails(max_results=50)
             else:
-                emails = self.gmail_client.get_inbox_emails(limit=30)
+                emails = []
             
-            self.emails_loaded.emit(emails)
+            if not emails:
+                logger.warning(f"Aucun email trouvé dans {self.current_folder}")
+                self.emails_loaded.emit([])
+                self.analysis_complete.emit()
+                return
             
-            self.emails_with_analysis = []
-            total_emails = len(emails)
+            logger.info(f"{len(emails)} emails chargés, analyse IA en cours...")
             
-            # Analyser avec l'IA seulement pour INBOX
-            if self.current_folder == "INBOX":
-                for i, email in enumerate(emails):
-                    if self.should_stop:
-                        break
-                    
-                    analysis = self.ai_processor.process_email(email)
-                    email.ai_analysis = analysis
+            # Analyser avec l'IA
+            for i, email in enumerate(emails):
+                if self.should_stop:
+                    break
+                
+                try:
+                    email.ai_analysis = self.ai_processor.process_email(email)
                     self.emails_with_analysis.append(email)
-                    
-                    self.progress_updated.emit(i + 1, total_emails)
-                    self.msleep(100)
-            else:
-                # Pas d'analyse IA pour les autres dossiers
-                self.emails_with_analysis = emails
-                self.progress_updated.emit(total_emails, total_emails)
+                    self.progress_updated.emit(i + 1, len(emails))
+                except Exception as e:
+                    logger.error(f"Erreur analyse email {email.id}: {e}")
             
+            self.emails_loaded.emit(self.emails_with_analysis)
             self.analysis_complete.emit()
-            logger.info(f"Chargement terminé pour {self.current_folder}: {len(self.emails_with_analysis)} emails")
             
         except Exception as e:
-            logger.error(f"Erreur EmailLoaderThread: {e}")
+            logger.error(f"Erreur chargement emails: {e}")
+            self.emails_loaded.emit([])
+            self.analysis_complete.emit()
     
     def stop(self):
         """Arrête le thread."""
         self.should_stop = True
 
 
-class CategoryFilter(QPushButton):
-    """Bouton de filtre."""
-    
-    def __init__(self, name: str, category: str, count: int = 0):
-        super().__init__(f"{name} ({count})")
-        self.category = category
-        self.count = count
-        self.is_active = False
-        self.original_name = name
-        
-        self.setCheckable(True)
-        self.setFixedHeight(38)
-        self.setMinimumWidth(90)
-        self._apply_style()
-    
-    def update_count(self, count: int):
-        """Met à jour le compteur."""
-        self.count = count
-        self.setText(f"{self.original_name} ({count})")
-    
-    def set_active(self, active: bool):
-        """Active/désactive le filtre."""
-        self.is_active = active
-        self.setChecked(active)
-        
-        if active:
-            self.setStyleSheet("""
-                CategoryFilter {
-                    background-color: #1976d2;
-                    color: #ffffff;
-                    border: 3px solid #1565c0;
-                    border-radius: 19px;
-                    font-weight: 700;
-                    padding: 8px 16px;
-                }
-            """)
-        else:
-            self._apply_style()
-    
-    def _apply_style(self):
-        """Applique le style par défaut."""
-        self.setStyleSheet("""
-            CategoryFilter {
-                background-color: #ffffff;
-                color: #495057;
-                border: 2px solid #dee2e6;
-                border-radius: 19px;
-                font-weight: 600;
-                padding: 8px 16px;
-            }
-            
-            CategoryFilter:hover {
-                background-color: #f8f9fa;
-                border-color: #adb5bd;
-            }
-        """)
-
-
 class SmartInboxView(QWidget):
-    """Vue Smart Inbox avec NAVIGATION COMPLÈTE."""
+    """Vue Inbox intelligente avec navigation et filtres - CORRIGÉE."""
     
     email_selected = pyqtSignal(object)
     
     def __init__(self, gmail_client: GmailClient, ai_processor: AIProcessor):
         super().__init__()
+        
         self.gmail_client = gmail_client
         self.ai_processor = ai_processor
         
+        # État
         self.all_emails = []
         self.filtered_emails = []
-        self.email_cards = []
-        self.current_filter = "all"
         self.current_folder = "INBOX"
+        self.current_category = "Tous"
         self.selected_email = None
-        self.is_loading = False
+        
+        # Thread de chargement
+        self.loader_thread = None
         
         self._setup_ui()
-        self._setup_loader()
+        self._apply_styles()
         
-        # Auto-refresh seulement pour INBOX
-        self.refresh_timer = QTimer()
-        self.refresh_timer.timeout.connect(self._auto_refresh)
-        self.refresh_timer.start(300000)  # 5 minutes
+        # Chargement initial automatique
+        QTimer.singleShot(500, self.refresh_emails)
     
     def _setup_ui(self):
-        """Configuration interface avec navigation."""
+        """Configure l'interface."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -182,7 +124,7 @@ class SmartInboxView(QWidget):
         navigation_section = self._create_navigation()
         layout.addWidget(navigation_section)
         
-        # Layout horizontal pour le contenu principal
+        # Splitter horizontal: Liste | Détail
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
         main_splitter.setHandleWidth(2)
         
@@ -190,7 +132,7 @@ class SmartInboxView(QWidget):
         email_list = self._create_email_list()
         main_splitter.addWidget(email_list)
         
-        # === COLONNE DROITE: Vue détail email ===
+        # === COLONNE DROITE: Détail email ===
         self.detail_view = EmailDetailView()
         self.detail_view.set_gmail_client(self.gmail_client)
         main_splitter.addWidget(self.detail_view)
@@ -200,584 +142,324 @@ class SmartInboxView(QWidget):
         layout.addWidget(main_splitter)
     
     def _create_navigation(self) -> QWidget:
-        """Crée la navigation COMPLÈTE avec dossiers."""
+        """Crée la navigation COMPLÈTE avec dossiers - CORRIGÉE."""
         nav_frame = QFrame()
-        nav_frame.setObjectName("navigation-frame")
-        nav_frame.setFixedHeight(100)
+        nav_frame.setObjectName("navigation-bar")
+        nav_frame.setFixedHeight(70)
         
-        layout = QVBoxLayout(nav_frame)
-        layout.setContentsMargins(20, 10, 20, 10)
-        layout.setSpacing(10)
+        nav_layout = QHBoxLayout(nav_frame)
+        nav_layout.setContentsMargins(20, 10, 20, 10)
+        nav_layout.setSpacing(15)
         
-        # === LIGNE 1: NAVIGATION DOSSIERS ===
-        folder_layout = QHBoxLayout()
-        folder_layout.setSpacing(15)
+        # === NAVIGATION DOSSIERS ===
+        folders_label = QLabel("📁 Dossiers:")
+        folders_label.setFont(QFont("Inter", 12, QFont.Weight.Bold))
+        folders_label.setStyleSheet("color: #000000;")
+        nav_layout.addWidget(folders_label)
         
-        # Label
-        folder_label = QLabel("Dossier:")
-        folder_label.setFont(QFont("Inter", 13, QFont.Weight.Bold))
-        folder_label.setStyleSheet("color: #1a1a1a;")
-        folder_layout.addWidget(folder_label)
+        # Groupe de boutons pour les dossiers
+        self.folder_group = QButtonGroup()
         
-        # Sélecteur de dossier
-        self.folder_selector = QComboBox()
-        self.folder_selector.addItems([
-            "Boîte de réception",
-            "Envoyés", 
-            "Archivés",
-            "Supprimés",
-            "Spam"
-        ])
-        self.folder_selector.setMinimumWidth(200)
-        self.folder_selector.setFixedHeight(35)
-        self.folder_selector.currentTextChanged.connect(self._on_folder_changed)
-        folder_layout.addWidget(self.folder_selector)
-        
-        folder_layout.addStretch()
-        
-        # Bouton actualiser
-        refresh_btn = QPushButton("Actualiser")
-        refresh_btn.setObjectName("refresh-btn")
-        refresh_btn.setFixedHeight(35)
-        refresh_btn.setMinimumWidth(120)
-        refresh_btn.clicked.connect(self.refresh_emails)
-        folder_layout.addWidget(refresh_btn)
-        
-        layout.addLayout(folder_layout)
-        
-        # === LIGNE 2: FILTRES CATÉGORIES (seulement pour INBOX) ===
-        self.filters_container = QHBoxLayout()
-        self.filters_container.setSpacing(12)
-        
-        # Label filtres
-        filter_label = QLabel("Filtres:")
-        filter_label.setFont(QFont("Inter", 13, QFont.Weight.Bold))
-        filter_label.setStyleSheet("color: #1a1a1a;")
-        self.filters_container.addWidget(filter_label)
-        
-        # Groupe de boutons filtres
-        self.filter_group = QButtonGroup()
-        self.category_filters = {}
-        
-        filter_definitions = [
-            ("Tous", "all", ""),
-            ("Urgent", "urgent", ""),
-            ("RDV", "rdv", ""),
-            ("CV", "cv", ""),
-            ("Spam", "spam", ""),
-            ("Pièces J.", "attachments", "")
+        folders = [
+            ("📥 Boîte de réception", "INBOX"),
+            ("📦 Archives", "ARCHIVES"),
+            ("🗑️ Corbeille", "TRASH")
         ]
         
-        for name, category, emoji in filter_definitions:
-            filter_btn = CategoryFilter(f"{name}", category, 0)
-            filter_btn.clicked.connect(lambda checked, cat=category: self._on_filter_clicked(cat))
+        for label, folder_id in folders:
+            btn = QPushButton(label)
+            btn.setObjectName("folder-btn")
+            btn.setCheckable(True)
+            btn.setProperty("folder_id", folder_id)
+            btn.clicked.connect(lambda checked, fid=folder_id: self._on_folder_changed(fid))
+            self.folder_group.addButton(btn)
+            nav_layout.addWidget(btn)
             
-            self.filter_group.addButton(filter_btn)
-            self.category_filters[category] = filter_btn
-            self.filters_container.addWidget(filter_btn)
+            if folder_id == "INBOX":
+                btn.setChecked(True)
         
-        self.category_filters["all"].set_active(True)
+        nav_layout.addSpacing(20)
         
-        self.filters_container.addStretch()
+        # === FILTRES PAR CATÉGORIE ===
+        filter_label = QLabel("🏷️ Catégorie:")
+        filter_label.setFont(QFont("Inter", 12, QFont.Weight.Bold))
+        filter_label.setStyleSheet("color: #000000;")
+        nav_layout.addWidget(filter_label)
         
-        layout.addLayout(self.filters_container)
+        self.category_filter = QComboBox()
+        self.category_filter.addItems([
+            "Tous", "CV", "RDV", "Facture", "Support", 
+            "Partenariat", "Spam", "Général"
+        ])
+        self.category_filter.setMinimumWidth(150)
+        self.category_filter.setFixedHeight(35)
+        self.category_filter.currentTextChanged.connect(self._on_category_changed)
+        nav_layout.addWidget(self.category_filter)
         
-        # Styles
-        nav_frame.setStyleSheet("""
-            QFrame#navigation-frame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #e3f2fd, stop:1 #bbdefb);
-                border-bottom: 3px solid #1976d2;
-            }
-            
-            QComboBox {
-                background-color: #ffffff;
-                border: 2px solid #1976d2;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #1a1a1a;
-                font-weight: 600;
-                font-size: 13px;
-            }
-            
-            QComboBox:focus {
-                border-color: #1565c0;
-            }
-            
-            QComboBox::drop-down {
-                border: none;
-                width: 30px;
-            }
-            
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 6px solid #1976d2;
-            }
-            
-            QComboBox QAbstractItemView {
-                background-color: #ffffff;
-                border: 2px solid #1976d2;
-                border-radius: 8px;
-                selection-background-color: #e3f2fd;
-                selection-color: #1a1a1a;
-                padding: 4px;
-            }
-            
-            QPushButton#refresh-btn {
-                background-color: #4caf50;
-                color: #ffffff;
-                border: none;
-                border-radius: 17px;
-                font-weight: 700;
-                font-size: 12px;
-                padding: 8px 16px;
-            }
-            
-            QPushButton#refresh-btn:hover {
-                background-color: #45a049;
-            }
-            
-            QPushButton#refresh-btn:pressed {
-                background-color: #388e3c;
-            }
-        """)
+        nav_layout.addStretch()
+        
+        # Bouton refresh
+        refresh_btn = QPushButton("🔄 Actualiser")
+        refresh_btn.setObjectName("refresh-btn")
+        refresh_btn.setFixedHeight(35)
+        refresh_btn.clicked.connect(self.refresh_emails)
+        nav_layout.addWidget(refresh_btn)
         
         return nav_frame
     
     def _create_email_list(self) -> QWidget:
-        """Crée la liste des emails."""
-        list_widget = QWidget()
-        list_widget.setObjectName("email-list-widget")
+        """Crée la liste d'emails avec scroll."""
+        list_container = QFrame()
+        list_container.setObjectName("email-list-container")
         
-        list_layout = QVBoxLayout(list_widget)
+        list_layout = QVBoxLayout(list_container)
         list_layout.setContentsMargins(0, 0, 0, 0)
         list_layout.setSpacing(0)
         
+        # Header de la liste
+        header = QFrame()
+        header.setObjectName("list-header")
+        header.setFixedHeight(50)
+        
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(20, 0, 20, 0)
+        
+        self.list_title = QLabel("📥 Boîte de réception")
+        self.list_title.setFont(QFont("Inter", 14, QFont.Weight.Bold))
+        self.list_title.setStyleSheet("color: #000000;")
+        header_layout.addWidget(self.list_title)
+        
+        header_layout.addStretch()
+        
+        self.email_count_label = QLabel("0 emails")
+        self.email_count_label.setFont(QFont("Inter", 11))
+        self.email_count_label.setStyleSheet("color: #6c757d;")
+        header_layout.addWidget(self.email_count_label)
+        
+        list_layout.addWidget(header)
+        
+        # Scroll area pour les emails
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll_area.setObjectName("emails-scroll")
         
-        scroll_content = QWidget()
-        self.email_layout = QVBoxLayout(scroll_content)
-        self.email_layout.setContentsMargins(10, 10, 10, 10)
-        self.email_layout.setSpacing(8)
-        self.email_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        # Container des emails
+        self.emails_container = QWidget()
+        self.emails_layout = QVBoxLayout(self.emails_container)
+        self.emails_layout.setSpacing(0)
+        self.emails_layout.setContentsMargins(0, 0, 0, 0)
+        self.emails_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        # Messages de statut
-        self.loading_label = QLabel("Chargement des emails...")
-        self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.loading_label.setFont(QFont("Inter", 14, QFont.Weight.Medium))
-        self.loading_label.setObjectName("loading-label")
-        self.email_layout.addWidget(self.loading_label)
+        # Message par défaut
+        self.empty_label = QLabel("📭 Aucun email à afficher")
+        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_label.setFont(QFont("Inter", 14))
+        self.empty_label.setStyleSheet("color: #6c757d; padding: 50px;")
+        self.emails_layout.addWidget(self.empty_label)
         
-        self.progress_label = QLabel("")
-        self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.progress_label.setFont(QFont("Inter", 12))
-        self.progress_label.setObjectName("progress-label")
-        self.progress_label.hide()
-        self.email_layout.addWidget(self.progress_label)
-        
-        self.email_layout.addStretch()
-        
-        scroll_area.setWidget(scroll_content)
+        scroll_area.setWidget(self.emails_container)
         list_layout.addWidget(scroll_area)
         
-        list_widget.setStyleSheet("""
-            QWidget#email-list-widget {
-                background-color: #f8f9fa;
-                border-right: 2px solid #dee2e6;
-            }
-            
-            QScrollArea#emails-scroll {
-                background-color: #ffffff;
-                border: none;
-            }
-            
-            QScrollArea#emails-scroll QScrollBar:vertical {
-                background-color: #f8f9fa;
-                width: 12px;
-                border-radius: 6px;
-                margin: 2px;
-            }
-            
-            QScrollArea#emails-scroll QScrollBar::handle:vertical {
-                background-color: #6c757d;
-                border-radius: 5px;
-                min-height: 20px;
-                margin: 1px;
-            }
-            
-            QScrollArea#emails-scroll QScrollBar::handle:vertical:hover {
-                background-color: #495057;
-            }
-            
-            QLabel#loading-label {
-                color: #6c757d;
-                padding: 40px;
-                background-color: #ffffff;
-                border-radius: 12px;
-                border: 2px dashed #dee2e6;
-                margin: 20px;
-            }
-            
-            QLabel#progress-label {
-                color: #007bff;
-                padding: 10px;
-                font-weight: 600;
-            }
-        """)
-        
-        return list_widget
+        return list_container
     
-    def _setup_loader(self):
-        """Configure le thread de chargement."""
-        self.email_loader = EmailLoaderThread(self.gmail_client, self.ai_processor)
-        self.email_loader.emails_loaded.connect(self._on_emails_loaded)
-        self.email_loader.analysis_complete.connect(self._on_analysis_complete)
-        self.email_loader.progress_updated.connect(self._on_progress_updated)
-    
-    def _on_folder_changed(self, folder_text: str):
-        """Gère le changement de dossier."""
-        # Mapping des textes vers les codes
-        folder_mapping = {
-            "Boîte de réception": "INBOX",
-            "Envoyés": "SENT", 
-            "Archivés": "ARCHIVED",
-            "Supprimés": "TRASH",
-            "Spam": "SPAM"
-        }
-        
-        new_folder = folder_mapping.get(folder_text, "INBOX")
-        
-        if new_folder != self.current_folder:
-            self.current_folder = new_folder
-            
-            # Masquer/afficher les filtres selon le dossier
-            if new_folder == "INBOX":
-                self._show_filters(True)
-            else:
-                self._show_filters(False)
-            
-            # Charger les emails du nouveau dossier
-            self.refresh_emails()
-            
-            logger.info(f"Changement vers dossier: {new_folder}")
-    
-    def _show_filters(self, show: bool):
-        """Affiche ou masque les filtres."""
-        for i in range(self.filters_container.count()):
-            item = self.filters_container.itemAt(i)
-            if item and item.widget():
-                item.widget().setVisible(show)
-        
-        if not show:
-            # Réinitialiser le filtre à "all"
-            self.current_filter = "all"
-            for cat, btn in self.category_filters.items():
-                btn.set_active(cat == "all")
-    
-    def refresh_emails(self):
-        """Actualise les emails selon le dossier actuel."""
-        if self.is_loading or self.email_loader.isRunning():
+    def _on_folder_changed(self, folder_id: str):
+        """Gère le changement de dossier - CORRIGÉ."""
+        if folder_id == self.current_folder:
             return
         
-        self.is_loading = True
+        logger.info(f"Changement de dossier: {self.current_folder} -> {folder_id}")
+        self.current_folder = folder_id
         
-        # Afficher le chargement
-        self._clear_email_list()
+        # Mettre à jour le titre
         folder_names = {
-            "INBOX": "boîte de réception",
-            "SENT": "emails envoyés", 
-            "ARCHIVED": "emails archivés",
-            "TRASH": "emails supprimés",
-            "SPAM": "emails spam"
+            "INBOX": "📥 Boîte de réception",
+            "ARCHIVES": "📦 Archives",
+            "TRASH": "🗑️ Corbeille"
         }
-        folder_name = folder_names.get(self.current_folder, "emails")
+        self.list_title.setText(folder_names.get(folder_id, "Emails"))
         
-        self.loading_label.setText(f"Chargement des {folder_name}...")
-        self.loading_label.show()
-        self.progress_label.hide()
-        
-        # Réinitialiser le filtre
-        self.current_filter = "all"
-        for cat, btn in self.category_filters.items():
-            btn.set_active(cat == "all")
-        
-        # Configurer le dossier et démarrer le chargement
-        self.email_loader.set_folder(self.current_folder)
-        self.email_loader.start()
+        # Recharger les emails
+        self.refresh_emails()
     
-    def _auto_refresh(self):
-        """Auto-refresh seulement pour INBOX."""
-        if not self.is_loading and self.current_folder == "INBOX":
-            self.refresh_emails()
+    def _on_category_changed(self, category: str):
+        """Gère le changement de catégorie - CORRIGÉ."""
+        self.current_category = category
+        logger.info(f"Filtre catégorie: {category}")
+        self._filter_and_display_emails()
+    
+    def refresh_emails(self):
+        """Recharge les emails - CORRIGÉ."""
+        logger.info(f"Actualisation emails du dossier {self.current_folder}...")
+        
+        # Arrêter le thread précédent
+        if self.loader_thread and self.loader_thread.isRunning():
+            self.loader_thread.stop()
+            self.loader_thread.wait()
+        
+        # Vider la liste
+        self._clear_email_list()
+        
+        # Message de chargement
+        loading_label = QLabel("⏳ Chargement en cours...")
+        loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        loading_label.setFont(QFont("Inter", 14))
+        loading_label.setStyleSheet("color: #007bff; padding: 50px;")
+        self.emails_layout.addWidget(loading_label)
+        
+        # Lancer le nouveau thread
+        self.loader_thread = EmailLoaderThread(self.gmail_client, self.ai_processor)
+        self.loader_thread.set_folder(self.current_folder)
+        self.loader_thread.emails_loaded.connect(self._on_emails_loaded)
+        self.loader_thread.progress_updated.connect(self._on_progress_updated)
+        self.loader_thread.start()
     
     def _on_emails_loaded(self, emails: List[Email]):
-        """Gère la réception des emails."""
+        """Gère les emails chargés - CORRIGÉ."""
+        logger.info(f"{len(emails)} emails chargés avec analyse IA")
         self.all_emails = emails
-        
-        if self.current_folder == "INBOX":
-            self.loading_label.setText("Analyse IA en cours...")
-            self.progress_label.setText("Analyse IA: 0 / 0")
-            self.progress_label.show()
-        else:
-            # Pas d'analyse IA pour les autres dossiers
-            self.loading_label.setText("Organisation des emails...")
-        
-        logger.info(f"{len(emails)} emails chargés depuis {self.current_folder}")
+        self._filter_and_display_emails()
     
     def _on_progress_updated(self, current: int, total: int):
         """Met à jour la progression."""
-        if self.current_folder == "INBOX":
-            self.progress_label.setText(f"Analyse IA: {current} / {total}")
+        logger.debug(f"Analyse IA: {current}/{total}")
+    
+    def _filter_and_display_emails(self):
+        """Filtre et affiche les emails - CORRIGÉ."""
+        # Appliquer le filtre de catégorie
+        if self.current_category == "Tous":
+            self.filtered_emails = self.all_emails
         else:
-            self.progress_label.setText(f"Traitement: {current} / {total}")
+            self.filtered_emails = [
+                email for email in self.all_emails
+                if hasattr(email, 'ai_analysis') and 
+                   hasattr(email.ai_analysis, 'category') and
+                   email.ai_analysis.category.lower() == self.current_category.lower()
+            ]
+        
+        # Mettre à jour le compteur
+        self.email_count_label.setText(f"{len(self.filtered_emails)} email(s)")
+        
+        # Afficher les emails
+        self._display_email_list()
     
-    def _on_analysis_complete(self):
-        """Fin de l'analyse."""
-        self.all_emails = self.email_loader.emails_with_analysis
-        
-        self.loading_label.hide()
-        self.progress_label.hide()
-        
-        self._create_email_cards()
-        
-        # Mettre à jour les compteurs seulement pour INBOX
-        if self.current_folder == "INBOX":
-            self._update_filter_counts()
-        
-        self.is_loading = False
-        
-        # Log des statistiques
-        if self.current_folder == "INBOX":
-            ai_suggestions_count = len([e for e in self.all_emails 
-                                       if hasattr(e, 'ai_analysis') and e.ai_analysis and 
-                                       getattr(e.ai_analysis, 'should_auto_respond', False)])
-            
-            if ai_suggestions_count > 0:
-                logger.info(f"{ai_suggestions_count} réponses IA disponibles")
-        
-        attachments_count = len([e for e in self.all_emails if hasattr(e, 'attachments') and e.attachments])
-        
-        if attachments_count > 0:
-            logger.info(f"{attachments_count} emails avec pièces jointes")
-        
-        logger.info(f"Interface mise à jour avec {len(self.all_emails)} emails ({self.current_folder})")
-    
-    def _create_email_cards(self):
-        """Crée les cartes d'emails."""
+    def _display_email_list(self):
+        """Affiche la liste d'emails - CORRIGÉ PyQt5."""
         self._clear_email_list()
-        
-        emails_to_show = self.filtered_emails if self.filtered_emails else self.all_emails
-        
-        if not emails_to_show:
-            folder_messages = {
-                "INBOX": "Aucun email dans la boîte de réception",
-                "SENT": "Aucun email envoyé",
-                "ARCHIVED": "Aucun email archivé", 
-                "TRASH": "Aucun email dans la corbeille",
-                "SPAM": "Aucun email spam"
-            }
-            
-            no_email_label = QLabel(folder_messages.get(self.current_folder, "Aucun email"))
-            no_email_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            no_email_label.setFont(QFont("Inter", 14, QFont.Weight.Medium))
-            no_email_label.setStyleSheet("""
-                QLabel {
-                    color: #757575; 
-                    padding: 40px;
-                    background-color: #f5f5f5;
-                    border-radius: 12px;
-                    border: 2px dashed #bdbdbd;
-                    margin: 20px 0;
-                }
-            """)
-            self.email_layout.insertWidget(self.email_layout.count() - 1, no_email_label)
-            return
-        
-        for email in emails_to_show:
-            # Utiliser l'analyse IA seulement pour INBOX
-            ai_analysis = getattr(email, 'ai_analysis', None) if self.current_folder == "INBOX" else None
-            card = SmartEmailCard(email, ai_analysis)
-            card.clicked.connect(self._on_email_card_clicked)
-            
-            self.email_cards.append(card)
-            self.email_layout.insertWidget(self.email_layout.count() - 1, card)
-        
-        logger.info(f"Créé {len(self.email_cards)} cartes pour {self.current_folder}")
     
-    def _clear_email_list(self):
-        """Vide la liste des emails."""
-        for card in self.email_cards:
-            card.setParent(None)
-            card.deleteLater()
-        self.email_cards.clear()
-        
-        for i in reversed(range(self.email_layout.count() - 1)):
-            item = self.email_layout.itemAt(i)
-            if item and item.widget():
-                widget = item.widget()
-                if widget not in [self.loading_label, self.progress_label]:
-                    widget.setParent(None)
-                    widget.deleteLater()
-    
-    def _on_filter_clicked(self, category: str):
-        """Gère le clic sur un filtre (seulement INBOX)."""
-        if self.current_folder != "INBOX":
-            return
-        
-        for cat, btn in self.category_filters.items():
-            btn.set_active(cat == category)
-        
-        self.current_filter = category
-        self._apply_filter(category)
-        
-        logger.info(f"Filtre appliqué: {category}")
-    
-    def _apply_filter(self, category: str):
-        """Applique un filtre (seulement INBOX)."""
-        if self.current_folder != "INBOX":
-            return
-        
-        if category == "all":
-            self.filtered_emails = []
-        else:
-            self.filtered_emails = []
+        if not self.filtered_emails:
+        # Recréer le label vide
+            try:
+                from PyQt5.QtWidgets import QLabel
+                from PyQt5.QtCore import Qt
+                from PyQt5.QtGui import QFont
             
-            for email in self.all_emails:
-                should_include = False
-                
-                if category == "attachments":
-                    should_include = hasattr(email, 'attachments') and email.attachments
-                elif hasattr(email, 'ai_analysis') and email.ai_analysis:
-                    email_category = getattr(email.ai_analysis, 'category', '').lower()
-                    
-                    if category == "urgent" and ('urgent' in email_category or 'important' in email_category):
-                        should_include = True
-                    elif category == "rdv" and ('rdv' in email_category or 'meeting' in email_category or 'rendez' in email_category):
-                        should_include = True
-                    elif category == "cv" and ('cv' in email_category or 'candidature' in email_category):
-                        should_include = True
-                    elif category == "spam" and 'spam' in email_category:
-                        should_include = True
-                
-                if should_include:
-                    self.filtered_emails.append(email)
-        
-        self._create_email_cards()
-    
-    def _update_filter_counts(self):
-        """Met à jour les compteurs des filtres (seulement INBOX)."""
-        if self.current_folder != "INBOX":
+                self.empty_label = QLabel(f"📭 Aucun email dans {self.list_title.text()}")
+                self.empty_label.setAlignment(Qt.AlignCenter)  # CORRIGÉ pour PyQt5
+                self.empty_label.setFont(QFont("Arial", 14))
+                self.empty_label.setStyleSheet("color: #6c757d; padding: 50px;")
+                self.emails_layout.addWidget(self.empty_label)
+            except Exception as e:
+                logger.error(f"Erreur création label vide: {e}")
             return
-        
-        counts = {
-            "all": len(self.all_emails),
-            "urgent": 0,
-            "rdv": 0,
-            "cv": 0,
-            "spam": 0,
-            "attachments": 0
-        }
-        
-        for email in self.all_emails:
-            if hasattr(email, 'attachments') and email.attachments:
-                counts["attachments"] += 1
-            
-            if hasattr(email, 'ai_analysis') and email.ai_analysis:
-                category = getattr(email.ai_analysis, 'category', '').lower()
-                
-                if 'urgent' in category or 'important' in category:
-                    counts["urgent"] += 1
-                elif 'rdv' in category or 'meeting' in category or 'rendez' in category:
-                    counts["rdv"] += 1
-                elif 'cv' in category or 'candidature' in category:
-                    counts["cv"] += 1
-                elif 'spam' in category:
-                    counts["spam"] += 1
-        
-        for category, count in counts.items():
-            if category in self.category_filters:
-                self.category_filters[category].update_count(count)
+    
+    # Créer les cartes d'emails
+        for email in self.filtered_emails:
+            try:
+                card = SmartEmailCard(email)
+                card.clicked.connect(lambda e=email: self._on_email_card_clicked(e))
+                self.emails_layout.addWidget(card)
+            except Exception as e:
+                logger.error(f"Erreur création carte email: {e}")
     
     def _on_email_card_clicked(self, email: Email):
-        """Gère le clic sur une carte d'email."""
-        # Désélectionner toutes les cartes
-        for card in self.email_cards:
-            if hasattr(card, 'set_selected'):
-                card.set_selected(False)
-        
-        # Sélectionner la carte cliquée
-        for card in self.email_cards:
-            if card.email.id == email.id:
-                if hasattr(card, 'set_selected'):
-                    card.set_selected(True)
-                break
-        
-        # Afficher les détails
-        self.detail_view.show_email(email)
+        """Gère le clic sur une carte d'email - CORRIGÉ."""
+        logger.info(f"Email sélectionné: {email.id}")
         self.selected_email = email
         
-        # Marquer comme lu (seulement pour INBOX)
-        if not email.is_read and self.current_folder == "INBOX":
-            if self.gmail_client.mark_as_read(email.id):
+        # Marquer comme lu si nécessaire
+        if not email.is_read and self.gmail_client:
+            try:
+                self.gmail_client.mark_as_read(email.id)
                 email.is_read = True
+            except Exception as e:
+                logger.error(f"Erreur marquage lu: {e}")
+        
+        # Afficher dans la vue détail
+        self.detail_view.show_email(email)
         
         # Émettre le signal
         self.email_selected.emit(email)
-        
-        attachment_info = f" ({len(email.attachments)} PJ)" if hasattr(email, 'attachments') and email.attachments else ""
-        logger.info(f"Email sélectionné: {email.id}{attachment_info} ({self.current_folder})")
     
-    def filter_emails(self, search_text: str):
-        """Filtre les emails selon un texte de recherche."""
-        try:
-            if not search_text or len(search_text) < 2:
-                self.clear_filter()
-                return
-            
-            search_lower = search_text.lower()
-            filtered = []
-            
-            for email in self.all_emails:
-                if (search_lower in (email.subject or "").lower() or
-                    search_lower in (email.sender or "").lower() or
-                    search_lower in (email.body or "").lower() or
-                    search_lower in (email.snippet or "").lower()):
-                    filtered.append(email)
-            
-            self.filtered_emails = filtered
-            self._create_email_cards()
-            
-            logger.info(f"Recherche '{search_text}' dans {self.current_folder}: {len(filtered)} résultats")
-            
-        except Exception as e:
-            logger.error(f"Erreur filtre emails: {e}")
+    def _clear_email_list(self):
+        """Vide la liste d'emails."""
+        while self.emails_layout.count():
+            child = self.emails_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
     
-    def clear_filter(self):
-        """Supprime le filtre de recherche."""
-        try:
-            if self.current_folder == "INBOX":
-                self._apply_filter(self.current_filter)
-            else:
-                self.filtered_emails = []
-                self._create_email_cards()
-            logger.info("Filtre de recherche supprimé")
-        except Exception as e:
-            logger.error(f"Erreur suppression filtre: {e}")
-    
-    def get_selected_email(self) -> Optional[Email]:
-        """Retourne l'email sélectionné."""
-        return self.selected_email
-    
-    def get_email_count(self) -> int:
-        """Retourne le nombre d'emails."""
-        return len(self.all_emails)
-    
-    def get_current_folder(self) -> str:
-        """Retourne le dossier actuel."""
-        return self.current_folder
+    def _apply_styles(self):
+        """Applique les styles."""
+        self.setStyleSheet("""
+            /* Navigation Bar */
+            QFrame#navigation-bar {
+                background-color: #f8f9fa;
+                border-bottom: 2px solid #dee2e6;
+            }
+            
+            QPushButton#folder-btn {
+                background-color: transparent;
+                border: 2px solid transparent;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: 600;
+                color: #495057;
+            }
+            
+            QPushButton#folder-btn:hover {
+                background-color: #e9ecef;
+            }
+            
+            QPushButton#folder-btn:checked {
+                background-color: #007bff;
+                color: white;
+                border-color: #007bff;
+            }
+            
+            QPushButton#refresh-btn {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: 600;
+            }
+            QPushButton#refresh-btn:hover { background-color: #218838; }
+            
+            QComboBox {
+                background-color: #ffffff;
+                border: 2px solid #dee2e6;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+            QComboBox:focus { border-color: #007bff; }
+            
+            /* List Container */
+            QFrame#email-list-container {
+                background-color: #ffffff;
+                border-right: 1px solid #dee2e6;
+            }
+            
+            QFrame#list-header {
+                background-color: #f8f9fa;
+                border-bottom: 1px solid #dee2e6;
+            }
+            
+            QScrollArea#emails-scroll {
+                border: none;
+                background-color: #ffffff;
+            }
+        """)
