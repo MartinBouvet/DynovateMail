@@ -31,11 +31,11 @@ class SmartClassifier:
     def __init__(self, model_path: str = "app/data/classifier.db"):
         self.model_path = model_path
         self._init_database()
-        
-        # Templates de réponses améliorés
+    
+    # Templates de réponses améliorés
         self.response_templates = {
-            'cv': {
-                'template': """Bonjour {sender_name},
+        'cv': {
+            'template': """Bonjour {sender_name},
 
 Merci pour votre candidature et l'intérêt que vous portez à notre entreprise.
 
@@ -45,10 +45,10 @@ Nous vous remercions pour le temps que vous avez consacré à votre candidature.
 
 Cordialement,
 L'équipe Recrutement""",
-                'should_respond': True
-            },
-            'rdv': {
-                'template': """Bonjour {sender_name},
+            'should_respond': True
+        },
+        'rdv': {
+            'template': """Bonjour {sender_name},
 
 Merci pour votre demande de rendez-vous.
 
@@ -57,90 +57,79 @@ Je consulte mon planning et vous propose les créneaux suivants :
 - Mardi prochain à 10h30
 - Mercredi prochain à 16h00
 
-N'hésitez pas à me confirmer le créneau qui vous convient le mieux ou à me proposer d'autres alternatives.
-
-Dans l'attente de notre rencontre.
+N'hésitez pas à me confirmer le créneau qui vous convient le mieux.
 
 Cordialement,
 {user_name}""",
-                'should_respond': True
-            },
-            'support': {
-                'template': """Bonjour {sender_name},
+            'should_respond': True
+        },
+        'support': {
+            'template': """Bonjour {sender_name},
 
 Merci de nous avoir contactés concernant votre demande d'assistance.
 
-Nous avons bien pris en compte votre message et notre équipe technique va examiner votre problème. Vous devriez recevoir une réponse détaillée de notre part dans les prochaines heures.
-
-En cas d'urgence, n'hésitez pas à nous contacter par téléphone.
+Nous avons bien pris en compte votre message et notre équipe va examiner votre problème. Vous devriez recevoir une réponse détaillée dans les prochaines heures.
 
 Cordialement,
-L'équipe Support Technique""",
-                'should_respond': True
-            },
-            'facture': {
-                'template': """Bonjour {sender_name},
-
-Nous accusons réception de votre message concernant la facturation.
-
-Votre demande a été transmise à notre service comptabilité qui vous répondra dans les meilleurs délais avec les informations demandées.
-
-Cordialement,
-Le service Facturation""",
-                'should_respond': False
-            },
-            'spam': {
-                'template': "",
-                'should_respond': False
-            },
-            'general': {
-                'template': """Bonjour {sender_name},
-
-Merci pour votre message.
-
-Nous l'avons bien reçu et nous vous répondrons dans les plus brefs délais.
-
-Cordialement,
-L'équipe""",
-                'should_respond': False
-            }
+L'équipe Support""",
+            'should_respond': False  # CORRECTION: Ne pas auto-répondre aux demandes support
+        },
+        'facture': {
+            'template': "",
+            'should_respond': False
+        },
+        'newsletter': {
+            'template': "",
+            'should_respond': False
+        },
+        'partenariat': {
+            'template': "",
+            'should_respond': False
+        },
+        'spam': {
+            'template': "",
+            'should_respond': False
         }
-        
-        # Patterns de détection améliorés
-        self.patterns = {
-            'cv': [
-                r'\b(cv|curriculum|résumé|candidature|postule|emploi|poste|job)\b',
-                r'\b(experience|compétence|formation|diplôme|qualification)\b',
-                r'\b(lettre de motivation|cover letter)\b',
-                r'\b(recherche un poste|recherche d\'emploi)\b'
-            ],
-            'rdv': [
-                r'\b(rendez[-\s]?vous|meeting|réunion|entretien|call|appointment)\b',
-                r'\b(disponible|créneau|calendrier|planning)\b',
-                r'\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b',
-                r'\d{1,2}[h:]\d{2}|\d{1,2}h\d{2}|\d{1,2}:\d{2}',
-                r'\b(quand êtes-vous|êtes-vous libre|pouvons-nous nous voir)\b'
-            ],
-            'facture': [
-                r'\b(facture|invoice|bill|payment|paiement)\b',
-                r'\b(montant|prix|coût|€|euro|dollar|\$)\b',
-                r'\b(due|échéance|deadline|devis)\b'
-            ],
-            'support': [
-                r'\b(aide|help|support|problème|issue|bug)\b',
-                r'\b(erreur|error|panne|dysfonctionnement)\b',
-                r'\b(urgent|critique|emergency|assistance)\b',
-                r'\b(ne fonctionne pas|ne marche pas|problème avec)\b'
-            ],
-            'spam': [
-                r'\b(gratuit|free|promo|offre|reduction|discount)\b',
-                r'\b(cliquez|click|urgent|limited|limité)\b',
-                r'[A-Z]{3,}.*[A-Z]{3,}',  # Beaucoup de majuscules
-                r'\b(félicitations|congratulations|winner|gagnant)\b'
-            ]
-        }
-        
-        logger.info("SmartClassifier initialisé avec templates de réponses")
+    }
+    
+    # CORRECTION: Patterns améliorés
+        self.category_keywords = {
+        'cv': [
+            'cv', 'candidature', 'curriculum vitae', 'postuler', 'candidat',
+            'lettre de motivation', 'portfolio', 'expérience professionnelle',
+            'compétences', 'diplôme', 'formation', 'poste'
+        ],
+        'rdv': [
+            'rendez-vous', 'réunion', 'rencontre', 'meeting', 'rdv',
+            'disponible', 'disponibilité', 'calendrier', 'créneau',
+            'conférence', 'call', 'entretien', 'zoom', 'teams'
+        ],
+        'facture': [
+            'facture', 'paiement', 'montant', 'invoice', 'devis',
+            'prix', 'tarif', '€', 'euro', 'virement', 'règlement',
+            'total', 'tva', 'commande'
+        ],
+        'support': [
+            'problème', 'bug', 'erreur', 'aide', 'support', 'assistance',
+            'dysfonctionnement', 'panne', 'question', 'comment',
+            'ne fonctionne pas', 'issue', 'ticket'
+        ],
+        'partenariat': [
+            'partenariat', 'collaboration', 'coopération', 'projet commun',
+            'ensemble', 'proposition', 'opportunité', 'synergie', 'partnership'
+        ],
+        'newsletter': [
+            'newsletter', 'abonnement', 'désabonner', 'unsubscribe',
+            'bulletin', 'actualités', 'notification'
+        ],
+        'spam': [
+            'gagner', 'gratuit', 'cliquez ici', 'urgent!!!', 'offre limitée',
+            'casino', 'crypto', 'investissement garanti', 'loterie',
+            'félicitations', 'héritage', 'nigerian prince'
+        ]
+    }
+    
+        logger.info("SmartClassifier initialisé avec patterns corrigés")
     
     def _init_database(self):
         """Initialise la base de données."""

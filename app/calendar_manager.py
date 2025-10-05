@@ -223,39 +223,55 @@ class CalendarManager:
     
     def extract_event_from_email(self, email) -> Optional[CalendarEvent]:
         """
-        Extrait un événement depuis un email analysé par l'IA - CORRIGÉ.
-        
+        Extrait un événement depuis un email - CORRIGÉ pour créer automatiquement.
+    
         Args:
             email: Email avec analyse IA
-            
+        
         Returns:
-            CalendarEvent ou None si aucun événement détecté
+            CalendarEvent ou None
         """
         try:
             if not hasattr(email, 'ai_analysis') or not email.ai_analysis:
                 return None
-            
+        
             analysis = email.ai_analysis
-            
-            # Vérifier que c'est un email de RDV
+        
+        # Vérifier que c'est un email de RDV
             if analysis.category != 'rdv':
                 return None
-            
-            # Extraire les informations
+        
+        # Extraire les informations
             extracted_info = analysis.extracted_info
-            
-            # Essayer d'extraire la date
-            if not extracted_info.get('potential_dates'):
-                logger.debug("Aucune date trouvée dans l'email")
-                return None
-            
-            # Pour l'instant, on ne crée pas automatiquement l'événement
-            # car il faudrait parser les dates correctement
-            # On retourne None et laisse l'utilisateur créer manuellement
-            
-            logger.info(f"Événement potentiel détecté dans email {email.id}")
-            return None
-            
+        
+        # Créer un événement par défaut
+            sender_name = email.get_sender_name() if hasattr(email, 'get_sender_name') else email.sender
+        
+        # Date par défaut: demain à 14h
+            from datetime import datetime, timedelta
+            default_start = datetime.now() + timedelta(days=1)
+            default_start = default_start.replace(hour=14, minute=0, second=0, microsecond=0)
+            default_end = default_start + timedelta(hours=1)
+        
+            event = CalendarEvent(
+                id=f"rdv_{email.id}",
+                title=f"RDV: {email.subject[:50]}",
+                description=f"Demande de RDV de {sender_name}\n\nExtrait:\n{email.snippet}",
+                start_time=default_start,
+                end_time=default_end,
+                location="À confirmer",
+                attendees=[email.get_sender_email() if hasattr(email, 'get_sender_email') else email.sender],
+                status='tentative',
+                created_from_email=email.id
+            )
+        
+        # CORRECTION: Ajouter automatiquement à la liste d'événements
+            self.events[event.id] = event
+            self._save_events()
+        
+            logger.info(f"Événement créé automatiquement depuis email {email.id}")
+            return event
+        
         except Exception as e:
             logger.error(f"Erreur extraction événement: {e}")
             return None

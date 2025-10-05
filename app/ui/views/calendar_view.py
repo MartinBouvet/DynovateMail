@@ -199,38 +199,187 @@ class EventDialog(QDialog):
         }
     
     def _apply_dialog_style(self):
-        """Applique le style au dialogue."""
+        """Applique le style au dialogue - ULTRA CORRIGÉ CONTRASTE."""
         self.setStyleSheet("""
-            QDialog {
-                background-color: #ffffff;
-            }
-            
-            QLabel {
-                color: #495057;
-                font-weight: 500;
-                font-size: 13px;
-            }
-            
-            QLineEdit, QTextEdit, QDateEdit, QTimeEdit, QComboBox {
-                background-color: #ffffff;
-                border: 2px solid #dee2e6;
-                border-radius: 6px;
-                padding: 8px;
-                font-size: 13px;
-            }
-            
-            QLineEdit:focus, QTextEdit:focus, QDateEdit:focus, QTimeEdit:focus, QComboBox:focus {
-                border-color: #007bff;
-            }
-            
-            QPushButton {
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-weight: 600;
-                font-size: 13px;
-            }
-        """)
+        /* DIALOG GÉNÉRAL */
+        QDialog {
+            background-color: #ffffff;
+        }
+        
+        /* LABELS - CORRECTION CONTRASTE */
+        QLabel {
+            color: #000000;  /* CORRECTION: Noir au lieu de gris */
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        /* LINE EDIT */
+        QLineEdit {
+            background-color: #ffffff;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 13px;
+            color: #000000;  /* CORRECTION: Texte noir */
+        }
+        
+        QLineEdit:focus {
+            border-color: #007bff;
+        }
+        
+        /* TEXT EDIT */
+        QTextEdit {
+            background-color: #ffffff;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 13px;
+            color: #000000;  /* CORRECTION: Texte noir */
+        }
+        
+        QTextEdit:focus {
+            border-color: #007bff;
+        }
+        
+        /* DATE EDIT - CORRECTION CRITIQUE */
+        QDateEdit {
+            background-color: #ffffff;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 13px;
+            color: #000000;  /* CORRECTION: Date en noir */
+        }
+        
+        QDateEdit:focus {
+            border-color: #007bff;
+        }
+        
+        QDateEdit::drop-down {
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 20px;
+            border-left: 1px solid #dee2e6;
+            background-color: #f8f9fa;
+        }
+        
+        QDateEdit::down-arrow {
+            image: none;
+            width: 10px;
+            height: 10px;
+            background-color: #000000;  /* Flèche visible */
+        }
+        
+        /* TIME EDIT - CORRECTION CRITIQUE */
+        QTimeEdit {
+            background-color: #ffffff;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 13px;
+            color: #000000;  /* CORRECTION: Heure en noir */
+        }
+        
+        QTimeEdit:focus {
+            border-color: #007bff;
+        }
+        
+        QTimeEdit::drop-down {
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 20px;
+            border-left: 1px solid #dee2e6;
+            background-color: #f8f9fa;
+        }
+        
+        QTimeEdit::up-button, QTimeEdit::down-button {
+            background-color: #f8f9fa;
+            border: none;
+        }
+        
+        /* COMBOBOX - CORRECTION CONTRASTE */
+        QComboBox {
+            background-color: #ffffff;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 13px;
+            color: #000000;  /* CORRECTION: Texte noir */
+        }
+        
+        QComboBox:focus {
+            border-color: #007bff;
+        }
+        
+        QComboBox::drop-down {
+            border: none;
+            width: 20px;
+            background-color: #f8f9fa;
+        }
+        
+        QComboBox QAbstractItemView {
+            background-color: #ffffff;
+            color: #000000;  /* CORRECTION: Options en noir */
+            selection-background-color: #007bff;
+            selection-color: #ffffff;
+            border: 1px solid #dee2e6;
+        }
+        
+        /* BOUTONS - CORRECTION CONTRASTE */
+        QPushButton {
+            border: none;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #ffffff;  /* Texte blanc sur boutons colorés */
+        }
+        
+        /* CALENDRIER POPUP - CORRECTION CRITIQUE */
+        QCalendarWidget {
+            background-color: #ffffff;
+        }
+        
+        QCalendarWidget QToolButton {
+            color: #000000;  /* CORRECTION: Flèches en noir */
+            background-color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        
+        QCalendarWidget QToolButton:hover {
+            background-color: #e9ecef;
+        }
+        
+        QCalendarWidget QMenu {
+            background-color: #ffffff;
+            color: #000000;  /* CORRECTION: Menu en noir */
+        }
+        
+        QCalendarWidget QSpinBox {
+            background-color: #ffffff;
+            color: #000000;  /* CORRECTION: Année en noir */
+            border: 1px solid #dee2e6;
+            padding: 3px;
+        }
+        
+        QCalendarWidget QWidget#qt_calendar_navigationbar {
+            background-color: #f8f9fa;
+        }
+        
+        QCalendarWidget QAbstractItemView {
+            background-color: #ffffff;
+            color: #000000;  /* CORRECTION: Dates en noir */
+            selection-background-color: #007bff;
+            selection-color: #ffffff;
+            border: none;
+        }
+        
+        QCalendarWidget QAbstractItemView:enabled {
+            color: #000000;  /* CORRECTION: S'assurer que c'est noir */
+        }
+    """)
 
 
 class CalendarView(QWidget):
@@ -741,65 +890,167 @@ Description:
                 )
     
     def _apply_style(self):
-        """Applique les styles."""
+        """Applique les styles - CONTRASTE PARFAIT."""
         self.setStyleSheet("""
-            /* Header */
-            QFrame#calendar-header {
-                background-color: #f8f9fa;
-                border-bottom: 2px solid #dee2e6;
-            }
-            
-            QPushButton#primary-btn {
-                background-color: #007bff;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-weight: 600;
-                font-size: 13px;
-            }
-            QPushButton#primary-btn:hover { background-color: #0056b3; }
-            
-            QPushButton#secondary-btn {
-                background-color: #28a745;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-weight: 600;
-                font-size: 13px;
-            }
-            QPushButton#secondary-btn:hover { background-color: #218838; }
-            
-            /* Sections */
-            QFrame#calendar-section, QFrame#events-section {
-                background-color: #ffffff;
-            }
-            
-            /* Boutons icônes */
-            QPushButton#icon-btn {
-                background-color: #007bff;
-                color: white;
-                border: none;
-                border-radius: 4px;
-            }
-            QPushButton#icon-btn:hover { background-color: #0056b3; }
-            
-            QPushButton#icon-btn-danger {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 4px;
-            }
-            QPushButton#icon-btn-danger:hover { background-color: #c82333; }
-            
-            /* ComboBox */
-            QComboBox {
-                background-color: #ffffff;
-                border: 2px solid #dee2e6;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-size: 13px;
-            }
-            QComboBox:focus { border-color: #007bff; }
-        """)
+        /* BACKGROUND GÉNÉRAL */
+        QWidget {
+            background-color: #ffffff;
+        }
+        
+        /* HEADER */
+        QFrame#calendar-header {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #007bff;
+        }
+        
+        /* BOUTONS HEADER */
+        QPushButton#primary-btn {
+            background-color: #007bff;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        QPushButton#primary-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        QPushButton#secondary-btn {
+            background-color: #6c757d;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        QPushButton#secondary-btn:hover {
+            background-color: #545b62;
+        }
+        
+        /* SECTIONS */
+        QFrame#calendar-section, QFrame#events-section {
+            background-color: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        
+        /* TITRES SECTIONS */
+        QLabel#section-title {
+            color: #000000;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        /* CALENDRIER WIDGET */
+        QCalendarWidget {
+            background-color: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        
+        QCalendarWidget QToolButton {
+            color: #000000;
+            background-color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        
+        QCalendarWidget QToolButton:hover {
+            background-color: #e9ecef;
+        }
+        
+        QCalendarWidget QMenu {
+            background-color: #ffffff;
+            color: #000000;
+            border: 1px solid #dee2e6;
+        }
+        
+        QCalendarWidget QSpinBox {
+            color: #000000;
+            background-color: #ffffff;
+            border: 1px solid #ced4da;
+            padding: 3px;
+        }
+        
+        QCalendarWidget QAbstractItemView {
+            background-color: #ffffff;
+            color: #000000;
+            selection-background-color: #007bff;
+            selection-color: #ffffff;
+        }
+        
+        /* SCROLL AREA ÉVÉNEMENTS */
+        QScrollArea#events-scroll {
+            border: none;
+            background-color: #ffffff;
+        }
+        
+        /* CARTES ÉVÉNEMENTS */
+        QFrame#event-card {
+            background-color: #ffffff;
+            border: 1px solid #dee2e6;
+            border-left: 4px solid #007bff;
+            border-radius: 6px;
+        }
+        
+        QFrame#event-card:hover {
+            background-color: #f8f9fa;
+            border-left-color: #0056b3;
+        }
+        
+        /* LABELS ÉVÉNEMENTS */
+        QLabel#event-title {
+            color: #000000;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        QLabel#event-time {
+            color: #6c757d;
+            font-size: 12px;
+        }
+        
+        QLabel#event-location {
+            color: #495057;
+            font-size: 12px;
+        }
+        
+        /* BOUTONS ÉVÉNEMENTS */
+        QPushButton#event-edit-btn {
+            background-color: #007bff;
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 11px;
+        }
+        
+        QPushButton#event-edit-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        QPushButton#event-delete-btn {
+            background-color: #dc3545;
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 11px;
+        }
+        
+        QPushButton#event-delete-btn:hover {
+            background-color: #c82333;
+        }
+        
+        /* LABEL VIDE */
+        QLabel#no-events-label {
+            color: #6c757d;
+            font-size: 14px;
+        }
+    """)

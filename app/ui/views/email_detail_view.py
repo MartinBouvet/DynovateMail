@@ -341,39 +341,107 @@ class EmailDetailView(QWidget):
             self._show_error_message(f"Erreur: {str(e)}")
     
     def _show_html_content(self, email: Email):
-        """Affiche le contenu HTML - VERSION CORRIGÉE."""
+        """Affiche le contenu HTML - VERSION ULTRA CORRIGÉE avec images."""
         try:
-            # Construire le HTML propre
+        # Construire le HTML propre
             if hasattr(email, 'is_html') and email.is_html and email.body:
                 html_content = email.body
+            
+            # IMPORTANT: Permettre le chargement des images externes
+            # Ne pas filtrer les URLs d'images
+            
             elif email.body:
-                # Convertir texte brut en HTML
+            # Convertir texte brut en HTML
                 html_content = f"<p>{html.escape(email.body).replace(chr(10), '<br>')}</p>"
             else:
                 html_content = f"<p style='color: #6c757d;'>{html.escape(email.snippet or 'Contenu non disponible')}</p>"
-            
-            # Template HTML complet avec styles
+        
+        # Template HTML complet avec styles CORRIGÉS
             full_html = f"""
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <style>
                     body {{
                         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                         font-size: 14px;
                         line-height: 1.6;
-                        color: #212529;
+                        color: #212529 !important;
                         padding: 20px;
                         margin: 0;
-                        background-color: #ffffff;
+                        background-color: #ffffff !important;
                     }}
+                
+                    /* CORRECTION: Forcer les couleurs de texte */
+                    p, div, span, td, th, li {{ 
+                        color: #212529 !important;
+                    }}
+                
+                    /* CORRECTION: Texte blanc visible sur fond sombre */
+                    *[style*="color: white"],
+                    *[style*="color: #fff"],
+                    *[style*="color: #ffffff"] {{
+                        color: #212529 !important;
+                        background-color: #f8f9fa !important;
+                        padding: 2px 4px;
+                    }}
+                
+                    /* CORRECTION: Texte noir visible sur fond noir */
+                    *[style*="background-color: black"],
+                    *[style*="background-color: #000"],
+                    *[style*="background: black"],
+                    *[style*="background: #000"] {{
+                        background-color: #ffffff !important;
+                        color: #212529 !important;
+                    }}
+                
                     p {{ margin: 0 0 10px 0; }}
-                    a {{ color: #007bff; text-decoration: none; }}
+                    a {{ 
+                        color: #007bff !important; 
+                        text-decoration: none; 
+                    }}
                     a:hover {{ text-decoration: underline; }}
-                    img {{ max-width: 100%; height: auto; }}
-                    pre {{ background-color: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }}
-                    blockquote {{ border-left: 3px solid #dee2e6; padding-left: 15px; color: #6c757d; }}
+                
+                    /* CORRECTION: Images s'affichent correctement */
+                    img {{ 
+                        max-width: 100% !important; 
+                        height: auto !important;
+                        display: block;
+                        margin: 10px 0;
+                    }}
+                
+                    pre {{ 
+                        background-color: #f8f9fa; 
+                        padding: 10px; 
+                        border-radius: 4px; 
+                        overflow-x: auto;
+                        color: #212529 !important;
+                    }}
+                
+                    blockquote {{ 
+                        border-left: 3px solid #dee2e6; 
+                        padding-left: 15px; 
+                        color: #6c757d !important;
+                        margin: 10px 0;
+                    }}
+                
+                    table {{
+                        border-collapse: collapse;
+                        width: 100%;
+                        margin: 10px 0;
+                    }}
+                
+                    table td, table th {{
+                        padding: 8px;
+                        border: 1px solid #dee2e6;
+                    }}
+                
+                    /* Emails marketing */
+                    table[bgcolor] {{
+                        background-color: transparent !important;
+                    }}
                 </style>
             </head>
             <body>
@@ -381,17 +449,17 @@ class EmailDetailView(QWidget):
             </body>
             </html>
             """
-            
+        
             if self.web_view:
                 self.web_view.setHtml(full_html)
             else:
                 self.fallback_view.setHtml(full_html)
-                
+            
         except Exception as e:
             logger.error(f"Erreur affichage HTML: {e}")
             content = email.snippet or "Erreur d'affichage"
             if self.web_view:
-                self.web_view.setHtml(f"<p>{html.escape(content)}</p>")
+                self.web_view.setHtml(f"<p style='color: #212529;'>{html.escape(content)}</p>")
             else:
                 self.fallback_view.setPlainText(content)
     

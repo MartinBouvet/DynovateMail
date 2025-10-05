@@ -399,3 +399,29 @@ class GmailClient:
         except Exception as e:
             logger.error(f"Erreur suppression: {e}")
             return False
+    def get_sent_emails(self, max_results: int = 50) -> List[Email]:
+        """Récupère les emails envoyés."""
+        try:
+            if not self.authenticated:
+                return []
+        
+            results = self.service.users().messages().list(
+                userId='me',
+                maxResults=max_results,
+                labelIds=['SENT']
+            ).execute()
+        
+            messages = results.get('messages', [])
+            emails = []
+        
+            for msg in messages:
+                email = self.get_email_by_id(msg['id'])
+                if email:
+                    emails.append(email)
+        
+            logger.info(f"{len(emails)} emails envoyés récupérés")
+            return emails
+        
+        except Exception as e:
+            logger.error(f"Erreur récupération emails envoyés: {e}")
+            return []
