@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Point d'entrée principal CORRIGÉ - VRAIS EMAILS UNIQUEMENT.
+Point d'entrée principal - VERSION FINALE CORRIGÉE
 """
 import sys
 import logging
 from pathlib import Path
 import os
 
-# Supprimer les warnings Qt inutiles
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.fonts.debug=false"
 
 app_dir = Path(__file__).parent
@@ -25,13 +24,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
-    """Fonction principale - VRAIS EMAILS UNIQUEMENT."""
+    """Fonction principale."""
     try:
         credentials_file = "client_secret.json"
         if not os.path.exists(credentials_file):
-            logger.error(f"ERREUR FATALE: Fichier {credentials_file} non trouvé")
-            print(f"❌ ERREUR: Le fichier {credentials_file} est OBLIGATOIRE")
-            print("📥 Téléchargez vos credentials OAuth2 depuis Google Cloud Console")
+            logger.error(f"ERREUR: Fichier {credentials_file} non trouvé")
+            print(f"❌ ERREUR: Le fichier {credentials_file} est requis")
+            print("📥 Téléchargez vos credentials OAuth2 depuis:")
             print("🔗 https://console.cloud.google.com/apis/credentials")
             sys.exit(1)
         
@@ -42,35 +41,42 @@ def main():
         from ai_processor import AIProcessor
         from calendar_manager import CalendarManager
         from auto_responder import AutoResponder
-        from pending_response_manager import PendingResponseManager
         from ui.main_window import MainWindow
         
+        # Application Qt
         app = QApplication(sys.argv)
-        app.setApplicationName("Dynovate Mail Assistant IA")
-        app.setApplicationVersion("2.0")
+        app.setApplicationName("Dynovate Mail")
+        app.setApplicationVersion("3.0")
         app.setOrganizationName("Dynovate")
         app.setStyle('Fusion')
         
-        logger.info("🚀 Initialisation des services...")
+        # Force le thème clair
+        app.setStyleSheet("""
+            * {
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+        """)
         
-        # Services - FORCER MODE PRODUCTION
-        print("📧 Connexion à Gmail (AUTHENTIFICATION REQUISE)...")
+        logger.info("🚀 Démarrage Dynovate Mail...")
+        
+        # Authentification Gmail
+        print("📧 Connexion à Gmail...")
         gmail_client = GmailClient(credentials_file=credentials_file, mock_mode=False)
         
         if not gmail_client.authenticated:
-            logger.error("❌ ERREUR FATALE: Impossible de s'authentifier avec Gmail")
-            print("❌ ERREUR: Authentification Gmail échouée")
+            logger.error("❌ Authentification Gmail échouée")
+            print("❌ ERREUR: Impossible de s'authentifier")
             print("🔑 Vérifiez vos credentials et autorisations")
             sys.exit(1)
         
-        print("✅ Gmail authentifié avec succès!")
+        print("✅ Gmail authentifié!")
         
+        # Services
         ai_processor = AIProcessor()
         calendar_manager = CalendarManager()
-        pending_manager = PendingResponseManager()
         auto_responder = AutoResponder(ai_processor)
         
-        # Interface principale
+        # Interface
         main_window = MainWindow(
             gmail_client=gmail_client,
             ai_processor=ai_processor,
@@ -80,23 +86,14 @@ def main():
         
         main_window.show()
         
-        logger.info("✅ Application lancée avec succès - MODE PRODUCTION UNIQUEMENT")
-        print("✅ Dynovate Mail avec vrais emails lancé!")
-        print("📧 AUCUN email de test - UNIQUEMENT vos vrais emails Gmail")
-        print("📁 Navigation: Boîte de réception, Envoyés, Archives, Supprimés, Spam")
-        print("💾 Sauvegarde de pièces jointes fonctionnelle")
+        logger.info("✅ Dynovate Mail lancé avec succès!")
+        print("✅ Interface prête!")
         
         sys.exit(app.exec())
         
-    except ImportError as e:
-        logger.error(f"Module manquant: {e}")
-        print(f"❌ ERREUR: Installez les dépendances - {e}")
-        print("📦 Commande: pip install -r requirements.txt")
-        sys.exit(1)
-        
     except Exception as e:
-        logger.error(f"Erreur fatale: {e}")
-        print(f"💥 Erreur fatale: {e}")
+        logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
+        print(f"❌ ERREUR: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

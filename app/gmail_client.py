@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Client Gmail API - VERSION COMPLÈTE CORRIGÉE
+Client Gmail - MÉTHODES COMPLÈTES
 """
 import logging
-import pickle
-import os.path
 import base64
-from typing import List, Optional, Dict, Any
-from datetime import datetime
+import os
+from typing import List, Optional, Dict
+from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -22,117 +21,202 @@ from models.email_model import Email, EmailAttachment
 
 logger = logging.getLogger(__name__)
 
-# Scopes nécessaires
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/gmail.modify'
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/gmail.compose'
 ]
 
-
 class GmailClient:
-    """Client Gmail API - PRODUCTION UNIQUEMENT."""
+    """Client pour l'API Gmail."""
     
-    def __init__(self, credentials_file: str = 'client_secret.json', mock_mode: bool = False):
-        """
-        Initialise le client Gmail.
-        
-        Args:
-            credentials_file: Chemin vers le fichier credentials OAuth2
-            mock_mode: IGNORÉ - toujours en mode production
-        """
+    def __init__(self, credentials_file: str = "client_secret.json", mock_mode: bool = False):
         self.credentials_file = credentials_file
-        self.token_file = 'token.pickle'
+        self.mock_mode = mock_mode
         self.service = None
         self.authenticated = False
         
-        logger.info("Client Gmail PRODUCTION UNIQUEMENT initialisé")
-        self._authenticate()
+        if not mock_mode:
+            self._authenticate()
     
     def _authenticate(self):
-        """Authentifie avec l'API Gmail."""
-        creds = None
-        
-        # Charger les credentials sauvegardés
-        if os.path.exists(self.token_file):
-            with open(self.token_file, 'rb') as token:
-                creds = pickle.load(token)
-        
-        # Si pas de credentials ou expirés
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                logger.info("Token Gmail rafraîchi")
-                creds.refresh(Request())
-            else:
-                if not os.path.exists(self.credentials_file):
-                    logger.error(f"Fichier credentials introuvable: {self.credentials_file}")
-                    return
-                
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    self.credentials_file, SCOPES)
-                creds = flow.run_local_server(port=0)
-            
-            # Sauvegarder les credentials
-            with open(self.token_file, 'wb') as token:
-                pickle.dump(creds, token)
-                logger.info("Credentials Gmail sauvegardés")
-        
-        # Créer le service
-        self.service = build('gmail', 'v1', credentials=creds)
-        self.authenticated = True
-        logger.info("✅ Service Gmail authentifié avec succès")
-    
-    def get_recent_emails(self, max_results: int = 50) -> List[Email]:
-        """
-        Récupère les emails récents.
-        
-        Args:
-            max_results: Nombre maximum d'emails
-            
-        Returns:
-            List[Email]: Liste des emails
-        """
+        """Authentifie avec Gmail API."""
         try:
-            if not self.authenticated:
-                logger.error("Service Gmail non authentifié")
-                return []
+            creds = None
+            
+            if os.path.exists('token.json'):
+                creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+            
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                else:
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        self.credentials_file, SCOPES
+                    )
+                    creds = flow.run_local_server(port=0)
+                
+                with open('token.json', 'w') as token:
+                    token.write(creds.to_json())
+            
+            self.service = build('gmail', 'v1', credentials=creds)
+            self.authenticated = True
+            logger.info("Authentification Gmail réussie")
+            
+        except Exception as e:
+            logger.error(f"Erreur authentification Gmail: {e}")
+            self.authenticated = False
+    
+    def get_inbox_emails(self, max_results: int = 50) -> List[Email]:
+        """Récupère les emails de la boîte de réception."""
+        try:
+            logger.info(f"Récupération de {max_results} emails de la boîte de réception")
             
             results = self.service.users().messages().list(
                 userId='me',
-                maxResults=max_results,
-                labelIds=['INBOX']
+                labelIds=['INBOX'],
+                maxResults=max_results
             ).execute()
             
             messages = results.get('messages', [])
-            
-            if not messages:
-                logger.info("Aucun email trouvé")
-                return []
-            
-            logger.info(f"Récupération de {len(messages)} emails...")
-            
             emails = []
+            
             for msg in messages:
-                email = self.get_email_by_id(msg['id'])
+                email = self._get_email_by_id(msg['id'])
                 if email:
                     emails.append(email)
             
+            logger.info(f"{len(emails)} emails récupérés de INBOX")
             return emails
             
         except Exception as e:
-            logger.error(f"Erreur récupération emails: {e}")
+            logger.error(f"Erreur récupération inbox: {e}")
             return []
     
-    def get_email_by_id(self, email_id: str) -> Optional[Email]:
-        """
-        Récupère un email par son ID.
-        
-        Args:
-            email_id: ID de l'email
+    def get_sent_emails(self, max_results: int = 50) -> List[Email]:
+        """Récupère les emails envoyés."""
+        try:
+            results = self.service.users().messages().list(
+                userId='me',
+                labelIds=['SENT'],
+                maxResults=max_results
+            ).execute()
             
-        Returns:
-            Email ou None
-        """
+            messages = results.get('messages', [])
+            emails = []
+            
+            for msg in messages:
+                email = self._get_email_by_id(msg['id'])
+                if email:
+                    emails.append(email)
+            
+            logger.info(f"{len(emails)} emails envoyés récupérés")
+            return emails
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération emails envoyés: {e}")
+            return []
+    
+    def get_archived_emails(self, max_results: int = 50) -> List[Email]:
+        """Récupère les emails archivés."""
+        try:
+            # Les emails archivés n'ont pas le label INBOX mais ne sont pas dans TRASH
+            results = self.service.users().messages().list(
+                userId='me',
+                q='-in:inbox -in:trash -in:spam',
+                maxResults=max_results
+            ).execute()
+            
+            messages = results.get('messages', [])
+            emails = []
+            
+            for msg in messages:
+                email = self._get_email_by_id(msg['id'])
+                if email:
+                    emails.append(email)
+            
+            logger.info(f"{len(emails)} emails archivés récupérés")
+            return emails
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération archives: {e}")
+            return []
+    
+    def get_draft_emails(self, max_results: int = 50) -> List[Email]:
+        """Récupère les brouillons."""
+        try:
+            results = self.service.users().drafts().list(
+                userId='me',
+                maxResults=max_results
+            ).execute()
+            
+            drafts = results.get('drafts', [])
+            emails = []
+            
+            for draft in drafts:
+                msg = draft.get('message', {})
+                email = self._get_email_by_id(msg['id'])
+                if email:
+                    emails.append(email)
+            
+            logger.info(f"{len(emails)} brouillons récupérés")
+            return emails
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération brouillons: {e}")
+            return []
+    
+    def get_trash_emails(self, max_results: int = 50) -> List[Email]:
+        """Récupère les emails de la corbeille."""
+        try:
+            results = self.service.users().messages().list(
+                userId='me',
+                labelIds=['TRASH'],
+                maxResults=max_results
+            ).execute()
+            
+            messages = results.get('messages', [])
+            emails = []
+            
+            for msg in messages:
+                email = self._get_email_by_id(msg['id'])
+                if email:
+                    emails.append(email)
+            
+            logger.info(f"{len(emails)} emails de la corbeille récupérés")
+            return emails
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération corbeille: {e}")
+            return []
+    
+    def get_spam_emails(self, max_results: int = 50) -> List[Email]:
+        """Récupère les spams."""
+        try:
+            results = self.service.users().messages().list(
+                userId='me',
+                labelIds=['SPAM'],
+                maxResults=max_results
+            ).execute()
+            
+            messages = results.get('messages', [])
+            emails = []
+            
+            for msg in messages:
+                email = self._get_email_by_id(msg['id'])
+                if email:
+                    emails.append(email)
+            
+            logger.info(f"{len(emails)} spams récupérés")
+            return emails
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération spam: {e}")
+            return []
+    
+    def _get_email_by_id(self, email_id: str) -> Optional[Email]:
+        """Récupère un email par son ID."""
         try:
             message = self.service.users().messages().get(
                 userId='me',
@@ -140,65 +224,60 @@ class GmailClient:
                 format='full'
             ).execute()
             
-            return self._parse_email(message)
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération email {email_id}: {e}")
-            return None
-    
-    def _parse_email(self, message: Dict) -> Optional[Email]:
-        """Parse un message Gmail en objet Email."""
-        try:
             headers = message['payload'].get('headers', [])
             
-            # Extraire les headers
-            subject = self._get_header(headers, 'Subject') or '(Sans sujet)'
-            sender = self._get_header(headers, 'From') or 'unknown@unknown.com'
-            to = self._get_header(headers, 'To') or ''
-            date_str = self._get_header(headers, 'Date') or ''
+            # Extraction des informations
+            subject = self._get_header(headers, 'Subject')
+            sender = self._get_header(headers, 'From')
+            to = self._get_header(headers, 'To')
+            cc = self._get_header(headers, 'Cc')
+            date_str = self._get_header(headers, 'Date')
+            
+            # Snippet (aperçu court)
+            snippet = message.get('snippet', '')
             
             # Parser la date
-            try:
-                from email.utils import parsedate_to_datetime
-                received_date = parsedate_to_datetime(date_str)
-            except:
-                received_date = datetime.now()
+            received_date = None
+            if date_str:
+                try:
+                    from email.utils import parsedate_to_datetime
+                    received_date = parsedate_to_datetime(date_str)
+                except:
+                    received_date = datetime.now(timezone.utc)
             
             # Corps du message
             body, is_html = self._get_body(message['payload'])
             
-            # Snippet
-            snippet = message.get('snippet', '')
-            
-            # Labels (pour déterminer si lu)
-            label_ids = message.get('labelIds', [])
-            is_read = 'UNREAD' not in label_ids
-            
             # Pièces jointes
-            attachments = self._get_attachments(message['payload'], message['id'])
+            attachments = self._get_attachments(message['payload'], email_id)
+            
+            # Labels
+            labels = message.get('labelIds', [])
+            is_read = 'UNREAD' not in labels
             
             email = Email(
-                id=message['id'],
-                sender=sender,
-                to=to,
+                id=email_id,
                 subject=subject,
+                sender=sender,
+                to=[to] if to else [],
+                cc=[cc] if cc else [],
                 body=body,
-                snippet=snippet,
+                snippet=snippet,  # AJOUT DU SNIPPET
                 received_date=received_date,
                 is_read=is_read,
                 is_html=is_html,
                 attachments=attachments,
-                has_attachments=len(attachments) > 0
+                labels=labels
             )
             
             return email
             
         except Exception as e:
-            logger.error(f"Erreur parsing email: {e}")
+            logger.error(f"Erreur récupération email {email_id}: {e}")
             return None
     
     def _get_header(self, headers: List[Dict], name: str) -> Optional[str]:
-        """Récupère un header spécifique."""
+        """Extrait une en-tête."""
         for header in headers:
             if header['name'].lower() == name.lower():
                 return header['value']
@@ -252,74 +331,10 @@ class GmailClient:
         
         return attachments
     
-    def get_archived_emails(self, max_results: int = 50) -> List[Email]:
-        """Récupère les emails archivés."""
-        try:
-            if not self.authenticated:
-                return []
-            
-            results = self.service.users().messages().list(
-                userId='me',
-                maxResults=max_results,
-                q='-in:inbox -in:trash -in:spam'
-            ).execute()
-            
-            messages = results.get('messages', [])
-            emails = []
-            
-            for msg in messages:
-                email = self.get_email_by_id(msg['id'])
-                if email:
-                    emails.append(email)
-            
-            return emails
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération archives: {e}")
-            return []
-    
-    def get_trashed_emails(self, max_results: int = 50) -> List[Email]:
-        """Récupère les emails supprimés."""
-        try:
-            if not self.authenticated:
-                return []
-            
-            results = self.service.users().messages().list(
-                userId='me',
-                maxResults=max_results,
-                labelIds=['TRASH']
-            ).execute()
-            
-            messages = results.get('messages', [])
-            emails = []
-            
-            for msg in messages:
-                email = self.get_email_by_id(msg['id'])
-                if email:
-                    emails.append(email)
-            
-            return emails
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération corbeille: {e}")
-            return []
-    
-    def send_email(self, to: List[str], subject: str, body: str,
-                   cc: Optional[List[str]] = None,
+    def send_email(self, to: List[str], subject: str, body: str, 
+                   cc: Optional[List[str]] = None, 
                    attachments: Optional[List[str]] = None) -> bool:
-        """
-        Envoie un email.
-        
-        Args:
-            to: Liste des destinataires
-            subject: Sujet
-            body: Corps du message
-            cc: Liste des destinataires en CC
-            attachments: Liste des chemins de fichiers à attacher
-            
-        Returns:
-            True si envoyé avec succès
-        """
+        """Envoie un email."""
         try:
             message = MIMEMultipart()
             message['To'] = ', '.join(to)
@@ -358,7 +373,7 @@ class GmailClient:
         encoders.encode_base64(part)
         part.add_header(
             'Content-Disposition',
-            f'attachment; filename= {os.path.basename(filepath)}'
+            f'attachment; filename={os.path.basename(filepath)}'
         )
         message.attach(part)
     
@@ -375,6 +390,19 @@ class GmailClient:
             logger.error(f"Erreur marquage lu: {e}")
             return False
     
+    def mark_as_unread(self, email_id: str) -> bool:
+        """Marque un email comme non lu."""
+        try:
+            self.service.users().messages().modify(
+                userId='me',
+                id=email_id,
+                body={'addLabelIds': ['UNREAD']}
+            ).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Erreur marquage non lu: {e}")
+            return False
+    
     def archive_email(self, email_id: str) -> bool:
         """Archive un email."""
         try:
@@ -383,6 +411,7 @@ class GmailClient:
                 id=email_id,
                 body={'removeLabelIds': ['INBOX']}
             ).execute()
+            logger.info(f"Email {email_id} archivé")
             return True
         except Exception as e:
             logger.error(f"Erreur archivage: {e}")
@@ -395,33 +424,32 @@ class GmailClient:
                 userId='me',
                 id=email_id
             ).execute()
+            logger.info(f"Email {email_id} supprimé")
             return True
         except Exception as e:
             logger.error(f"Erreur suppression: {e}")
             return False
-    def get_sent_emails(self, max_results: int = 50) -> List[Email]:
-        """Récupère les emails envoyés."""
+    
+    def search_emails(self, query: str, max_results: int = 50) -> List[Email]:
+        """Recherche des emails."""
         try:
-            if not self.authenticated:
-                return []
-        
             results = self.service.users().messages().list(
                 userId='me',
-                maxResults=max_results,
-                labelIds=['SENT']
+                q=query,
+                maxResults=max_results
             ).execute()
-        
+            
             messages = results.get('messages', [])
             emails = []
-        
+            
             for msg in messages:
-                email = self.get_email_by_id(msg['id'])
+                email = self._get_email_by_id(msg['id'])
                 if email:
                     emails.append(email)
-        
-            logger.info(f"{len(emails)} emails envoyés récupérés")
+            
+            logger.info(f"{len(emails)} emails trouvés pour: {query}")
             return emails
-        
+            
         except Exception as e:
-            logger.error(f"Erreur récupération emails envoyés: {e}")
+            logger.error(f"Erreur recherche: {e}")
             return []

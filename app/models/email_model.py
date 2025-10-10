@@ -3,47 +3,52 @@
 Modèles de données pour les emails - CORRIGÉ
 """
 from dataclasses import dataclass, field
-from typing import List, Optional, Any
+from typing import List, Optional
 from datetime import datetime
-
 
 @dataclass
 class EmailAttachment:
-    """Représente une pièce jointe."""
+    """Pièce jointe d'un email."""
     id: str
     filename: str
     mime_type: str
     size: int
     message_id: str
-    data: Optional[bytes] = None
 
+@dataclass
+class AIAnalysis:
+    """Résultat d'analyse IA d'un email."""
+    category: str
+    priority: int  # 1-5
+    sentiment: str
+    summary: str
+    is_spam: bool
+    confidence: float
 
 @dataclass
 class Email:
-    """Représente un email - CORRIGÉ."""
+    """Modèle d'email."""
     id: str
-    sender: str
-    subject: str
-    body: str
-    snippet: str
-    received_date: datetime
+    subject: Optional[str] = None
+    sender: Optional[str] = None
+    to: List[str] = field(default_factory=list)
+    cc: List[str] = field(default_factory=list)
+    bcc: List[str] = field(default_factory=list)
+    body: Optional[str] = None
+    snippet: Optional[str] = None  # AJOUT du snippet
+    received_date: Optional[datetime] = None
     is_read: bool = False
     is_html: bool = False
-    to: str = ""  # AJOUTÉ
-    cc: Optional[List[str]] = None
     attachments: List[EmailAttachment] = field(default_factory=list)
-    has_attachments: bool = False
     labels: List[str] = field(default_factory=list)
-    ai_analysis: Optional[Any] = None
+    ai_analysis: Optional[AIAnalysis] = None
     
-    def get_sender_name(self) -> str:
-        """Extrait le nom de l'expéditeur."""
-        if '<' in self.sender:
-            return self.sender.split('<')[0].strip().strip('"')
-        return self.sender.split('@')[0]
-    
-    def get_sender_email(self) -> str:
-        """Extrait l'email de l'expéditeur."""
-        if '<' in self.sender:
-            return self.sender.split('<')[1].split('>')[0]
-        return self.sender
+    def __post_init__(self):
+        """Initialisation post-création."""
+        # S'assurer que to, cc, bcc sont des listes
+        if not isinstance(self.to, list):
+            self.to = [self.to] if self.to else []
+        if not isinstance(self.cc, list):
+            self.cc = [self.cc] if self.cc else []
+        if not isinstance(self.bcc, list):
+            self.bcc = [self.bcc] if self.bcc else []

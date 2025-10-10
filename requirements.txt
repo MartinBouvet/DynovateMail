@@ -1,40 +1,23 @@
-# Interface utilisateur
-PyQt6>=6.4.0
-PyQt6-Qt6>=6.4.0
-PyQt6-WebEngine>=6.4.0
+# Interface graphique
+PyQt6==6.6.1
+PyQt6-Qt6==6.6.1
+PyQt6-sip==13.6.0
 
-# Gmail API - OBLIGATOIRE pour les vrais emails
-google-api-python-client>=2.50.0
-google-auth-httplib2>=0.1.0
-google-auth-oauthlib>=0.5.0
-google-auth>=2.0.0
+# Gmail API
+google-auth==2.26.2
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.113.0
 
-# Intelligence artificielle
-torch>=1.13.0
-transformers>=4.20.0
-spacy>=3.4.0
-scikit-learn>=1.1.0
-
-# Traitement du langage naturel
-nltk>=3.7
-textblob>=0.17.1
+# NLP et IA
+spacy==3.7.2
+transformers==4.36.2
+torch==2.1.2
+sentencepiece==0.1.99
 
 # Utilitaires
-python-dateutil>=2.8.0
-beautifulsoup4>=4.11.0
-lxml>=4.9.0
-pillow>=9.0.0
-requests>=2.28.0
-
-# Base de données et stockage
-sqlalchemy>=1.4.0
-
-# Développement et tests
-pytest>=7.0.0
-pytest-cov>=3.0.0
-black>=22.0.0
-flake8>=4.0.0
-
-# Configuration et logging
-python-dotenv>=0.19.0
-pyyaml>=6.0
+python-dateutil==2.8.2
+pytz==2023.3
+beautifulsoup4==4.12.3
+lxml==5.1.0
+PyQt6-WebEngine==6.6.0

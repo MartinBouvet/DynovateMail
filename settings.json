@@ -1,0 +1,33 @@
+{
+    "user": {
+        "name": "Martin bouvet",
+        "email": "martinbouvet11@gmail.com",
+        "signature": "Cordialement,\n\nDynovate, Martin Bouvet"
+    },
+    "ai": {
+        "enabled": true,
+        "classification": true,
+        "spam_detection": true,
+        "sentiment": true,
+        "meeting_extraction": true,
+        "confidence": 80
+    },
+    "auto_response": {
+        "enabled": false,
+        "delay_minutes": 5,
+        "respond_to_cv": true,
+        "respond_to_meeting": true,
+        "respond_to_support": true,
+        "avoid_loops": true
+    },
+    "notifications": {
+        "desktop": true,
+        "sound": true,
+        "important_only": false
+    },
+    "appearance": {
+        "theme": "Clair",
+        "font_size": 12,
+        "compact": false
+    }
+}
