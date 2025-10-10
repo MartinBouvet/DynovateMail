@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Sidebar avec dossiers et catégories - CORRIGÉE
+Sidebar des dossiers d'emails - ICÔNES CORRIGÉES
 """
 import logging
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QFrame
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QFrame, QLabel
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 
 class EmailFoldersSidebar(QWidget):
-    """Sidebar avec dossiers et catégories."""
+    """Sidebar avec les dossiers d'emails."""
     
     folder_changed = pyqtSignal(str)
     
@@ -20,127 +20,147 @@ class EmailFoldersSidebar(QWidget):
         self._setup_ui()
     
     def _setup_ui(self):
-        """Crée la sidebar."""
-        self.setObjectName("folders-sidebar")
-        
+        """Crée l'interface."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 10, 0, 10)
-        layout.setSpacing(2)
+        layout.setContentsMargins(10, 20, 10, 10)
+        layout.setSpacing(5)
         
-        # Titre Dossiers
-        title = QLabel("DOSSIERS")
-        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        title.setContentsMargins(15, 10, 15, 10)
-        title.setStyleSheet("color: #5b21b6;")
+        # Titre
+        title = QLabel("📧 Dossiers")
+        title.setFont(QFont("SF Pro Display", 16, QFont.Bold))
+        title.setStyleSheet("color: #5b21b6; margin-bottom: 10px;")
         layout.addWidget(title)
+        
+        # Séparateur
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet("background-color: #e0e0e0;")
+        layout.addWidget(separator)
         
         # Dossiers principaux
         folders = [
-            ("INBOX", "📥 Boîte de réception"),
-            ("SENT", "📤 Envoyés"),
-            ("DRAFTS", "📝 Brouillons"),
-            ("ARCHIVED", "📦 Archives"),
-            ("TRASH", "🗑️ Corbeille"),
-            ("SPAM", "⚠️ Spam")
+            ("📥 Réception", "INBOX"),
+            ("⭐ Favoris", "STARRED"),
+            ("📤 Envoyés", "SENT"),
+            ("📝 Brouillons", "DRAFTS"),
+            ("🗑 Corbeille", "TRASH"),
+            ("🚫 Spam", "SPAM"),
         ]
         
         self.folder_buttons = {}
         
-        for folder_id, folder_name in folders:
-            btn = QPushButton(folder_name)
-            btn.setObjectName(f"folder-{folder_id}")
-            btn.setFixedHeight(45)
-            btn.setFont(QFont("Segoe UI", 12))
-            btn.clicked.connect(lambda checked, f=folder_id: self._on_folder_clicked(f))
+        for label, folder_id in folders:
+            btn = self._create_folder_button(label, folder_id)
             layout.addWidget(btn)
             self.folder_buttons[folder_id] = btn
         
+        # Espace
         layout.addStretch()
         
-        # Séparateur
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setStyleSheet("background-color: #5b21b6; max-height: 2px;")
-        layout.addWidget(separator)
+        # Séparateur avant boutons du bas
+        separator2 = QFrame()
+        separator2.setFrameShape(QFrame.HLine)
+        separator2.setStyleSheet("background-color: #e0e0e0;")
+        layout.addWidget(separator2)
         
-        # Section TRI (au lieu de Catégories IA)
-        tri_label = QLabel("TRI PAR CATÉGORIE")
-        tri_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        tri_label.setContentsMargins(15, 10, 15, 10)
-        tri_label.setStyleSheet("color: #5b21b6;")
-        layout.addWidget(tri_label)
-        
-        # Boutons de tri par catégorie
-        categories = [
-            ("cv", "📄 CV"),
-            ("meeting", "📅 Rendez-vous"),
-            ("invoice", "💰 Factures"),
-            ("newsletter", "📰 Newsletters"),
-            ("support", "🛠️ Support"),
-            ("spam", "⚠️ Spam")
-        ]
-        
-        for cat_id, cat_name in categories:
-            btn = QPushButton(cat_name)
-            btn.setFixedHeight(40)
-            btn.setFont(QFont("Segoe UI", 11))
-            btn.clicked.connect(lambda checked, c=cat_id: self._on_category_clicked(c))
-            layout.addWidget(btn)
-        
-        self._apply_styles()
-        self._update_active_folder("INBOX")
-    
-    def _on_folder_clicked(self, folder_id: str):
-        """Dossier cliqué."""
-        if folder_id != self.current_folder:
-            self.current_folder = folder_id
-            self._update_active_folder(folder_id)
-            self.folder_changed.emit(folder_id)
-            logger.info(f"Dossier sélectionné: {folder_id}")
-    
-    def _on_category_clicked(self, category: str):
-        """Catégorie cliquée."""
-        self.folder_changed.emit(f"CATEGORY:{category}")
-        logger.info(f"Tri par catégorie: {category}")
-    
-    def _update_active_folder(self, folder_id: str):
-        """Met à jour l'apparence du dossier actif."""
-        for fid, btn in self.folder_buttons.items():
-            if fid == folder_id:
-                btn.setStyleSheet("""
-                    background-color: #5b21b6; 
-                    color: #ffffff;
-                    border-left: 4px solid #000000; 
-                    font-weight: bold;
-                """)
-            else:
-                btn.setStyleSheet("")
-    
-    def _apply_styles(self):
-        """Applique les styles Dynovate."""
-        self.setStyleSheet("""
-            #folders-sidebar {
-                background-color: #f5f5f5;
-                border-right: 2px solid #5b21b6;
-            }
-            
+        # Boutons du bas avec icônes Unicode simples
+        settings_btn = QPushButton("⚙ Paramètres")
+        settings_btn.setFont(QFont("SF Pro Display", 12))
+        settings_btn.setFixedHeight(40)
+        settings_btn.setStyleSheet("""
             QPushButton {
                 text-align: left;
                 padding-left: 15px;
                 border: none;
-                border-radius: 0px;
+                border-radius: 8px;
                 background-color: transparent;
-                color: #000000;
-                font-size: 12px;
+                color: #333333;
             }
-            
             QPushButton:hover {
-                background-color: #e0e0e0;
-                border-left: 4px solid #5b21b6;
-            }
-            
-            QPushButton:pressed {
-                background-color: #5b21b6;
-                color: #ffffff;
+                background-color: #f3f4f6;
             }
         """)
+        settings_btn.clicked.connect(lambda: self._on_folder_click("SETTINGS"))
+        layout.addWidget(settings_btn)
+        
+        support_btn = QPushButton("❓ Support")
+        support_btn.setFont(QFont("SF Pro Display", 12))
+        support_btn.setFixedHeight(40)
+        support_btn.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding-left: 15px;
+                border: none;
+                border-radius: 8px;
+                background-color: transparent;
+                color: #333333;
+            }
+            QPushButton:hover {
+                background-color: #f3f4f6;
+            }
+        """)
+        support_btn.clicked.connect(lambda: self._on_folder_click("SUPPORT"))
+        layout.addWidget(support_btn)
+        
+        # Sélectionner INBOX par défaut
+        self._update_selection("INBOX")
+    
+    def _create_folder_button(self, label: str, folder_id: str) -> QPushButton:
+        """Crée un bouton de dossier."""
+        btn = QPushButton(label)
+        btn.setFont(QFont("SF Pro Display", 12))
+        btn.setFixedHeight(45)
+        btn.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding-left: 15px;
+                border: none;
+                border-radius: 8px;
+                background-color: transparent;
+                color: #333333;
+            }
+            QPushButton:hover {
+                background-color: #f3f4f6;
+            }
+        """)
+        
+        btn.clicked.connect(lambda: self._on_folder_click(folder_id))
+        
+        return btn
+    
+    def _on_folder_click(self, folder_id: str):
+        """Gère le clic sur un dossier."""
+        logger.info(f"Dossier sélectionné: {folder_id}")
+        self.current_folder = folder_id
+        self._update_selection(folder_id)
+        self.folder_changed.emit(folder_id)
+    
+    def _update_selection(self, folder_id: str):
+        """Met à jour la sélection visuelle."""
+        for fid, btn in self.folder_buttons.items():
+            if fid == folder_id:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding-left: 15px;
+                        border: none;
+                        border-radius: 8px;
+                        background-color: #5b21b6;
+                        color: white;
+                        font-weight: bold;
+                    }
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding-left: 15px;
+                        border: none;
+                        border-radius: 8px;
+                        background-color: transparent;
+                        color: #333333;
+                    }
+                    QPushButton:hover {
+                        background-color: #f3f4f6;
+                    }
+                """)

@@ -3,9 +3,9 @@
 Barre d'outils supérieure - AVEC LOGO
 """
 import logging
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel, QLineEdit
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel, QLineEdit
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont, QPixmap
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +36,11 @@ class TopToolbar(QWidget):
         
         # Logo (si vous avez un fichier logo.png)
         logo_label = QLabel("📧")  # Remplacer par une image si disponible
-        logo_label.setFont(QFont("Segoe UI", 24))
+        logo_label.setFont(QFont("SF Pro Display", 24))
         logo_layout.addWidget(logo_label)
         
         title = QLabel("Dynovate Mail")
-        title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        title.setFont(QFont("SF Pro Display", 18, QFont.Bold))
         title.setStyleSheet("color: #5b21b6;")
         logo_layout.addWidget(title)
         layout.addLayout(logo_layout)
@@ -52,7 +52,7 @@ class TopToolbar(QWidget):
         compose_btn.clicked.connect(self.compose_requested.emit)
         compose_btn.setFixedHeight(45)
         compose_btn.setMinimumWidth(180)
-        compose_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        compose_btn.setFont(QFont("SF Pro Display", 14, QFont.Bold))
         layout.addWidget(compose_btn)
         
         layout.addStretch()
@@ -62,7 +62,7 @@ class TopToolbar(QWidget):
         self.search_input.setPlaceholderText("🔍 Rechercher dans les emails...")
         self.search_input.setFixedWidth(350)
         self.search_input.setFixedHeight(45)
-        self.search_input.setFont(QFont("Segoe UI", 13))
+        self.search_input.setFont(QFont("SF Pro Display", 13))
         self.search_input.returnPressed.connect(self._on_search)
         layout.addWidget(self.search_input)
         
@@ -73,21 +73,21 @@ class TopToolbar(QWidget):
         inbox_btn.clicked.connect(lambda: self.view_requested.emit("inbox"))
         inbox_btn.setFixedHeight(45)
         inbox_btn.setMinimumWidth(120)
-        inbox_btn.setFont(QFont("Segoe UI", 13))
+        inbox_btn.setFont(QFont("SF Pro Display", 13))
         layout.addWidget(inbox_btn)
         
         calendar_btn = QPushButton("📅 Calendrier")
         calendar_btn.clicked.connect(lambda: self.view_requested.emit("calendar"))
         calendar_btn.setFixedHeight(45)
         calendar_btn.setMinimumWidth(130)
-        calendar_btn.setFont(QFont("Segoe UI", 13))
+        calendar_btn.setFont(QFont("SF Pro Display", 13))
         layout.addWidget(calendar_btn)
         
         ai_btn = QPushButton("🤖 Assistant IA")
         ai_btn.clicked.connect(lambda: self.view_requested.emit("ai"))
         ai_btn.setFixedHeight(45)
         ai_btn.setMinimumWidth(140)
-        ai_btn.setFont(QFont("Segoe UI", 13))
+        ai_btn.setFont(QFont("SF Pro Display", 13))
         layout.addWidget(ai_btn)
         
         # Bouton paramètres AGRANDI
@@ -95,7 +95,7 @@ class TopToolbar(QWidget):
         settings_btn.clicked.connect(lambda: self.view_requested.emit("settings"))
         settings_btn.setFixedHeight(45)
         settings_btn.setMinimumWidth(130)
-        settings_btn.setFont(QFont("Segoe UI", 13))
+        settings_btn.setFont(QFont("SF Pro Display", 13))
         layout.addWidget(settings_btn)
         
         self._apply_styles()

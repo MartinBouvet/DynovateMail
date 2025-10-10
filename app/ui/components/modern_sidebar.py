@@ -4,12 +4,12 @@ Sidebar moderne CORRIGÉE avec alignement parfait des statistiques.
 """
 import logging
 from typing import Dict, List
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QFrame, QSpacerItem, QSizePolicy
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QIcon
+from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QFont, QIcon
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class StatCard(QFrame):
         icon_label = QLabel(icon)
         icon_label.setFont(QFont("Arial", 16))
         icon_label.setFixedSize(24, 24)  # Taille fixe pour alignement
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(icon_label)
         
         # Colonne droite: Titre et valeur
@@ -48,7 +48,7 @@ class StatCard(QFrame):
         # Valeur
         self.value_label = QLabel(value)
         self.value_label.setObjectName("stat-value")
-        self.value_label.setFont(QFont("Inter", 18, QFont.Weight.Bold))
+        self.value_label.setFont(QFont("Inter", 18, QFont.Bold))
         text_layout.addWidget(self.value_label)
         
         main_layout.addWidget(text_container)
@@ -109,7 +109,7 @@ class NavButton(QPushButton):
         self.icon_label = QLabel(icon)
         self.icon_label.setFont(QFont("Arial", 16))
         self.icon_label.setFixedSize(20, 20)
-        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.icon_label)
         
         # Texte
@@ -219,22 +219,22 @@ class ModernSidebar(QWidget):
         # Logo
         logo = QLabel("⚡")
         logo.setFont(QFont("Arial", 32))
-        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setAlignment(Qt.AlignCenter)
         logo.setStyleSheet("color: #1976d2;")
         layout.addWidget(logo)
         
         # Titre
         title = QLabel("Dynovate")
         title.setObjectName("app-title")
-        title.setFont(QFont("Inter", 18, QFont.Weight.Bold))
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setFont(QFont("Inter", 18, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
         # Sous-titre
         subtitle = QLabel("Mail Assistant IA")
         subtitle.setObjectName("app-subtitle")
         subtitle.setFont(QFont("Inter", 12, QFont.Weight.Normal))
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setAlignment(Qt.AlignCenter)
         layout.addWidget(subtitle)
         
         return header
@@ -250,7 +250,7 @@ class ModernSidebar(QWidget):
         # Titre de section
         section_title = QLabel("Navigation")
         section_title.setObjectName("section-title")
-        section_title.setFont(QFont("Inter", 13, QFont.Weight.Bold))
+        section_title.setFont(QFont("Inter", 13, QFont.Bold))
         section_title.setContentsMargins(5, 0, 0, 0)
         layout.addWidget(section_title)
         
@@ -286,7 +286,7 @@ class ModernSidebar(QWidget):
         # Titre de section
         section_title = QLabel("Statistiques")
         section_title.setObjectName("section-title")
-        section_title.setFont(QFont("Inter", 13, QFont.Weight.Bold))
+        section_title.setFont(QFont("Inter", 13, QFont.Bold))
         section_title.setContentsMargins(5, 0, 0, 0)
         layout.addWidget(section_title)
         
@@ -317,21 +317,21 @@ class ModernSidebar(QWidget):
         # Avatar
         avatar = QLabel("👤")
         avatar.setFont(QFont("Arial", 24))
-        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setAlignment(Qt.AlignCenter)
         layout.addWidget(avatar)
         
         # Nom utilisateur
         username = QLabel("Utilisateur")
         username.setObjectName("username")
         username.setFont(QFont("Inter", 13, QFont.Weight.Medium))
-        username.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        username.setAlignment(Qt.AlignCenter)
         layout.addWidget(username)
         
         # Status
         status = QLabel("🟢 En ligne")
         status.setObjectName("user-status")
         status.setFont(QFont("Inter", 11))
-        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status.setAlignment(Qt.AlignCenter)
         layout.addWidget(status)
         
         return user_frame

@@ -1,23 +1,19 @@
 # Interface graphique
 PyQt6==6.6.1
-PyQt6-Qt6==6.6.1
-PyQt6-sip==13.6.0
 
 # Gmail API
-google-auth==2.26.2
-google-auth-oauthlib==1.2.0
+google-api-python-client==2.108.0
 google-auth-httplib2==0.2.0
-google-api-python-client==2.113.0
+google-auth-oauthlib==1.2.0
 
-# NLP et IA
+# IA et NLP - VERSION PRÉ-COMPILÉE
 spacy==3.7.2
-transformers==4.36.2
-torch==2.1.2
-sentencepiece==0.1.99
 
 # Utilitaires
 python-dateutil==2.8.2
-pytz==2023.3
-beautifulsoup4==4.12.3
-lxml==5.1.0
-PyQt6-WebEngine==6.6.0
+pytz==2024.1
+requests==2.31.0
+psutil==5.9.8
+
+# Base de données
+sqlalchemy==2.0.23

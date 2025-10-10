@@ -3,13 +3,13 @@
 Vue de composition d'email - CORRIGÉE
 """
 import logging
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QLineEdit, QTextEdit, QFrame,
     QFileDialog, QMessageBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont
 import os
 
 from gmail_client import GmailClient
@@ -44,20 +44,20 @@ class ComposeView(QDialog):
         
         # En-tête
         header = QLabel("✉️ Nouveau message")
-        header.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        header.setFont(QFont("SF Pro Display", 20, QFont.Bold))
         header.setStyleSheet("color: #5b21b6;")
         layout.addWidget(header)
         
         # Destinataires
         to_layout = QHBoxLayout()
         to_label = QLabel("À:")
-        to_label.setFont(QFont("Segoe UI", 12))
+        to_label.setFont(QFont("SF Pro Display", 12))
         to_label.setFixedWidth(80)
         to_layout.addWidget(to_label)
         
         self.to_input = QLineEdit()
         self.to_input.setPlaceholderText("destinataire@example.com")
-        self.to_input.setFont(QFont("Segoe UI", 12))
+        self.to_input.setFont(QFont("SF Pro Display", 12))
         to_layout.addWidget(self.to_input)
         
         layout.addLayout(to_layout)
@@ -65,13 +65,13 @@ class ComposeView(QDialog):
         # CC
         cc_layout = QHBoxLayout()
         cc_label = QLabel("Cc:")
-        cc_label.setFont(QFont("Segoe UI", 12))
+        cc_label.setFont(QFont("SF Pro Display", 12))
         cc_label.setFixedWidth(80)
         cc_layout.addWidget(cc_label)
         
         self.cc_input = QLineEdit()
         self.cc_input.setPlaceholderText("(optionnel)")
-        self.cc_input.setFont(QFont("Segoe UI", 12))
+        self.cc_input.setFont(QFont("SF Pro Display", 12))
         cc_layout.addWidget(self.cc_input)
         
         layout.addLayout(cc_layout)
@@ -79,25 +79,25 @@ class ComposeView(QDialog):
         # Sujet
         subject_layout = QHBoxLayout()
         subject_label = QLabel("Sujet:")
-        subject_label.setFont(QFont("Segoe UI", 12))
+        subject_label.setFont(QFont("SF Pro Display", 12))
         subject_label.setFixedWidth(80)
         subject_layout.addWidget(subject_label)
         
         self.subject_input = QLineEdit()
         self.subject_input.setPlaceholderText("Sujet de l'email")
-        self.subject_input.setFont(QFont("Segoe UI", 12))
+        self.subject_input.setFont(QFont("SF Pro Display", 12))
         subject_layout.addWidget(self.subject_input)
         
         layout.addLayout(subject_layout)
         
         # Corps
         body_label = QLabel("Message:")
-        body_label.setFont(QFont("Segoe UI", 12))
+        body_label.setFont(QFont("SF Pro Display", 12))
         layout.addWidget(body_label)
         
         self.body_input = QTextEdit()
         self.body_input.setPlaceholderText("Écrivez votre message ici...")
-        self.body_input.setFont(QFont("Segoe UI", 12))
+        self.body_input.setFont(QFont("SF Pro Display", 12))
         layout.addWidget(self.body_input)
         
         # Section pièces jointes
@@ -106,7 +106,7 @@ class ComposeView(QDialog):
         attachments_layout = QVBoxLayout(self.attachments_section)
         
         attachments_title = QLabel("📎 Pièces jointes:")
-        attachments_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        attachments_title.setFont(QFont("SF Pro Display", 11, QFont.Bold))
         attachments_layout.addWidget(attachments_title)
         
         self.attachments_layout = QVBoxLayout()
@@ -120,20 +120,20 @@ class ComposeView(QDialog):
         
         send_btn = QPushButton("📤 Envoyer")
         send_btn.setObjectName("send-btn")
-        send_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        send_btn.setFont(QFont("SF Pro Display", 13, QFont.Bold))
         send_btn.setFixedHeight(45)
         send_btn.setMinimumWidth(120)
         send_btn.clicked.connect(self._send_email)
         actions_layout.addWidget(send_btn)
         
         attach_btn = QPushButton("📎 Joindre fichier")
-        attach_btn.setFont(QFont("Segoe UI", 12))
+        attach_btn.setFont(QFont("SF Pro Display", 12))
         attach_btn.setFixedHeight(45)
         attach_btn.clicked.connect(self._add_attachment)
         actions_layout.addWidget(attach_btn)
         
         ai_btn = QPushButton("🤖 Générer avec IA")
-        ai_btn.setFont(QFont("Segoe UI", 12))
+        ai_btn.setFont(QFont("SF Pro Display", 12))
         ai_btn.setFixedHeight(45)
         ai_btn.clicked.connect(self._generate_ai_response)
         actions_layout.addWidget(ai_btn)
@@ -141,7 +141,7 @@ class ComposeView(QDialog):
         actions_layout.addStretch()
         
         cancel_btn = QPushButton("❌ Annuler")
-        cancel_btn.setFont(QFont("Segoe UI", 12))
+        cancel_btn.setFont(QFont("SF Pro Display", 12))
         cancel_btn.setFixedHeight(45)
         cancel_btn.clicked.connect(self.close)
         actions_layout.addWidget(cancel_btn)
@@ -192,7 +192,7 @@ class ComposeView(QDialog):
         file_size = os.path.getsize(file_path) / 1024  # KB
         
         label = QLabel(f"📄 {filename} ({file_size:.1f} KB)")
-        label.setFont(QFont("Segoe UI", 11))
+        label.setFont(QFont("SF Pro Display", 11))
         label.setStyleSheet("color: #000000;")
         item_layout.addWidget(label)
         

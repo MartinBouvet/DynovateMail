@@ -5,12 +5,12 @@ Panel de suggestions IA avec réponses automatiques.
 import logging
 from typing import Optional
 from datetime import datetime
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QFrame, QCheckBox, QSlider, QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QFont, QColor
 
 from models.email_model import Email
 
@@ -26,7 +26,7 @@ class ConfidenceBar(QWidget):
         self.setMinimumWidth(200)
     
     def paintEvent(self, event):
-        from PyQt6.QtGui import QPainter, QBrush
+        from PyQt5.QtGui import QPainter, QBrush
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
@@ -60,8 +60,8 @@ class AISuggestionPanel(QWidget):
         
         self.setObjectName("ai-suggestion-panel")
         self.setFixedSize(450, 600)
-        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         
         self._setup_ui()
         self._apply_style()
@@ -116,7 +116,7 @@ class AISuggestionPanel(QWidget):
         
         title_label = QLabel("Assistant IA")
         title_label.setObjectName("panel-title")
-        title_label.setFont(QFont("Inter", 18, QFont.Weight.Bold))
+        title_label.setFont(QFont("Inter", 18, QFont.Bold))
         layout.addWidget(title_label)
         
         layout.addStretch()
@@ -140,7 +140,7 @@ class AISuggestionPanel(QWidget):
         # Titre
         title = QLabel("📊 Analyse IA")
         title.setObjectName("section-title")
-        title.setFont(QFont("Inter", 14, QFont.Weight.Bold))
+        title.setFont(QFont("Inter", 14, QFont.Bold))
         layout.addWidget(title)
         
         # Catégorie
@@ -159,14 +159,14 @@ class AISuggestionPanel(QWidget):
         confidence_layout.addWidget(self.confidence_bar)
         
         self.confidence_percent = QLabel("0%")
-        self.confidence_percent.setFont(QFont("Inter", 12, QFont.Weight.Bold))
+        self.confidence_percent.setFont(QFont("Inter", 12, QFont.Bold))
         confidence_layout.addWidget(self.confidence_percent)
         
         layout.addLayout(confidence_layout)
         
         # Raisonnement
         reasoning_title = QLabel("🧠 Raisonnement:")
-        reasoning_title.setFont(QFont("Inter", 12, QFont.Weight.Bold))
+        reasoning_title.setFont(QFont("Inter", 12, QFont.Bold))
         layout.addWidget(reasoning_title)
         
         self.reasoning_text = QLabel()
@@ -188,7 +188,7 @@ class AISuggestionPanel(QWidget):
         # Titre
         title = QLabel("✉️ Réponse suggérée")
         title.setObjectName("section-title")
-        title.setFont(QFont("Inter", 14, QFont.Weight.Bold))
+        title.setFont(QFont("Inter", 14, QFont.Bold))
         layout.addWidget(title)
         
         # Zone de texte éditable
@@ -212,7 +212,7 @@ class AISuggestionPanel(QWidget):
         delay_layout.addWidget(self.delay_slider)
         
         self.delay_value_label = QLabel("5 min")
-        self.delay_value_label.setFont(QFont("Inter", 11, QFont.Weight.Bold))
+        self.delay_value_label.setFont(QFont("Inter", 11, QFont.Bold))
         delay_layout.addWidget(self.delay_value_label)
         
         layout.addLayout(delay_layout)

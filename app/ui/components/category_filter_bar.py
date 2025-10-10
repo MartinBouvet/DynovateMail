@@ -3,9 +3,9 @@
 Barre de filtres par catégories - CORRIGÉE
 """
 import logging
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class CategoryFilterBar(QWidget):
             btn = QPushButton(cat_label)
             btn.setObjectName(f"category-{cat_id}")
             btn.setCheckable(True)
-            btn.setFont(QFont("Segoe UI", 12))
+            btn.setFont(QFont("SF Pro Display", 12))
             btn.setFixedHeight(38)
             btn.clicked.connect(lambda checked, c=cat_id: self._on_category_clicked(c))
             layout.addWidget(btn)

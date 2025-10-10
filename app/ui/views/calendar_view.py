@@ -6,14 +6,14 @@ Corrections: Affichage événements, navigation, création
 import logging
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta, date
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QCalendarWidget, QListWidget, QListWidgetItem, QFrame,
     QSplitter, QScrollArea, QDialog, QDialogButtonBox, QTextEdit,
     QLineEdit, QTimeEdit, QDateEdit, QComboBox, QGridLayout, QMessageBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QDate, QTime, QTimer, QDateTime
-from PyQt6.QtGui import QFont, QColor, QTextCharFormat
+from PyQt5.QtCore import Qt, pyqtSignal, QDate, QTime, QTimer, QDateTime
+from PyQt5.QtGui import QFont, QColor, QTextCharFormat
 
 from calendar_manager import CalendarManager
 from models.calendar_model import CalendarEvent
@@ -39,13 +39,13 @@ class ModernCalendarWidget(QCalendarWidget):
         self.event_format = QTextCharFormat()
         self.event_format.setBackground(QColor("#e7f3ff"))
         self.event_format.setForeground(QColor("#007bff"))
-        self.event_format.setFontWeight(QFont.Weight.Bold)
+        self.event_format.setFontWeight(QFont.Bold)
         
         # Format pour aujourd'hui
         self.today_format = QTextCharFormat()
         self.today_format.setBackground(QColor("#28a745"))
         self.today_format.setForeground(QColor("#ffffff"))
-        self.today_format.setFontWeight(QFont.Weight.Bold)
+        self.today_format.setFontWeight(QFont.Bold)
     
     def set_events(self, events: List[CalendarEvent]):
         """Définit les événements à afficher - CORRIGÉ."""
@@ -433,7 +433,7 @@ class CalendarView(QWidget):
         
         # Titre
         title = QLabel("📅 Calendrier")
-        title.setFont(QFont("Inter", 18, QFont.Weight.Bold))
+        title.setFont(QFont("Inter", 18, QFont.Bold))
         title.setStyleSheet("color: #000000;")
         layout.addWidget(title)
         
@@ -466,7 +466,7 @@ class CalendarView(QWidget):
         
         # Titre section
         section_title = QLabel("📆 Vue mensuelle")
-        section_title.setFont(QFont("Inter", 16, QFont.Weight.Bold))
+        section_title.setFont(QFont("Inter", 16, QFont.Bold))
         section_title.setStyleSheet("color: #000000;")
         layout.addWidget(section_title)
         
@@ -501,7 +501,7 @@ class CalendarView(QWidget):
         section_header.setSpacing(15)
         
         section_title = QLabel("📋 Événements")
-        section_title.setFont(QFont("Inter", 18, QFont.Weight.Bold))
+        section_title.setFont(QFont("Inter", 18, QFont.Bold))
         section_title.setStyleSheet("color: #000000;")
         section_header.addWidget(section_title)
         
@@ -525,19 +525,19 @@ class CalendarView(QWidget):
         # Zone de scroll pour les événements
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         
         # Container pour les cartes d'événements
         self.events_container = QWidget()
         self.events_layout = QVBoxLayout(self.events_container)
         self.events_layout.setSpacing(10)
         self.events_layout.setContentsMargins(5, 5, 5, 5)
-        self.events_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.events_layout.setAlignment(Qt.AlignTop)
         
         # Message par défaut
         self.no_events_label = QLabel("📅 Aucun événement")
-        self.no_events_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.no_events_label.setAlignment(Qt.AlignCenter)
         self.no_events_label.setFont(QFont("Inter", 16, QFont.Weight.Medium))
         self.no_events_label.setStyleSheet("""
             QLabel {
@@ -669,7 +669,7 @@ class CalendarView(QWidget):
         header_layout.setSpacing(10)
         
         title_label = QLabel(event.title or "Sans titre")
-        title_label.setFont(QFont("Inter", 14, QFont.Weight.Bold))
+        title_label.setFont(QFont("Inter", 14, QFont.Bold))
         title_label.setStyleSheet("color: #000000;")
         header_layout.addWidget(title_label)
         

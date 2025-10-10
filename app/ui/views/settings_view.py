@@ -5,14 +5,14 @@ Vue Paramètres - FONCTIONNELLE COMPLÈTE
 import logging
 import json
 import os
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QLineEdit, QTextEdit, QCheckBox,
     QSpinBox, QComboBox, QGroupBox, QScrollArea,
     QMessageBox, QFileDialog, QFrame
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class SettingsView(QScrollArea):
     def _setup_ui(self):
         """Crée l'interface."""
         self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -39,7 +39,7 @@ class SettingsView(QScrollArea):
         
         # Titre
         title = QLabel("⚙️ Paramètres")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        title.setFont(QFont("SF Pro Display", 24, QFont.Bold))
         title.setStyleSheet("color: #5b21b6;")
         layout.addWidget(title)
         
@@ -71,13 +71,13 @@ class SettingsView(QScrollArea):
         actions_layout = QHBoxLayout()
         
         save_btn = QPushButton("💾 Enregistrer les paramètres")
-        save_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        save_btn.setFont(QFont("SF Pro Display", 13, QFont.Bold))
         save_btn.setFixedHeight(50)
         save_btn.clicked.connect(self._save_settings)
         actions_layout.addWidget(save_btn)
         
         reset_btn = QPushButton("🔄 Réinitialiser")
-        reset_btn.setFont(QFont("Segoe UI", 13))
+        reset_btn.setFont(QFont("SF Pro Display", 13))
         reset_btn.setFixedHeight(50)
         reset_btn.clicked.connect(self._reset_settings)
         actions_layout.addWidget(reset_btn)
@@ -92,7 +92,7 @@ class SettingsView(QScrollArea):
     def _create_profile_section(self) -> QGroupBox:
         """Crée la section profil."""
         group = QGroupBox("👤 Profil utilisateur")
-        group.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        group.setFont(QFont("SF Pro Display", 14, QFont.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
@@ -100,14 +100,14 @@ class SettingsView(QScrollArea):
         # Nom
         name_layout = QHBoxLayout()
         name_label = QLabel("Nom complet:")
-        name_label.setFont(QFont("Segoe UI", 12))
+        name_label.setFont(QFont("SF Pro Display", 12))
         name_label.setFixedWidth(150)
         name_layout.addWidget(name_label)
         
         self.name_input = QLineEdit()
         self.name_input.setText(self.settings.get("user", {}).get("name", ""))
         self.name_input.setPlaceholderText("Votre nom")
-        self.name_input.setFont(QFont("Segoe UI", 12))
+        self.name_input.setFont(QFont("SF Pro Display", 12))
         name_layout.addWidget(self.name_input)
         
         layout.addLayout(name_layout)
@@ -115,27 +115,27 @@ class SettingsView(QScrollArea):
         # Email
         email_layout = QHBoxLayout()
         email_label = QLabel("Email:")
-        email_label.setFont(QFont("Segoe UI", 12))
+        email_label.setFont(QFont("SF Pro Display", 12))
         email_label.setFixedWidth(150)
         email_layout.addWidget(email_label)
         
         self.email_input = QLineEdit()
         self.email_input.setText(self.settings.get("user", {}).get("email", ""))
         self.email_input.setPlaceholderText("votre@email.com")
-        self.email_input.setFont(QFont("Segoe UI", 12))
+        self.email_input.setFont(QFont("SF Pro Display", 12))
         email_layout.addWidget(self.email_input)
         
         layout.addLayout(email_layout)
         
         # Signature
         signature_label = QLabel("Signature email:")
-        signature_label.setFont(QFont("Segoe UI", 12))
+        signature_label.setFont(QFont("SF Pro Display", 12))
         layout.addWidget(signature_label)
         
         self.signature_input = QTextEdit()
         self.signature_input.setText(self.settings.get("user", {}).get("signature", ""))
         self.signature_input.setPlaceholderText("Votre signature apparaîtra en bas de vos emails...")
-        self.signature_input.setFont(QFont("Segoe UI", 11))
+        self.signature_input.setFont(QFont("SF Pro Display", 11))
         self.signature_input.setFixedHeight(100)
         layout.addWidget(self.signature_input)
         
@@ -145,52 +145,52 @@ class SettingsView(QScrollArea):
     def _create_ai_section(self) -> QGroupBox:
         """Crée la section IA."""
         group = QGroupBox("🤖 Intelligence Artificielle")
-        group.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        group.setFont(QFont("SF Pro Display", 14, QFont.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
         # Activer l'IA
         self.ai_enabled = QCheckBox("Activer l'analyse IA des emails")
-        self.ai_enabled.setFont(QFont("Segoe UI", 12))
+        self.ai_enabled.setFont(QFont("SF Pro Display", 12))
         self.ai_enabled.setChecked(self.settings.get("ai", {}).get("enabled", True))
         layout.addWidget(self.ai_enabled)
         
         # Classification automatique
         self.ai_classification = QCheckBox("Classification automatique par catégorie")
-        self.ai_classification.setFont(QFont("Segoe UI", 12))
+        self.ai_classification.setFont(QFont("SF Pro Display", 12))
         self.ai_classification.setChecked(self.settings.get("ai", {}).get("classification", True))
         layout.addWidget(self.ai_classification)
         
         # Détection de spam
         self.ai_spam = QCheckBox("Détection intelligente de spam")
-        self.ai_spam.setFont(QFont("Segoe UI", 12))
+        self.ai_spam.setFont(QFont("SF Pro Display", 12))
         self.ai_spam.setChecked(self.settings.get("ai", {}).get("spam_detection", True))
         layout.addWidget(self.ai_spam)
         
         # Analyse de sentiment
         self.ai_sentiment = QCheckBox("Analyse du sentiment des messages")
-        self.ai_sentiment.setFont(QFont("Segoe UI", 12))
+        self.ai_sentiment.setFont(QFont("SF Pro Display", 12))
         self.ai_sentiment.setChecked(self.settings.get("ai", {}).get("sentiment", True))
         layout.addWidget(self.ai_sentiment)
         
         # Extraction de RDV
         self.ai_meetings = QCheckBox("Extraction automatique des rendez-vous")
-        self.ai_meetings.setFont(QFont("Segoe UI", 12))
+        self.ai_meetings.setFont(QFont("SF Pro Display", 12))
         self.ai_meetings.setChecked(self.settings.get("ai", {}).get("meeting_extraction", True))
         layout.addWidget(self.ai_meetings)
         
         # Niveau de confiance
         confidence_layout = QHBoxLayout()
         confidence_label = QLabel("Niveau de confiance minimum:")
-        confidence_label.setFont(QFont("Segoe UI", 12))
+        confidence_label.setFont(QFont("SF Pro Display", 12))
         confidence_layout.addWidget(confidence_label)
         
         self.ai_confidence = QSpinBox()
         self.ai_confidence.setRange(50, 100)
         self.ai_confidence.setValue(self.settings.get("ai", {}).get("confidence", 80))
         self.ai_confidence.setSuffix("%")
-        self.ai_confidence.setFont(QFont("Segoe UI", 12))
+        self.ai_confidence.setFont(QFont("SF Pro Display", 12))
         confidence_layout.addWidget(self.ai_confidence)
         
         confidence_layout.addStretch()
@@ -202,28 +202,28 @@ class SettingsView(QScrollArea):
     def _create_auto_response_section(self) -> QGroupBox:
         """Crée la section réponses automatiques."""
         group = QGroupBox("✍️ Réponses automatiques")
-        group.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        group.setFont(QFont("SF Pro Display", 14, QFont.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
         # Activer les réponses auto
         self.auto_enabled = QCheckBox("Activer les réponses automatiques")
-        self.auto_enabled.setFont(QFont("Segoe UI", 12))
+        self.auto_enabled.setFont(QFont("SF Pro Display", 12))
         self.auto_enabled.setChecked(self.settings.get("auto_response", {}).get("enabled", False))
         layout.addWidget(self.auto_enabled)
         
         # Délai avant envoi
         delay_layout = QHBoxLayout()
         delay_label = QLabel("Délai avant envoi:")
-        delay_label.setFont(QFont("Segoe UI", 12))
+        delay_label.setFont(QFont("SF Pro Display", 12))
         delay_layout.addWidget(delay_label)
         
         self.auto_delay = QSpinBox()
         self.auto_delay.setRange(0, 60)
         self.auto_delay.setValue(self.settings.get("auto_response", {}).get("delay_minutes", 5))
         self.auto_delay.setSuffix(" min")
-        self.auto_delay.setFont(QFont("Segoe UI", 12))
+        self.auto_delay.setFont(QFont("SF Pro Display", 12))
         delay_layout.addWidget(self.auto_delay)
         
         delay_layout.addStretch()
@@ -231,27 +231,27 @@ class SettingsView(QScrollArea):
         
         # Types d'emails à traiter
         types_label = QLabel("Répondre automatiquement aux:")
-        types_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        types_label.setFont(QFont("SF Pro Display", 12, QFont.Bold))
         layout.addWidget(types_label)
         
         self.auto_cv = QCheckBox("CV et candidatures")
-        self.auto_cv.setFont(QFont("Segoe UI", 11))
+        self.auto_cv.setFont(QFont("SF Pro Display", 11))
         self.auto_cv.setChecked(self.settings.get("auto_response", {}).get("respond_to_cv", True))
         layout.addWidget(self.auto_cv)
         
         self.auto_meeting = QCheckBox("Demandes de rendez-vous")
-        self.auto_meeting.setFont(QFont("Segoe UI", 11))
+        self.auto_meeting.setFont(QFont("SF Pro Display", 11))
         self.auto_meeting.setChecked(self.settings.get("auto_response", {}).get("respond_to_meeting", True))
         layout.addWidget(self.auto_meeting)
         
         self.auto_support = QCheckBox("Demandes de support")
-        self.auto_support.setFont(QFont("Segoe UI", 11))
+        self.auto_support.setFont(QFont("SF Pro Display", 11))
         self.auto_support.setChecked(self.settings.get("auto_response", {}).get("respond_to_support", True))
         layout.addWidget(self.auto_support)
         
         # Éviter les boucles
         self.auto_avoid_loops = QCheckBox("Éviter les boucles de réponses automatiques")
-        self.auto_avoid_loops.setFont(QFont("Segoe UI", 12))
+        self.auto_avoid_loops.setFont(QFont("SF Pro Display", 12))
         self.auto_avoid_loops.setChecked(self.settings.get("auto_response", {}).get("avoid_loops", True))
         layout.addWidget(self.auto_avoid_loops)
         
@@ -261,26 +261,26 @@ class SettingsView(QScrollArea):
     def _create_notifications_section(self) -> QGroupBox:
         """Crée la section notifications."""
         group = QGroupBox("🔔 Notifications")
-        group.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        group.setFont(QFont("SF Pro Display", 14, QFont.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
         # Notifications desktop
         self.notif_desktop = QCheckBox("Notifications de bureau")
-        self.notif_desktop.setFont(QFont("Segoe UI", 12))
+        self.notif_desktop.setFont(QFont("SF Pro Display", 12))
         self.notif_desktop.setChecked(self.settings.get("notifications", {}).get("desktop", True))
         layout.addWidget(self.notif_desktop)
         
         # Son
         self.notif_sound = QCheckBox("Son lors de nouveaux emails")
-        self.notif_sound.setFont(QFont("Segoe UI", 12))
+        self.notif_sound.setFont(QFont("SF Pro Display", 12))
         self.notif_sound.setChecked(self.settings.get("notifications", {}).get("sound", True))
         layout.addWidget(self.notif_sound)
         
         # Emails importants uniquement
         self.notif_important = QCheckBox("Notifier uniquement les emails importants")
-        self.notif_important.setFont(QFont("Segoe UI", 12))
+        self.notif_important.setFont(QFont("SF Pro Display", 12))
         self.notif_important.setChecked(self.settings.get("notifications", {}).get("important_only", False))
         layout.addWidget(self.notif_important)
         
@@ -290,7 +290,7 @@ class SettingsView(QScrollArea):
     def _create_appearance_section(self) -> QGroupBox:
         """Crée la section apparence."""
         group = QGroupBox("🎨 Apparence")
-        group.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        group.setFont(QFont("SF Pro Display", 14, QFont.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
@@ -298,13 +298,13 @@ class SettingsView(QScrollArea):
         # Thème
         theme_layout = QHBoxLayout()
         theme_label = QLabel("Thème:")
-        theme_label.setFont(QFont("Segoe UI", 12))
+        theme_label.setFont(QFont("SF Pro Display", 12))
         theme_layout.addWidget(theme_label)
         
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Clair", "Sombre", "Automatique"])
         self.theme_combo.setCurrentText(self.settings.get("appearance", {}).get("theme", "Clair"))
-        self.theme_combo.setFont(QFont("Segoe UI", 12))
+        self.theme_combo.setFont(QFont("SF Pro Display", 12))
         theme_layout.addWidget(self.theme_combo)
         
         theme_layout.addStretch()
@@ -313,14 +313,14 @@ class SettingsView(QScrollArea):
         # Taille de police
         font_layout = QHBoxLayout()
         font_label = QLabel("Taille de police:")
-        font_label.setFont(QFont("Segoe UI", 12))
+        font_label.setFont(QFont("SF Pro Display", 12))
         font_layout.addWidget(font_label)
         
         self.font_size = QSpinBox()
         self.font_size.setRange(10, 18)
         self.font_size.setValue(self.settings.get("appearance", {}).get("font_size", 12))
         self.font_size.setSuffix(" pt")
-        self.font_size.setFont(QFont("Segoe UI", 12))
+        self.font_size.setFont(QFont("SF Pro Display", 12))
         font_layout.addWidget(self.font_size)
         
         font_layout.addStretch()
@@ -328,7 +328,7 @@ class SettingsView(QScrollArea):
         
         # Compacité
         self.compact_mode = QCheckBox("Mode compact")
-        self.compact_mode.setFont(QFont("Segoe UI", 12))
+        self.compact_mode.setFont(QFont("SF Pro Display", 12))
         self.compact_mode.setChecked(self.settings.get("appearance", {}).get("compact", False))
         layout.addWidget(self.compact_mode)
         
@@ -338,35 +338,35 @@ class SettingsView(QScrollArea):
     def _create_privacy_section(self) -> QGroupBox:
         """Crée la section confidentialité."""
         group = QGroupBox("🔒 Données et confidentialité")
-        group.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        group.setFont(QFont("SF Pro Display", 14, QFont.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
         # Stockage local
         storage_label = QLabel("Tous les emails sont stockés localement sur votre ordinateur.")
-        storage_label.setFont(QFont("Segoe UI", 11))
+        storage_label.setFont(QFont("SF Pro Display", 11))
         storage_label.setStyleSheet("color: #666666;")
         storage_label.setWordWrap(True)
         layout.addWidget(storage_label)
         
         # Bouton effacer cache
         clear_cache_btn = QPushButton("🗑️ Effacer le cache local")
-        clear_cache_btn.setFont(QFont("Segoe UI", 12))
+        clear_cache_btn.setFont(QFont("SF Pro Display", 12))
         clear_cache_btn.setFixedHeight(40)
         clear_cache_btn.clicked.connect(self._clear_cache)
         layout.addWidget(clear_cache_btn)
         
         # Bouton exporter données
         export_btn = QPushButton("📥 Exporter mes données")
-        export_btn.setFont(QFont("Segoe UI", 12))
+        export_btn.setFont(QFont("SF Pro Display", 12))
         export_btn.setFixedHeight(40)
         export_btn.clicked.connect(self._export_data)
         layout.addWidget(export_btn)
         
         # Bouton déconnexion
         logout_btn = QPushButton("🚪 Déconnexion Gmail")
-        logout_btn.setFont(QFont("Segoe UI", 12))
+        logout_btn.setFont(QFont("SF Pro Display", 12))
         logout_btn.setFixedHeight(40)
         logout_btn.clicked.connect(self._logout)
         layout.addWidget(logout_btn)

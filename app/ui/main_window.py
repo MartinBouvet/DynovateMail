@@ -5,12 +5,12 @@ Interface principale - VERSION COMPLÈTE FINALE
 import logging
 from typing import Optional
 from datetime import datetime
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QFrame, QSplitter, QMessageBox, QApplication
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont
 
 from gmail_client import GmailClient
 from ai_processor import AIProcessor
@@ -107,7 +107,7 @@ class MainWindow(QMainWindow):
         
         # SÉPARATEUR VERTICAL
         separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setFrameShape(QFrame.VLine)
         separator.setStyleSheet("background-color: #5b21b6;")
         separator.setFixedWidth(2)
         content_layout.addWidget(separator)
@@ -384,7 +384,7 @@ class MainWindow(QMainWindow):
             QWidget {
                 background-color: #ffffff;
                 color: #000000;
-                font-family: 'Segoe UI', 'Inter', Arial, sans-serif;
+                font-family: 'SF Pro Display', 'Inter', Arial, sans-serif;
                 border: none;
             }
             
