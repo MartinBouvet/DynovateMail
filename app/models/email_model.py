@@ -1,54 +1,66 @@
 #!/usr/bin/env python3
 """
-Modèles de données pour les emails - CORRIGÉ
+Modèle Email - VERSION COMPLÈTE CORRIGÉE
 """
 from dataclasses import dataclass, field
-from typing import List, Optional
 from datetime import datetime
-
-@dataclass
-class EmailAttachment:
-    """Pièce jointe d'un email."""
-    id: str
-    filename: str
-    mime_type: str
-    size: int
-    message_id: str
-
-@dataclass
-class AIAnalysis:
-    """Résultat d'analyse IA d'un email."""
-    category: str
-    priority: int  # 1-5
-    sentiment: str
-    summary: str
-    is_spam: bool
-    confidence: float
+from typing import Optional, List, Dict
 
 @dataclass
 class Email:
-    """Modèle d'email."""
-    id: str
-    subject: Optional[str] = None
-    sender: Optional[str] = None
-    to: List[str] = field(default_factory=list)
-    cc: List[str] = field(default_factory=list)
-    bcc: List[str] = field(default_factory=list)
-    body: Optional[str] = None
-    snippet: Optional[str] = None  # AJOUT du snippet
-    received_date: Optional[datetime] = None
-    is_read: bool = False
-    is_html: bool = False
-    attachments: List[EmailAttachment] = field(default_factory=list)
-    labels: List[str] = field(default_factory=list)
-    ai_analysis: Optional[AIAnalysis] = None
+    """
+    Modèle représentant un email.
     
-    def __post_init__(self):
-        """Initialisation post-création."""
-        # S'assurer que to, cc, bcc sont des listes
-        if not isinstance(self.to, list):
-            self.to = [self.to] if self.to else []
-        if not isinstance(self.cc, list):
-            self.cc = [self.cc] if self.cc else []
-        if not isinstance(self.bcc, list):
-            self.bcc = [self.bcc] if self.bcc else []
+    Attributes:
+        id: Identifiant unique de l'email
+        sender: Adresse de l'expéditeur
+        to: Adresse du destinataire
+        subject: Sujet de l'email
+        snippet: Aperçu court du contenu
+        body: Contenu complet de l'email
+        received_date: Date de réception
+        read: Statut lu/non lu
+        thread_id: Identifiant du thread de conversation
+        attachments: Liste des pièces jointes
+        labels: Labels Gmail associés
+        ai_analysis: Résultat de l'analyse IA
+    """
+    
+    id: str
+    sender: str
+    to: str
+    subject: str
+    snippet: str = ""
+    body: str = ""
+    received_date: Optional[datetime] = None
+    read: bool = False
+    thread_id: Optional[str] = None
+    attachments: List[Dict] = field(default_factory=list)
+    labels: List[str] = field(default_factory=list)
+    ai_analysis: Optional[Dict] = None
+    
+    def __str__(self) -> str:
+        """Représentation textuelle de l'email."""
+        return f"Email(from={self.sender}, subject={self.subject})"
+    
+    def __repr__(self) -> str:
+        """Représentation détaillée de l'email."""
+        return (
+            f"Email(id={self.id}, sender={self.sender}, "
+            f"subject={self.subject}, read={self.read})"
+        )
+    
+    @property
+    def is_unread(self) -> bool:
+        """Vérifie si l'email est non lu."""
+        return not self.read
+    
+    @property
+    def has_attachments(self) -> bool:
+        """Vérifie si l'email a des pièces jointes."""
+        return len(self.attachments) > 0
+    
+    @property
+    def attachment_count(self) -> int:
+        """Retourne le nombre de pièces jointes."""
+        return len(self.attachments)

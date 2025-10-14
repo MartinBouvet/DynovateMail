@@ -1,82 +1,400 @@
 #!/usr/bin/env python3
 """
-Vue calendrier - VERSION CORRIGÉE COMPLÈTE
-Corrections: Affichage événements, navigation, création
+Vue Calendrier - VERSION COMPLÈTE CORRIGÉE
 """
 import logging
-from typing import List, Optional, Dict
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
+from typing import List, Optional
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QCalendarWidget, QListWidget, QListWidgetItem, QFrame,
-    QSplitter, QScrollArea, QDialog, QDialogButtonBox, QTextEdit,
-    QLineEdit, QTimeEdit, QDateEdit, QComboBox, QGridLayout, QMessageBox
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+    QPushButton, QCalendarWidget, QListWidget, QListWidgetItem,
+    QDialog, QDialogButtonBox, QGridLayout, QLineEdit,
+    QTextEdit, QDateEdit, QTimeEdit, QComboBox, QMessageBox,
+    QFrame
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QDate, QTime, QTimer, QDateTime
-from PyQt5.QtGui import QFont, QColor, QTextCharFormat
+from PyQt5.QtCore import Qt, QDate, QTime, pyqtSignal
+from PyQt5.QtGui import QFont, QTextCharFormat, QColor
 
-from calendar_manager import CalendarManager
-from models.calendar_model import CalendarEvent
+from app.calendar_manager import CalendarManager
+from app.models.calendar_model import CalendarEvent
 
 logger = logging.getLogger(__name__)
 
-
-class ModernCalendarWidget(QCalendarWidget):
-    """Widget calendrier avec style moderne - CORRIGÉ."""
+class CalendarView(QWidget):
+    """Vue du calendrier avec gestion des événements."""
     
-    def __init__(self):
+    event_selected = pyqtSignal(object)
+    
+    def __init__(self, calendar_manager: CalendarManager):
         super().__init__()
-        self.events_by_date = {}  # Dict[QDate, List[CalendarEvent]]
-        self._setup_style()
+        
+        self.calendar_manager = calendar_manager
+        self.events = []
+        
+        self._setup_ui()
+        self.refresh_events()
     
-    def _setup_style(self):
-        """Configure le style moderne."""
-        # Style général
-        self.setGridVisible(True)
-        self.setVerticalHeaderFormat(QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader)
+    def _setup_ui(self):
+        """Crée l'interface."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(20)
+        
+        # === EN-TÊTE ===
+        header_layout = QHBoxLayout()
+        
+        title = QLabel("📅 Calendrier")
+        title.setFont(QFont("Arial", 24, QFont.Bold))
+        title.setStyleSheet("color: #5b21b6;")
+        header_layout.addWidget(title)
+        
+        header_layout.addStretch()
+        
+        # Bouton nouvel événement
+        new_event_btn = QPushButton("➕ Nouvel événement")
+        new_event_btn.setFont(QFont("Arial", 12))
+        new_event_btn.setFixedHeight(40)
+        new_event_btn.setCursor(Qt.PointingHandCursor)
+        new_event_btn.clicked.connect(self._create_event)
+        new_event_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #5b21b6;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                padding: 0 25px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #4c1d95;
+            }
+        """)
+        header_layout.addWidget(new_event_btn)
+        
+        # Bouton rafraîchir
+        refresh_btn = QPushButton("🔄")
+        refresh_btn.setFont(QFont("Arial", 16))
+        refresh_btn.setFixedSize(40, 40)
+        refresh_btn.setCursor(Qt.PointingHandCursor)
+        refresh_btn.clicked.connect(self.refresh_events)
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f3f4f6;
+                border: 2px solid #e5e7eb;
+                border-radius: 20px;
+            }
+            QPushButton:hover {
+                background-color: #5b21b6;
+                border-color: #5b21b6;
+            }
+        """)
+        header_layout.addWidget(refresh_btn)
+        
+        layout.addLayout(header_layout)
+        
+        # === ZONE PRINCIPALE ===
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(20)
+        
+        # CALENDRIER
+        calendar_container = QWidget()
+        calendar_container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #e5e7eb;
+                border-radius: 16px;
+            }
+        """)
+        
+        calendar_layout = QVBoxLayout(calendar_container)
+        calendar_layout.setContentsMargins(20, 20, 20, 20)
+        
+        self.calendar = QCalendarWidget()
+        self.calendar.setGridVisible(True)
+        self.calendar.clicked.connect(self._on_date_selected)
+        self.calendar.setStyleSheet("""
+            QCalendarWidget QToolButton {
+                height: 40px;
+                width: 60px;
+                color: #111827;
+                font-size: 14px;
+            }
+            QCalendarWidget QMenu {
+                width: 150px;
+            }
+            QCalendarWidget QSpinBox {
+                width: 100px;
+                font-size: 14px;
+            }
+            QCalendarWidget QTableView {
+                selection-background-color: #5b21b6;
+            }
+        """)
+        calendar_layout.addWidget(self.calendar)
+        
+        content_layout.addWidget(calendar_container, 2)
+        
+        # LISTE DES ÉVÉNEMENTS
+        events_container = QWidget()
+        events_container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 2px solid #e5e7eb;
+                border-radius: 16px;
+            }
+        """)
+        
+        events_layout = QVBoxLayout(events_container)
+        events_layout.setContentsMargins(20, 20, 20, 20)
+        events_layout.setSpacing(15)
+        
+        events_title = QLabel("📋 Événements")
+        events_title.setFont(QFont("Arial", 18, QFont.Bold))
+        events_title.setStyleSheet("color: #111827;")
+        events_layout.addWidget(events_title)
+        
+        self.events_list = QListWidget()
+        self.events_list.setStyleSheet("""
+            QListWidget {
+                border: none;
+                background-color: #f9fafb;
+                border-radius: 10px;
+                padding: 10px;
+            }
+            QListWidget::item {
+                background-color: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 12px;
+                margin-bottom: 8px;
+            }
+            QListWidget::item:hover {
+                background-color: #f3f4f6;
+                border-color: #5b21b6;
+            }
+            QListWidget::item:selected {
+                background-color: #ede9fe;
+                border-color: #5b21b6;
+                color: #5b21b6;
+            }
+        """)
+        self.events_list.itemClicked.connect(self._on_event_selected)
+        events_layout.addWidget(self.events_list)
+        
+        content_layout.addWidget(events_container, 1)
+        
+        layout.addLayout(content_layout)
+    
+    def refresh(self):
+        """Rafraîchit la vue du calendrier."""
+        logger.info("Actualisation du calendrier...")
+        self.refresh_events()
+    
+    def refresh_events(self):
+        """Rafraîchit la liste des événements."""
+        logger.info("Actualisation des événements du calendrier...")
+        
+        try:
+            # Récupérer les événements
+            self.events = self.calendar_manager.get_all_events()
+            
+            # Mettre à jour l'affichage
+            self._update_calendar_highlights()
+            self._update_events_list()
+            
+            logger.info(f"{len(self.events)} événements chargés")
+        
+        except Exception as e:
+            logger.error(f"Erreur actualisation événements: {e}")
+    
+    def _update_calendar_highlights(self):
+        """Met en surbrillance les dates avec des événements."""
+        # Réinitialiser le format
+        default_format = QTextCharFormat()
         
         # Format pour les dates avec événements
-        self.event_format = QTextCharFormat()
-        self.event_format.setBackground(QColor("#e7f3ff"))
-        self.event_format.setForeground(QColor("#007bff"))
-        self.event_format.setFontWeight(QFont.Bold)
+        event_format = QTextCharFormat()
+        event_format.setBackground(QColor("#ede9fe"))
+        event_format.setForeground(QColor("#5b21b6"))
+        event_format.setFontWeight(QFont.Bold)
         
-        # Format pour aujourd'hui
-        self.today_format = QTextCharFormat()
-        self.today_format.setBackground(QColor("#28a745"))
-        self.today_format.setForeground(QColor("#ffffff"))
-        self.today_format.setFontWeight(QFont.Bold)
-    
-    def set_events(self, events: List[CalendarEvent]):
-        """Définit les événements à afficher - CORRIGÉ."""
-        self.events_by_date.clear()
-        
-        for event in events:
+        # Appliquer le format aux dates avec événements
+        for event in self.events:
             if event.start_time:
                 qdate = QDate(
                     event.start_time.year,
                     event.start_time.month,
                     event.start_time.day
                 )
-                if qdate not in self.events_by_date:
-                    self.events_by_date[qdate] = []
-                self.events_by_date[qdate].append(event)
-        
-        self._update_calendar_display()
+                self.calendar.setDateTextFormat(qdate, event_format)
     
-    def _update_calendar_display(self):
-        """Met à jour l'affichage du calendrier."""
-        # Réinitialiser tous les formats
-        for qdate in self.events_by_date.keys():
-            self.setDateTextFormat(qdate, self.event_format)
+    def _update_events_list(self):
+        """Met à jour la liste des événements."""
+        self.events_list.clear()
         
-        # Format pour aujourd'hui
-        today = QDate.currentDate()
-        self.setDateTextFormat(today, self.today_format)
+        # Filtrer par date sélectionnée
+        selected_date = self.calendar.selectedDate().toPyDate()
+        
+        filtered_events = [
+            e for e in self.events
+            if e.start_time and e.start_time.date() == selected_date
+        ]
+        
+        if not filtered_events:
+            item = QListWidgetItem("📭 Aucun événement ce jour")
+            item.setFont(QFont("Arial", 11))
+            item.setForeground(QColor("#9ca3af"))
+            self.events_list.addItem(item)
+            return
+        
+        # Trier par heure
+        filtered_events.sort(key=lambda e: e.start_time)
+        
+        for event in filtered_events:
+            time_str = event.start_time.strftime("%H:%M")
+            item_text = f"⏰ {time_str} - {event.title}"
+            
+            if event.location:
+                item_text += f"\n📍 {event.location}"
+            
+            item = QListWidgetItem(item_text)
+            item.setFont(QFont("Arial", 11))
+            item.setData(Qt.UserRole, event)
+            self.events_list.addItem(item)
+    
+    def _on_date_selected(self, date: QDate):
+        """Gère la sélection d'une date."""
+        logger.info(f"Date sélectionnée: {date.toString()}")
+        self._update_events_list()
+    
+    def _on_event_selected(self, item: QListWidgetItem):
+        """Gère la sélection d'un événement."""
+        event = item.data(Qt.UserRole)
+        
+        if event:
+            logger.info(f"Événement sélectionné: {event.title}")
+            self._show_event_details(event)
+    
+    def _show_event_details(self, event: CalendarEvent):
+        """Affiche les détails d'un événement."""
+        details = f"""
+📅 {event.title}
+
+⏰ Date: {event.start_time.strftime('%d/%m/%Y à %H:%M')}
+⏱️ Durée: {event.duration} minutes
+"""
+        
+        if event.location:
+            details += f"\n📍 Lieu: {event.location}"
+        
+        if event.description:
+            details += f"\n\n📝 Description:\n{event.description}"
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Détails de l'événement")
+        msg.setText(details)
+        msg.setIcon(QMessageBox.Information)
+        
+        # Boutons
+        msg.addButton("✏️ Modifier", QMessageBox.ActionRole)
+        msg.addButton("🗑️ Supprimer", QMessageBox.DestructiveRole)
+        msg.addButton("Fermer", QMessageBox.RejectRole)
+        
+        result = msg.exec()
+        
+        if result == 0:  # Modifier
+            self._edit_event(event)
+        elif result == 1:  # Supprimer
+            self._delete_event(event)
+    
+    def _create_event(self):
+        """Crée un nouvel événement."""
+        dialog = EventDialog(parent=self)
+        
+        if dialog.exec() == QDialog.Accepted:
+            event = dialog.get_event()
+            
+            try:
+                self.calendar_manager.add_event(event)
+                self.refresh_events()
+                
+                QMessageBox.information(
+                    self,
+                    "Succès",
+                    f"✅ Événement '{event.title}' créé !"
+                )
+                
+                logger.info(f"Événement créé: {event.title}")
+            
+            except Exception as e:
+                logger.error(f"Erreur création événement: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Erreur",
+                    f"Impossible de créer l'événement:\n{e}"
+                )
+    
+    def _edit_event(self, event: CalendarEvent):
+        """Modifie un événement."""
+        dialog = EventDialog(event=event, parent=self)
+        
+        if dialog.exec() == QDialog.Accepted:
+            updated_event = dialog.get_event()
+            
+            try:
+                # Mettre à jour l'événement
+                self.calendar_manager.update_event(event.id, updated_event)
+                self.refresh_events()
+                
+                QMessageBox.information(
+                    self,
+                    "Succès",
+                    f"✅ Événement modifié !"
+                )
+                
+                logger.info(f"Événement modifié: {event.id}")
+            
+            except Exception as e:
+                logger.error(f"Erreur modification événement: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Erreur",
+                    f"Impossible de modifier l'événement:\n{e}"
+                )
+    
+    def _delete_event(self, event: CalendarEvent):
+        """Supprime un événement."""
+        reply = QMessageBox.question(
+            self,
+            "Confirmation",
+            f"Voulez-vous vraiment supprimer l'événement '{event.title}' ?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                self.calendar_manager.delete_event(event.id)
+                self.refresh_events()
+                
+                QMessageBox.information(
+                    self,
+                    "Succès",
+                    "✅ Événement supprimé !"
+                )
+                
+                logger.info(f"Événement supprimé: {event.id}")
+            
+            except Exception as e:
+                logger.error(f"Erreur suppression événement: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Erreur",
+                    f"Impossible de supprimer l'événement:\n{e}"
+                )
 
 
 class EventDialog(QDialog):
-    """Dialogue pour créer/éditer un événement - CORRIGÉ."""
+    """Dialogue pour créer/modifier un événement."""
     
     def __init__(self, event: Optional[CalendarEvent] = None, parent=None):
         super().__init__(parent)
@@ -142,8 +460,8 @@ class EventDialog(QDialog):
         
         # Boutons
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | 
-            QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.Save | 
+            QDialogButtonBox.Cancel
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -156,901 +474,118 @@ class EventDialog(QDialog):
         if not self.event:
             return
         
-        self.title_input.setText(self.event.title or "")
+        self.title_input.setText(self.event.title)
         
         if self.event.start_time:
-            qdate = QDate(
+            self.date_input.setDate(QDate(
                 self.event.start_time.year,
                 self.event.start_time.month,
                 self.event.start_time.day
-            )
-            qtime = QTime(
+            ))
+            self.start_time_input.setTime(QTime(
                 self.event.start_time.hour,
                 self.event.start_time.minute
-            )
-            self.date_input.setDate(qdate)
-            self.start_time_input.setTime(qtime)
+            ))
         
-        if hasattr(self.event, 'duration'):
+        if self.event.duration:
             self.duration_input.setCurrentText(str(self.event.duration))
         
-        if hasattr(self.event, 'location'):
-            self.location_input.setText(self.event.location or "")
+        if self.event.location:
+            self.location_input.setText(self.event.location)
         
-        if hasattr(self.event, 'description'):
-            self.description_input.setPlainText(self.event.description or "")
+        if self.event.description:
+            self.description_input.setPlainText(self.event.description)
     
-    def get_event_data(self) -> Dict:
-        """Retourne les données de l'événement."""
-        qdate = self.date_input.date()
-        qtime = self.start_time_input.time()
+    def get_event(self) -> CalendarEvent:
+        """Récupère l'événement depuis les champs du formulaire."""
+        # Combiner date et heure
+        date = self.date_input.date()
+        time = self.start_time_input.time()
         
-        start_datetime = datetime(
-            qdate.year(), qdate.month(), qdate.day(),
-            qtime.hour(), qtime.minute()
+        start_time = datetime(
+            date.year(),
+            date.month(),
+            date.day(),
+            time.hour(),
+            time.minute()
         )
         
-        return {
-            'title': self.title_input.text().strip(),
-            'start_time': start_datetime,
-            'duration': int(self.duration_input.currentText()),
-            'location': self.location_input.text().strip(),
-            'description': self.description_input.toPlainText().strip()
-        }
+        # Créer l'événement
+        event = CalendarEvent(
+            id=self.event.id if self.event else None,
+            title=self.title_input.text().strip(),
+            start_time=start_time,
+            duration=int(self.duration_input.currentText()),
+            location=self.location_input.text().strip() or None,
+            description=self.description_input.toPlainText().strip() or None
+        )
+        
+        return event
     
     def _apply_dialog_style(self):
-        """Applique le style au dialogue - ULTRA CORRIGÉ CONTRASTE."""
+        """Applique les styles au dialogue."""
         self.setStyleSheet("""
-        /* DIALOG GÉNÉRAL */
-        QDialog {
-            background-color: #ffffff;
-        }
-        
-        /* LABELS - CORRECTION CONTRASTE */
-        QLabel {
-            color: #000000;  /* CORRECTION: Noir au lieu de gris */
-            font-weight: 600;
-            font-size: 13px;
-        }
-        
-        /* LINE EDIT */
-        QLineEdit {
-            background-color: #ffffff;
-            border: 2px solid #dee2e6;
-            border-radius: 6px;
-            padding: 8px;
-            font-size: 13px;
-            color: #000000;  /* CORRECTION: Texte noir */
-        }
-        
-        QLineEdit:focus {
-            border-color: #007bff;
-        }
-        
-        /* TEXT EDIT */
-        QTextEdit {
-            background-color: #ffffff;
-            border: 2px solid #dee2e6;
-            border-radius: 6px;
-            padding: 8px;
-            font-size: 13px;
-            color: #000000;  /* CORRECTION: Texte noir */
-        }
-        
-        QTextEdit:focus {
-            border-color: #007bff;
-        }
-        
-        /* DATE EDIT - CORRECTION CRITIQUE */
-        QDateEdit {
-            background-color: #ffffff;
-            border: 2px solid #dee2e6;
-            border-radius: 6px;
-            padding: 8px;
-            font-size: 13px;
-            color: #000000;  /* CORRECTION: Date en noir */
-        }
-        
-        QDateEdit:focus {
-            border-color: #007bff;
-        }
-        
-        QDateEdit::drop-down {
-            subcontrol-origin: padding;
-            subcontrol-position: top right;
-            width: 20px;
-            border-left: 1px solid #dee2e6;
-            background-color: #f8f9fa;
-        }
-        
-        QDateEdit::down-arrow {
-            image: none;
-            width: 10px;
-            height: 10px;
-            background-color: #000000;  /* Flèche visible */
-        }
-        
-        /* TIME EDIT - CORRECTION CRITIQUE */
-        QTimeEdit {
-            background-color: #ffffff;
-            border: 2px solid #dee2e6;
-            border-radius: 6px;
-            padding: 8px;
-            font-size: 13px;
-            color: #000000;  /* CORRECTION: Heure en noir */
-        }
-        
-        QTimeEdit:focus {
-            border-color: #007bff;
-        }
-        
-        QTimeEdit::drop-down {
-            subcontrol-origin: padding;
-            subcontrol-position: top right;
-            width: 20px;
-            border-left: 1px solid #dee2e6;
-            background-color: #f8f9fa;
-        }
-        
-        QTimeEdit::up-button, QTimeEdit::down-button {
-            background-color: #f8f9fa;
-            border: none;
-        }
-        
-        /* COMBOBOX - CORRECTION CONTRASTE */
-        QComboBox {
-            background-color: #ffffff;
-            border: 2px solid #dee2e6;
-            border-radius: 6px;
-            padding: 8px;
-            font-size: 13px;
-            color: #000000;  /* CORRECTION: Texte noir */
-        }
-        
-        QComboBox:focus {
-            border-color: #007bff;
-        }
-        
-        QComboBox::drop-down {
-            border: none;
-            width: 20px;
-            background-color: #f8f9fa;
-        }
-        
-        QComboBox QAbstractItemView {
-            background-color: #ffffff;
-            color: #000000;  /* CORRECTION: Options en noir */
-            selection-background-color: #007bff;
-            selection-color: #ffffff;
-            border: 1px solid #dee2e6;
-        }
-        
-        /* BOUTONS - CORRECTION CONTRASTE */
-        QPushButton {
-            border: none;
-            border-radius: 6px;
-            padding: 10px 20px;
-            font-weight: 600;
-            font-size: 13px;
-            color: #ffffff;  /* Texte blanc sur boutons colorés */
-        }
-        
-        /* CALENDRIER POPUP - CORRECTION CRITIQUE */
-        QCalendarWidget {
-            background-color: #ffffff;
-        }
-        
-        QCalendarWidget QToolButton {
-            color: #000000;  /* CORRECTION: Flèches en noir */
-            background-color: #ffffff;
-            border: none;
-            border-radius: 4px;
-            padding: 5px;
-        }
-        
-        QCalendarWidget QToolButton:hover {
-            background-color: #e9ecef;
-        }
-        
-        QCalendarWidget QMenu {
-            background-color: #ffffff;
-            color: #000000;  /* CORRECTION: Menu en noir */
-        }
-        
-        QCalendarWidget QSpinBox {
-            background-color: #ffffff;
-            color: #000000;  /* CORRECTION: Année en noir */
-            border: 1px solid #dee2e6;
-            padding: 3px;
-        }
-        
-        QCalendarWidget QWidget#qt_calendar_navigationbar {
-            background-color: #f8f9fa;
-        }
-        
-        QCalendarWidget QAbstractItemView {
-            background-color: #ffffff;
-            color: #000000;  /* CORRECTION: Dates en noir */
-            selection-background-color: #007bff;
-            selection-color: #ffffff;
-            border: none;
-        }
-        
-        QCalendarWidget QAbstractItemView:enabled {
-            color: #000000;  /* CORRECTION: S'assurer que c'est noir */
-        }
-    """)
-
-
-class CalendarView(QWidget):
-    """Vue calendrier moderne - CORRIGÉE."""
-    
-    def __init__(self, calendar_manager: CalendarManager):
-        super().__init__()
-        self.calendar_manager = calendar_manager
-        self.current_events = []
-        self._setup_ui()
-        self._apply_style()
-        
-        # Charger les événements au démarrage
-        QTimer.singleShot(500, self.refresh_events)
-    
-    def _setup_ui(self):
-        """Configure l'interface."""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        
-        # Header avec boutons d'action
-        header = self._create_header()
-        layout.addWidget(header)
-        
-# Splitter: Calendrier | Liste événements
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setHandleWidth(2)
-        
-        # === GAUCHE: Widget calendrier ===
-        calendar_section = self._create_calendar_section()
-        splitter.addWidget(calendar_section)
-        
-        # === DROITE: Liste événements ===
-        events_section = self._create_events_section()
-        splitter.addWidget(events_section)
-        
-        # Proportions: Calendrier (40%) - Événements (60%)
-        splitter.setSizes([450, 650])
-        layout.addWidget(splitter)
-    
-    def _create_header(self) -> QWidget:
-        """Crée le header avec actions."""
-        header = QFrame()
-        header.setObjectName("calendar-header")
-        header.setFixedHeight(70)
-        
-        layout = QHBoxLayout(header)
-        layout.setContentsMargins(20, 10, 20, 10)
-        layout.setSpacing(15)
-        
-        # Titre
-        title = QLabel("📅 Calendrier")
-        title.setFont(QFont("Inter", 18, QFont.Bold))
-        title.setStyleSheet("color: #000000;")
-        layout.addWidget(title)
-        
-        layout.addStretch()
-        
-        # Bouton Nouvel événement
-        new_event_btn = QPushButton("➕ Nouvel événement")
-        new_event_btn.setObjectName("primary-btn")
-        new_event_btn.setFixedHeight(40)
-        new_event_btn.clicked.connect(self._create_new_event)
-        layout.addWidget(new_event_btn)
-        
-        # Bouton Actualiser
-        refresh_btn = QPushButton("🔄 Actualiser")
-        refresh_btn.setObjectName("secondary-btn")
-        refresh_btn.setFixedHeight(40)
-        refresh_btn.clicked.connect(self.refresh_events)
-        layout.addWidget(refresh_btn)
-        
-        return header
-    
-    def _create_calendar_section(self) -> QWidget:
-        """Crée la section calendrier."""
-        section = QFrame()
-        section.setObjectName("calendar-section")
-        
-        layout = QVBoxLayout(section)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-        
-        # Titre section
-        section_title = QLabel("📆 Vue mensuelle")
-        section_title.setFont(QFont("Inter", 16, QFont.Bold))
-        section_title.setStyleSheet("color: #000000;")
-        layout.addWidget(section_title)
-        
-        # Widget calendrier
-        self.calendar_widget = ModernCalendarWidget()
-        self.calendar_widget.setMinimumHeight(350)
-        self.calendar_widget.clicked.connect(self._on_date_selected)
-        layout.addWidget(self.calendar_widget)
-        
-        # Info sélection
-        self.selection_info = QLabel("Sélectionnez une date pour voir les événements")
-        self.selection_info.setFont(QFont("Inter", 12))
-        self.selection_info.setStyleSheet("color: #6c757d; padding: 10px;")
-        self.selection_info.setWordWrap(True)
-        layout.addWidget(self.selection_info)
-        
-        layout.addStretch()
-        
-        return section
-    
-    def _create_events_section(self) -> QWidget:
-        """Crée la section liste d'événements."""
-        section = QFrame()
-        section.setObjectName("events-section")
-        
-        layout = QVBoxLayout(section)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
-        
-        # Header avec filtre
-        section_header = QHBoxLayout()
-        section_header.setSpacing(15)
-        
-        section_title = QLabel("📋 Événements")
-        section_title.setFont(QFont("Inter", 18, QFont.Bold))
-        section_title.setStyleSheet("color: #000000;")
-        section_header.addWidget(section_title)
-        
-        section_header.addStretch()
-        
-        # Filtre période
-        self.period_filter = QComboBox()
-        self.period_filter.addItems([
-            "Aujourd'hui", 
-            "Cette semaine", 
-            "Ce mois", 
-            "Tous"
-        ])
-        self.period_filter.setMinimumWidth(140)
-        self.period_filter.setFixedHeight(35)
-        self.period_filter.currentTextChanged.connect(self._filter_events)
-        section_header.addWidget(self.period_filter)
-        
-        layout.addLayout(section_header)
-        
-        # Zone de scroll pour les événements
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        
-        # Container pour les cartes d'événements
-        self.events_container = QWidget()
-        self.events_layout = QVBoxLayout(self.events_container)
-        self.events_layout.setSpacing(10)
-        self.events_layout.setContentsMargins(5, 5, 5, 5)
-        self.events_layout.setAlignment(Qt.AlignTop)
-        
-        # Message par défaut
-        self.no_events_label = QLabel("📅 Aucun événement")
-        self.no_events_label.setAlignment(Qt.AlignCenter)
-        self.no_events_label.setFont(QFont("Inter", 16, QFont.Weight.Medium))
-        self.no_events_label.setStyleSheet("""
+            QDialog {
+                background-color: #ffffff;
+            }
+            
             QLabel {
-                color: #6c757d; 
-                padding: 50px;
-                background-color: #f8f9fa;
-                border-radius: 12px;
-                border: 2px dashed #dee2e6;
-                margin: 20px 0;
+                color: #374151;
+                font-size: 12px;
+                font-weight: bold;
             }
-        """)
-        self.events_layout.addWidget(self.no_events_label)
-        
-        scroll_area.setWidget(self.events_container)
-        layout.addWidget(scroll_area)
-        
-        return section
-    
-    def refresh_events(self):
-        """Actualise les événements - CORRIGÉ."""
-        try:
-            logger.info("Actualisation des événements du calendrier...")
             
-            # Récupérer tous les événements
-            self.current_events = self.calendar_manager.get_all_events()
-            
-            logger.info(f"{len(self.current_events)} événements chargés")
-            
-            # Mettre à jour le calendrier
-            self.calendar_widget.set_events(self.current_events)
-            
-            # Mettre à jour la liste
-            self._filter_events(self.period_filter.currentText())
-            
-        except Exception as e:
-            logger.error(f"Erreur actualisation événements: {e}")
-            QMessageBox.critical(self, "Erreur", f"Impossible de charger les événements: {str(e)}")
-    
-    def _on_date_selected(self, qdate: QDate):
-        """Gère la sélection d'une date - CORRIGÉ."""
-        selected_date = date(qdate.year(), qdate.month(), qdate.day())
-        logger.info(f"Date sélectionnée: {selected_date}")
-        
-        # Filtrer les événements de cette date
-        events_on_date = [
-            event for event in self.current_events
-            if event.start_time and event.start_time.date() == selected_date
-        ]
-        
-        if events_on_date:
-            self.selection_info.setText(
-                f"📅 {len(events_on_date)} événement(s) le {selected_date.strftime('%d/%m/%Y')}"
-            )
-            # Afficher ces événements
-            self._display_specific_events(events_on_date)
-        else:
-            self.selection_info.setText(
-                f"Aucun événement le {selected_date.strftime('%d/%m/%Y')}"
-            )
-    
-    def _filter_events(self, period: str):
-        """Filtre les événements selon la période - CORRIGÉ."""
-        now = datetime.now()
-        
-        if period == "Aujourd'hui":
-            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-        elif period == "Cette semaine":
-            start = now - timedelta(days=now.weekday())
-            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
-        elif period == "Ce mois":
-            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            next_month = start.replace(day=28) + timedelta(days=4)
-            end = next_month - timedelta(days=next_month.day)
-            end = end.replace(hour=23, minute=59, second=59)
-        else:  # Tous
-            start = None
-            end = None
-        
-        # Filtrer
-        if start and end:
-            filtered = [
-                event for event in self.current_events
-                if event.start_time and start <= event.start_time <= end
-            ]
-        else:
-            filtered = self.current_events
-        
-        # Trier par date
-        filtered.sort(key=lambda e: e.start_time if e.start_time else datetime.max)
-        
-        self._display_event_list(filtered)
-    
-    def _display_event_list(self, events: List[CalendarEvent]):
-        """Affiche la liste d'événements - CORRIGÉ."""
-        # Vider le container
-        while self.events_layout.count():
-            child = self.events_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-        
-        if not events:
-            self.events_layout.addWidget(self.no_events_label)
-            return
-        
-        # Créer les cartes d'événements
-        for event in events:
-            card = self._create_event_card(event)
-            self.events_layout.addWidget(card)
-    
-    def _display_specific_events(self, events: List[CalendarEvent]):
-        """Affiche des événements spécifiques."""
-        self._display_event_list(events)
-    
-    def _create_event_card(self, event: CalendarEvent) -> QFrame:
-        """Crée une carte d'événement - CORRIGÉE."""
-        card = QFrame()
-        card.setObjectName("event-card")
-        card.setMinimumHeight(80)
-        card.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        layout = QVBoxLayout(card)
-        layout.setSpacing(8)
-        layout.setContentsMargins(15, 12, 15, 12)
-        
-        # Ligne 1: Titre + Actions
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(10)
-        
-        title_label = QLabel(event.title or "Sans titre")
-        title_label.setFont(QFont("Inter", 14, QFont.Bold))
-        title_label.setStyleSheet("color: #000000;")
-        header_layout.addWidget(title_label)
-        
-        header_layout.addStretch()
-        
-        # Boutons d'action
-        edit_btn = QPushButton("✏️")
-        edit_btn.setObjectName("icon-btn")
-        edit_btn.setFixedSize(30, 30)
-        edit_btn.setToolTip("Modifier")
-        edit_btn.clicked.connect(lambda: self._edit_event(event))
-        header_layout.addWidget(edit_btn)
-        
-        delete_btn = QPushButton("🗑️")
-        delete_btn.setObjectName("icon-btn-danger")
-        delete_btn.setFixedSize(30, 30)
-        delete_btn.setToolTip("Supprimer")
-        delete_btn.clicked.connect(lambda: self._delete_event(event))
-        header_layout.addWidget(delete_btn)
-        
-        layout.addLayout(header_layout)
-        
-        # Ligne 2: Infos
-        info_layout = QHBoxLayout()
-        info_layout.setSpacing(15)
-        
-        # Date et heure
-        if event.start_time:
-            datetime_text = event.start_time.strftime("📅 %d/%m/%Y à %H:%M")
-            datetime_label = QLabel(datetime_text)
-            datetime_label.setFont(QFont("Inter", 12))
-            datetime_label.setStyleSheet("color: #495057;")
-            info_layout.addWidget(datetime_label)
-        
-        # Durée
-        if hasattr(event, 'duration') and event.duration:
-            duration_label = QLabel(f"⏱️ {event.duration} min")
-            duration_label.setFont(QFont("Inter", 12))
-            duration_label.setStyleSheet("color: #6c757d;")
-            info_layout.addWidget(duration_label)
-        
-        # Lieu
-        if hasattr(event, 'location') and event.location:
-            location_label = QLabel(f"📍 {event.location}")
-            location_label.setFont(QFont("Inter", 12))
-            location_label.setStyleSheet("color: #6c757d;")
-            info_layout.addWidget(location_label)
-        
-        info_layout.addStretch()
-        layout.addLayout(info_layout)
-        
-        # Ligne 3: Description (si présente)
-        if hasattr(event, 'description') and event.description:
-            desc_label = QLabel(event.description[:100] + ("..." if len(event.description) > 100 else ""))
-            desc_label.setFont(QFont("Inter", 11))
-            desc_label.setStyleSheet("color: #6c757d;")
-            desc_label.setWordWrap(True)
-            layout.addWidget(desc_label)
-        
-        # Style de la carte
-        card.setStyleSheet("""
-            QFrame#event-card {
+            QLineEdit, QTextEdit, QDateEdit, QTimeEdit, QComboBox {
                 background-color: #ffffff;
-                border: 1px solid #dee2e6;
+                border: 2px solid #e5e7eb;
                 border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 12px;
+                color: #111827;
             }
-            QFrame#event-card:hover {
-                border-color: #007bff;
-                background-color: #f8f9fa;
+            
+            QLineEdit:focus, QTextEdit:focus, QDateEdit:focus, 
+            QTimeEdit:focus, QComboBox:focus {
+                border-color: #5b21b6;
+                background-color: #faf5ff;
             }
-        """)
-        
-        # Clic sur la carte pour afficher les détails
-        card.mousePressEvent = lambda e: self._show_event_details(event)
-        
-        return card
-    
-    def _show_event_details(self, event: CalendarEvent):
-        """Affiche les détails d'un événement."""
-        details_text = f"""
-Événement: {event.title}
-
-📅 Date: {event.start_time.strftime('%d/%m/%Y') if event.start_time else 'Non définie'}
-🕐 Heure: {event.start_time.strftime('%H:%M') if event.start_time else 'Non définie'}
-⏱️ Durée: {getattr(event, 'duration', 'Non définie')} minutes
-📍 Lieu: {getattr(event, 'location', 'Non défini') or 'Non défini'}
-
-Description:
-{getattr(event, 'description', 'Aucune description') or 'Aucune description'}
-        """.strip()
-        
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Détails de l'événement")
-        msg.setText(details_text)
-        msg.setIcon(QMessageBox.Icon.Information)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #ffffff;
-                color: #000000;
-                font-size: 13px;
-            }
-            QMessageBox QPushButton {
-                background-color: #007bff;
-                color: #ffffff;
+            
+            QDateEdit::drop-down, QTimeEdit::drop-down, QComboBox::drop-down {
                 border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                min-width: 80px;
-                font-weight: 600;
+                width: 30px;
             }
-            QMessageBox QPushButton:hover {
-                background-color: #0056b3;
+            
+            QDateEdit::down-arrow, QTimeEdit::down-arrow, QComboBox::down-arrow {
+                image: url(none);
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 8px solid #5b21b6;
+                margin-right: 5px;
+            }
+            
+            QDialogButtonBox QPushButton {
+                background-color: #5b21b6;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: bold;
+                min-width: 80px;
+            }
+            
+            QDialogButtonBox QPushButton:hover {
+                background-color: #4c1d95;
+            }
+            
+            QDialogButtonBox QPushButton[text="Cancel"],
+            QDialogButtonBox QPushButton[text="Annuler"] {
+                background-color: #f3f4f6;
+                color: #374151;
+                border: 2px solid #e5e7eb;
+            }
+            
+            QDialogButtonBox QPushButton[text="Cancel"]:hover,
+            QDialogButtonBox QPushButton[text="Annuler"]:hover {
+                background-color: #e5e7eb;
             }
         """)
-        msg.exec()
-        
-        logger.info(f"Détails événement affichés: {event.title}")
-    
-    def _create_new_event(self):
-        """Crée un nouvel événement - CORRIGÉ."""
-        dialog = EventDialog(parent=self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            event_data = dialog.get_event_data()
-            
-            # Validation
-            if not event_data['title'].strip():
-                QMessageBox.warning(self, "Erreur", "Le titre est obligatoire.")
-                return
-            
-            try:
-                # Créer l'événement
-                new_event = self.calendar_manager.create_event(**event_data)
-                
-                # Actualiser
-                self.refresh_events()
-                
-                logger.info(f"Nouvel événement créé: {new_event.title}")
-                
-                QMessageBox.information(
-                    self, 
-                    "Succès", 
-                    f"L'événement '{new_event.title}' a été créé avec succès."
-                )
-                
-            except Exception as e:
-                logger.error(f"Erreur création événement: {e}")
-                QMessageBox.critical(
-                    self, 
-                    "Erreur", 
-                    f"Impossible de créer l'événement:\n{str(e)}"
-                )
-    
-    def _edit_event(self, event: CalendarEvent):
-        """Modifie un événement - CORRIGÉ."""
-        dialog = EventDialog(event, parent=self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            event_data = dialog.get_event_data()
-            
-            # Validation
-            if not event_data['title'].strip():
-                QMessageBox.warning(self, "Erreur", "Le titre est obligatoire.")
-                return
-            
-            try:
-                # Mettre à jour
-                updated_event = self.calendar_manager.update_event(event.id, **event_data)
-                
-                # Actualiser
-                self.refresh_events()
-                
-                logger.info(f"Événement modifié: {updated_event.title}")
-                
-                QMessageBox.information(
-                    self, 
-                    "Succès", 
-                    f"L'événement '{updated_event.title}' a été modifié."
-                )
-                
-            except Exception as e:
-                logger.error(f"Erreur modification événement: {e}")
-                QMessageBox.critical(
-                    self, 
-                    "Erreur", 
-                    f"Impossible de modifier l'événement:\n{str(e)}"
-                )
-    
-    def _delete_event(self, event: CalendarEvent):
-        """Supprime un événement - CORRIGÉ."""
-        reply = QMessageBox.question(
-            self,
-            "Confirmer la suppression",
-            f"Êtes-vous sûr de vouloir supprimer l'événement '{event.title}' ?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                self.calendar_manager.delete_event(event.id)
-                
-                # Actualiser
-                self.refresh_events()
-                
-                logger.info(f"Événement supprimé: {event.title}")
-                
-                QMessageBox.information(
-                    self, 
-                    "Succès", 
-                    "L'événement a été supprimé."
-                )
-                
-            except Exception as e:
-                logger.error(f"Erreur suppression événement: {e}")
-                QMessageBox.critical(
-                    self, 
-                    "Erreur", 
-                    f"Impossible de supprimer l'événement:\n{str(e)}"
-                )
-    
-    def _apply_style(self):
-        """Applique les styles - CONTRASTE PARFAIT."""
-        self.setStyleSheet("""
-        /* BACKGROUND GÉNÉRAL */
-        QWidget {
-            background-color: #ffffff;
-        }
-        
-        /* HEADER */
-        QFrame#calendar-header {
-            background-color: #f8f9fa;
-            border-bottom: 2px solid #007bff;
-        }
-        
-        /* BOUTONS HEADER */
-        QPushButton#primary-btn {
-            background-color: #007bff;
-            color: #ffffff;
-            border: none;
-            border-radius: 6px;
-            padding: 10px 20px;
-            font-weight: 600;
-            font-size: 13px;
-        }
-        
-        QPushButton#primary-btn:hover {
-            background-color: #0056b3;
-        }
-        
-        QPushButton#secondary-btn {
-            background-color: #6c757d;
-            color: #ffffff;
-            border: none;
-            border-radius: 6px;
-            padding: 10px 20px;
-            font-weight: 600;
-            font-size: 13px;
-        }
-        
-        QPushButton#secondary-btn:hover {
-            background-color: #545b62;
-        }
-        
-        /* SECTIONS */
-        QFrame#calendar-section, QFrame#events-section {
-            background-color: #ffffff;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-        }
-        
-        /* TITRES SECTIONS */
-        QLabel#section-title {
-            color: #000000;
-            font-size: 16px;
-            font-weight: bold;
-        }
-        
-        /* CALENDRIER WIDGET */
-        QCalendarWidget {
-            background-color: #ffffff;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-        }
-        
-        QCalendarWidget QToolButton {
-            color: #000000;
-            background-color: #ffffff;
-            border: none;
-            border-radius: 4px;
-            padding: 5px;
-        }
-        
-        QCalendarWidget QToolButton:hover {
-            background-color: #e9ecef;
-        }
-        
-        QCalendarWidget QMenu {
-            background-color: #ffffff;
-            color: #000000;
-            border: 1px solid #dee2e6;
-        }
-        
-        QCalendarWidget QSpinBox {
-            color: #000000;
-            background-color: #ffffff;
-            border: 1px solid #ced4da;
-            padding: 3px;
-        }
-        
-        QCalendarWidget QAbstractItemView {
-            background-color: #ffffff;
-            color: #000000;
-            selection-background-color: #007bff;
-            selection-color: #ffffff;
-        }
-        
-        /* SCROLL AREA ÉVÉNEMENTS */
-        QScrollArea#events-scroll {
-            border: none;
-            background-color: #ffffff;
-        }
-        
-        /* CARTES ÉVÉNEMENTS */
-        QFrame#event-card {
-            background-color: #ffffff;
-            border: 1px solid #dee2e6;
-            border-left: 4px solid #007bff;
-            border-radius: 6px;
-        }
-        
-        QFrame#event-card:hover {
-            background-color: #f8f9fa;
-            border-left-color: #0056b3;
-        }
-        
-        /* LABELS ÉVÉNEMENTS */
-        QLabel#event-title {
-            color: #000000;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        
-        QLabel#event-time {
-            color: #6c757d;
-            font-size: 12px;
-        }
-        
-        QLabel#event-location {
-            color: #495057;
-            font-size: 12px;
-        }
-        
-        /* BOUTONS ÉVÉNEMENTS */
-        QPushButton#event-edit-btn {
-            background-color: #007bff;
-            color: #ffffff;
-            border: none;
-            border-radius: 4px;
-            padding: 5px 10px;
-            font-size: 11px;
-        }
-        
-        QPushButton#event-edit-btn:hover {
-            background-color: #0056b3;
-        }
-        
-        QPushButton#event-delete-btn {
-            background-color: #dc3545;
-            color: #ffffff;
-            border: none;
-            border-radius: 4px;
-            padding: 5px 10px;
-            font-size: 11px;
-        }
-        
-        QPushButton#event-delete-btn:hover {
-            background-color: #c82333;
-        }
-        
-        /* LABEL VIDE */
-        QLabel#no-events-label {
-            color: #6c757d;
-            font-size: 14px;
-        }
-    """)

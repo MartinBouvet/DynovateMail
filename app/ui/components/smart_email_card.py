@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QCursor
 
-from models.email_model import Email
+from app.models.email_model import Email
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class SmartEmailCard(QFrame):
         # Expéditeur
         sender = self.email.sender or "Inconnu"
         sender_label = QLabel(sender)
-        sender_label.setFont(QFont("SF Pro Display", 13, QFont.Bold if not self.email.is_read else QFont.Weight.Normal))
+        sender_label.setFont(QFont("Arial", 13, QFont.Bold if not self.email.is_read else QFont.Weight.Normal))
         sender_label.setStyleSheet("color: #000000;")
         header_layout.addWidget(sender_label)
         
@@ -48,7 +48,7 @@ class SmartEmailCard(QFrame):
         # Date
         date_str = self._format_date(self.email.received_date)
         date_label = QLabel(date_str)
-        date_label.setFont(QFont("SF Pro Display", 11))
+        date_label.setFont(QFont("Arial", 11))
         date_label.setStyleSheet("color: #666666;")
         header_layout.addWidget(date_label)
         
@@ -57,7 +57,7 @@ class SmartEmailCard(QFrame):
         # Ligne 2: Sujet
         subject = self.email.subject or "(Sans sujet)"
         subject_label = QLabel(subject)
-        subject_label.setFont(QFont("SF Pro Display", 12, QFont.Bold if not self.email.is_read else QFont.Weight.Normal))
+        subject_label.setFont(QFont("Arial", 12, QFont.Bold if not self.email.is_read else QFont.Weight.Normal))
         subject_label.setStyleSheet("color: #000000;")
         subject_label.setWordWrap(False)
         layout.addWidget(subject_label)
@@ -68,7 +68,7 @@ class SmartEmailCard(QFrame):
         # Aperçu
         preview = self._get_preview()
         preview_label = QLabel(preview)
-        preview_label.setFont(QFont("SF Pro Display", 11))
+        preview_label.setFont(QFont("Arial", 11))
         preview_label.setStyleSheet("color: #666666;")
         preview_label.setWordWrap(False)
         footer_layout.addWidget(preview_label, stretch=1)
@@ -142,7 +142,7 @@ class SmartEmailCard(QFrame):
         text, color = category_map.get(category, (category.title(), "#6b7280"))
         
         badge = QLabel(text)
-        badge.setFont(QFont("SF Pro Display", 10, QFont.Bold))
+        badge.setFont(QFont("Arial", 10, QFont.Bold))
         badge.setStyleSheet(f"""
             background-color: {color};
             color: #ffffff;

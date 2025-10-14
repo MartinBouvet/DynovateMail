@@ -8,8 +8,8 @@ from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from models.pending_response_model import PendingResponse, ResponseStatus
-from models.email_model import Email
+from app.models.pending_response_model import PendingResponse, ResponseStatus
+from app.models.email_model import Email
 
 logger = logging.getLogger(__name__)
 

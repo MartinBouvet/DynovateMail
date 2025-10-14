@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from dataclasses import asdict
 
-from models.calendar_model import CalendarEvent
+from app.models.calendar_model import CalendarEvent
 
 logger = logging.getLogger(__name__)
 

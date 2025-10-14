@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QColor
 
-from models.email_model import Email
+from app.models.email_model import Email
 
 logger = logging.getLogger(__name__)
 

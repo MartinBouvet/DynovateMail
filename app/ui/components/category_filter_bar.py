@@ -46,7 +46,7 @@ class CategoryFilterBar(QWidget):
             btn = QPushButton(cat_label)
             btn.setObjectName(f"category-{cat_id}")
             btn.setCheckable(True)
-            btn.setFont(QFont("SF Pro Display", 12))
+            btn.setFont(QFont("Arial", 12))
             btn.setFixedHeight(38)
             btn.clicked.connect(lambda checked, c=cat_id: self._on_category_clicked(c))
             layout.addWidget(btn)

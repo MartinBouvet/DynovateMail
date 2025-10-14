@@ -1,3 +1,8 @@
+from typing import Optional, Dict, List
+#!/usr/bin/env python3
+"""
+Package principal Dynovate Mail
+"""
 def __init__(self, credentials: Optional[str] = None, mock_mode: bool = True):
     """
     Initialise le client Gmail.

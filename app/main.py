@@ -1,71 +1,61 @@
 #!/usr/bin/env python3
 """
-Point d'entrée principal - VERSION AVEC GESTION AUTOMATIQUE OLLAMA
+Dynovate Mail - Point d'entrée principal
+VERSION FINALE OPTIMISÉE
 """
 import sys
-import logging
-from pathlib import Path
 import os
-import atexit
+import logging
+from datetime import datetime
+from pathlib import Path
 
-os.environ["QT_LOGGING_RULES"] = "qt.qpa.fonts.debug=false"
+# Ajouter le dossier parent au path pour les imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-app_dir = Path(__file__).parent
-sys.path.insert(0, str(app_dir))
+# Configuration du logging
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+
+log_file = log_dir / f"gmail_assistant_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('dynovate_mail.log'),
+        logging.FileHandler(log_file, encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 
 logger = logging.getLogger(__name__)
 
-# Gestionnaire Ollama global
-ollama_manager = None
-
 def cleanup_ollama():
-    """Nettoie Ollama à la fermeture."""
-    global ollama_manager
-    if ollama_manager:
-        logger.info("🧹 Nettoyage: arrêt d'Ollama...")
-        ollama_manager.stop()
+    """Nettoyage Ollama à la sortie."""
+    try:
+        from ollama_manager import OllamaManager
+        manager = OllamaManager()
+        manager.cleanup()
+    except:
+        pass
 
 def main():
     """Fonction principale."""
-    global ollama_manager
-    
     try:
-        credentials_file = "client_secret.json"
-        if not os.path.exists(credentials_file):
-            logger.error(f"ERREUR: Fichier {credentials_file} non trouvé")
-            print(f"❌ ERREUR: Le fichier {credentials_file} est requis")
-            print("📥 Téléchargez vos credentials OAuth2 depuis:")
-            print("🔗 https://console.cloud.google.com/apis/credentials")
-            sys.exit(1)
-        
-        from PyQt5.QtWidgets import QApplication, QMessageBox
-        from PyQt5.QtCore import Qt
-        
-        # === ÉTAPE 1: LANCER OLLAMA ===
-        print("=" * 60)
+        # === ÉTAPE 1: OLLAMA ===
+        print("\n" + "=" * 60)
         print("🤖 ÉTAPE 1/4: Démarrage du serveur Ollama...")
         print("=" * 60)
         
         from ollama_manager import OllamaManager
-        ollama_manager = OllamaManager(model_name="nchapman/ministral-8b-instruct-2410:8b")
+        ollama_manager = OllamaManager()
         
-        # Enregistrer la fonction de nettoyage
-        atexit.register(cleanup_ollama)
-        
-        if not ollama_manager.start():
-            print("❌ ERREUR: Impossible de démarrer Ollama")
-            print("📝 Vérifiez que:")
-            print("   1. Ollama est installé (https://ollama.ai)")
-            print("   2. Le modèle est téléchargé: ollama pull nchapman/ministral-8b-instruct-2410:8b")
+        if not ollama_manager.ensure_running():
+            logger.warning("⚠️ Ollama non disponible")
+            print("\n⚠️ Ollama n'est pas disponible.")
+            print("   L'application fonctionnera sans IA.")
+            print("   Pour activer l'IA:")
+            print("   1. Installez Ollama (https://ollama.ai)")
+            print("   2. Téléchargez le modèle: ollama pull nchapman/ministral-8b-instruct-2410:8b")
             
             response = input("\n⚠️ Continuer sans IA ? (o/N): ")
             if response.lower() != 'o':
@@ -76,34 +66,66 @@ def main():
             print(f"   📍 URL: {status['base_url']}")
             print(f"   🤖 Modèle: {status['model_name']}")
             if status.get('available_models'):
-                print(f"   📚 Modèles disponibles: {', '.join(status['available_models'][:3])}")
+                print(f"   📚 Modèles: {', '.join(status['available_models'][:3])}")
         
-        # === ÉTAPE 2: APPLICATION QT ===
+        # === ÉTAPE 2: INTERFACE QT ===
         print("\n" + "=" * 60)
         print("🖥️  ÉTAPE 2/4: Initialisation de l'interface...")
         print("=" * 60)
         
+        from PyQt5.QtWidgets import QApplication, QMessageBox
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
         app = QApplication(sys.argv)
         app.setApplicationName("Dynovate Mail")
-        app.setApplicationVersion("4.0 - Ollama Edition")
+        app.setApplicationVersion("4.0 - Final Edition")
         app.setOrganizationName("Dynovate")
         app.setStyle('Fusion')
         
+        # Font par défaut
+        font = QFont("Arial", 11)
+        app.setFont(font)
+        
+        # Style global
         app.setStyleSheet("""
             * {
-                font-family: 'SF Pro Display', Arial, sans-serif;
+                font-family: Arial, sans-serif;
             }
         """)
         
-        # Gérer la fermeture de l'application
+        # Gérer fermeture
         app.aboutToQuit.connect(cleanup_ollama)
         
         print("✅ Interface initialisée!")
         
-        # === ÉTAPE 3: AUTHENTIFICATION GMAIL ===
+        # === ÉTAPE 3: GMAIL ===
         print("\n" + "=" * 60)
         print("📧 ÉTAPE 3/4: Connexion à Gmail...")
         print("=" * 60)
+        
+        # Vérifier credentials
+        credentials_file = "client_secret.json"
+        if not os.path.exists(credentials_file):
+            logger.error("❌ Fichier client_secret.json introuvable")
+            print("❌ ERREUR: Fichier client_secret.json introuvable")
+            print("\n📋 Pour configurer Gmail:")
+            print("   1. Allez sur https://console.cloud.google.com")
+            print("   2. Créez un projet et activez l'API Gmail")
+            print("   3. Créez des identifiants OAuth 2.0")
+            print("   4. Téléchargez le fichier JSON")
+            print("   5. Renommez-le en 'client_secret.json'")
+            print("   6. Placez-le à la racine du projet")
+            
+            QMessageBox.critical(
+                None,
+                "Erreur configuration",
+                "Fichier client_secret.json introuvable.\n\n"
+                "Consultez la documentation pour configurer Gmail."
+            )
+            
+            cleanup_ollama()
+            sys.exit(1)
         
         from gmail_client import GmailClient
         gmail_client = GmailClient(credentials_file=credentials_file, mock_mode=False)
@@ -115,9 +137,12 @@ def main():
             
             QMessageBox.critical(
                 None,
-                "Erreur d'authentification",
+                "Erreur authentification",
                 "Impossible de se connecter à Gmail.\n\n"
-                "Vérifiez votre fichier client_secret.json et vos autorisations."
+                "Vérifiez:\n"
+                "- Le fichier client_secret.json est correct\n"
+                "- L'API Gmail est activée\n"
+                "- Les autorisations sont accordées"
             )
             
             cleanup_ollama()
@@ -141,7 +166,7 @@ def main():
         
         print("✅ Services IA chargés!")
         
-        # === LANCEMENT DE L'INTERFACE ===
+        # === LANCEMENT ===
         print("\n" + "=" * 60)
         print("🚀 DYNOVATE MAIL 4.0 - PRÊT!")
         print("=" * 60)
@@ -162,23 +187,25 @@ def main():
         
         logger.info("✅ Dynovate Mail lancé avec succès!")
         
-        # Lancer l'application
+        # Lancer
         exit_code = app.exec()
         
-        # Nettoyage à la sortie
+        # Nettoyage
         logger.info("👋 Fermeture de l'application...")
         cleanup_ollama()
         
         sys.exit(exit_code)
         
     except KeyboardInterrupt:
-        logger.info("⚠️ Interruption clavier détectée")
+        logger.info("⚠️ Interruption clavier")
         cleanup_ollama()
         sys.exit(0)
         
     except Exception as e:
         logger.exception(f"❌ Erreur fatale: {e}")
         print(f"\n❌ ERREUR FATALE: {e}")
+        import traceback
+        traceback.print_exc()
         cleanup_ollama()
         sys.exit(1)
 

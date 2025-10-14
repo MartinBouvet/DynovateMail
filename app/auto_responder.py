@@ -8,8 +8,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from ai_processor import AIProcessor
-from models.email_model import Email
+from app.ai_processor import AIProcessor
+from app.models.email_model import Email
 
 logger = logging.getLogger(__name__)
 

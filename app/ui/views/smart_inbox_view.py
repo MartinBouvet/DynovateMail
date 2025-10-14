@@ -1,174 +1,234 @@
 #!/usr/bin/env python3
 """
-Vue Smart Inbox - OPTIMISÉE: Analyse IA à la demande uniquement
+Vue Inbox - VERSION OPTIMISÉE ULTRA-RAPIDE
 """
 import logging
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import List, Dict, Optional
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QPushButton, QScrollArea, QFrame, QSplitter, QLineEdit
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QFrame, QScrollArea
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QThread
+from PyQt5.QtCore import Qt, pyqtSignal, QThread
 from PyQt5.QtGui import QFont
 
-from gmail_client import GmailClient
-from ai_processor import AIProcessor
-from models.email_model import Email
-from ui.views.email_detail_view import EmailDetailView
+from app.gmail_client import GmailClient
+from app.ai_processor import AIProcessor
+from app.models.email_model import Email
+from app.ui.views.email_detail_view import EmailDetailView
 
 logger = logging.getLogger(__name__)
 
-
-class AIAnalysisThread(QThread):
-    """Thread pour analyser un email sans bloquer l'UI."""
+class EmailAnalysisWorker(QThread):
+    """Worker pour analyse IA en arrière-plan."""
     
-    analysis_complete = pyqtSignal(object, dict)  # email, analysis
+    analysis_complete = pyqtSignal(str, dict)
     
-    def __init__(self, ai_processor: AIProcessor, email: Email):
+    def __init__(self, ai_processor: AIProcessor, emails: List[Email]):
         super().__init__()
         self.ai_processor = ai_processor
-        self.email = email
+        self.emails = emails
+        self._is_running = True
     
     def run(self):
-        """Analyse l'email dans un thread séparé."""
-        try:
-            analysis = self.ai_processor.analyze_email(
-                subject=self.email.subject or "",
-                body=self.email.body or self.email.snippet or "",
-                sender=self.email.sender or ""
-            )
-            self.analysis_complete.emit(self.email, analysis)
-        except Exception as e:
-            logger.error(f"Erreur analyse IA thread: {e}")
-            self.analysis_complete.emit(self.email, None)
-
+        """Analyse en arrière-plan."""
+        for email in self.emails:
+            if not self._is_running:
+                break
+            
+            try:
+                if not hasattr(email, 'ai_analysis') or email.ai_analysis is None:
+                    analysis = self.ai_processor.analyze_email_fast(
+                        subject=email.subject or "",
+                        body=email.snippet or email.body or "",
+                        sender=email.sender or ""
+                    )
+                    
+                    if analysis:
+                        self.analysis_complete.emit(email.id, analysis)
+            except:
+                pass
+    
+    def stop(self):
+        """Arrête l'analyse."""
+        self._is_running = False
 
 class EmailListItem(QFrame):
-    """Widget représentant un email dans la liste."""
+    """Item de liste d'email optimisé."""
     
     clicked = pyqtSignal(object)
     
     def __init__(self, email: Email):
         super().__init__()
         self.email = email
+        self.setObjectName("email-item")
+        self.setCursor(Qt.PointingHandCursor)
         self._setup_ui()
     
     def _setup_ui(self):
-        """Crée l'interface de l'item."""
-        self.setObjectName("email-item")
-        self.setCursor(Qt.PointingHandCursor)
-        
+        """Interface."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 12, 15, 12)
-        layout.setSpacing(5)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(8)
         
-        # En-tête (expéditeur + date)
+        # Ligne 1: Indicateur + Expéditeur + Date
         header_layout = QHBoxLayout()
+        header_layout.setSpacing(12)
         
+        # Indicateur non lu
+        if not getattr(self.email, 'read', True):
+            indicator = QLabel("●")
+            indicator.setFont(QFont("Arial", 12, QFont.Bold))
+            indicator.setStyleSheet("color: #5b21b6;")
+            indicator.setFixedWidth(20)
+            header_layout.addWidget(indicator)
+        else:
+            spacer = QLabel("")
+            spacer.setFixedWidth(20)
+            header_layout.addWidget(spacer)
+        
+        # Expéditeur
         sender_label = QLabel(self.email.sender or "Inconnu")
-        sender_label.setFont(QFont("SF Pro Display", 12, QFont.Bold))
+        sender_label.setFont(QFont("Arial", 13, QFont.Bold))
         sender_label.setStyleSheet("color: #000000;")
         header_layout.addWidget(sender_label)
         
         header_layout.addStretch()
         
+        # Date
         if self.email.received_date:
-            date_label = QLabel(self.email.received_date.strftime("%d/%m/%Y"))
-            date_label.setFont(QFont("SF Pro Display", 10))
+            date_str = self._format_date(self.email.received_date)
+            date_label = QLabel(date_str)
+            date_label.setFont(QFont("Arial", 11))
             date_label.setStyleSheet("color: #666666;")
             header_layout.addWidget(date_label)
         
         layout.addLayout(header_layout)
         
-        # Sujet
+        # Ligne 2: Sujet
         subject_label = QLabel(self.email.subject or "(Sans sujet)")
-        subject_label.setFont(QFont("SF Pro Display", 11))
-        subject_label.setStyleSheet("color: #333333;")
+        subject_label.setFont(QFont("Arial", 12))
+        subject_label.setStyleSheet("color: #1a1a1a;")
         subject_label.setWordWrap(False)
         layout.addWidget(subject_label)
         
-        # Aperçu
+        # Ligne 3: Aperçu
         if self.email.snippet:
-            snippet_label = QLabel(self.email.snippet[:100] + "...")
-            snippet_label.setFont(QFont("SF Pro Display", 10))
+            snippet = self.email.snippet[:150]
+            snippet_label = QLabel(snippet + "...")
+            snippet_label.setFont(QFont("Arial", 11))
             snippet_label.setStyleSheet("color: #666666;")
             snippet_label.setWordWrap(True)
+            snippet_label.setMaximumHeight(45)
             layout.addWidget(snippet_label)
         
-        # Badge catégorie IA (si disponible) - sera ajouté après analyse
+        # Ligne 4: Badges IA
         self.badges_layout = QHBoxLayout()
+        self.badges_layout.setSpacing(8)
         layout.addLayout(self.badges_layout)
         
         # Style
         self.setStyleSheet("""
             QFrame#email-item {
-                background-color: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
+                background-color: #ffffff;
+                border: none;
+                border-bottom: 1px solid #f0f0f0;
             }
             QFrame#email-item:hover {
-                background-color: #f9fafb;
-                border: 1px solid #5b21b6;
+                background-color: #faf5ff;
+                border-left: 4px solid #5b21b6;
             }
         """)
     
+    def _format_date(self, dt) -> str:
+        """Formate la date."""
+        try:
+            now = datetime.now(timezone.utc)
+            
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            elif dt.tzinfo is not None:
+                now = now.astimezone(dt.tzinfo)
+            
+            diff = now - dt
+            
+            if diff.days == 0:
+                return dt.strftime("%H:%M")
+            elif diff.days == 1:
+                return "Hier"
+            elif diff.days < 7:
+                days = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+                return days[dt.weekday()]
+            else:
+                return dt.strftime("%d/%m/%Y")
+        except:
+            return dt.strftime("%d/%m/%Y") if dt else ""
+    
     def update_ai_badges(self, analysis: dict):
-        """Met à jour les badges IA après analyse."""
-        # Nettoyer les anciens badges
+        """Met à jour les badges IA."""
+        # Effacer anciens badges
         while self.badges_layout.count():
             item = self.badges_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
-        if not analysis:
-            return
-        
-        category = analysis.get('category', 'autre')
-        priority = analysis.get('priority', 'moyenne')
-        
         # Badge catégorie
-        category_badge = QLabel(f"📁 {category.upper()}")
-        category_badge.setFont(QFont("SF Pro Display", 9))
-        category_badge.setStyleSheet("""
-            background-color: #e0e7ff;
-            color: #5b21b6;
-            padding: 3px 8px;
-            border-radius: 10px;
-        """)
-        self.badges_layout.addWidget(category_badge)
+        if 'category' in analysis and analysis['category'] != 'general':
+            icon = self._get_category_icon(analysis['category'])
+            badge = self._create_badge(icon, "#5b21b6")
+            self.badges_layout.addWidget(badge)
         
-        # Badge priorité
-        priority_colors = {
-            'haute': '#fee2e2',
-            'moyenne': '#fef3c7',
-            'basse': '#d1fae5'
-        }
-        priority_text_colors = {
-            'haute': '#dc2626',
-            'moyenne': '#f59e0b',
-            'basse': '#10b981'
-        }
+        # Badge sentiment
+        if analysis.get('sentiment') == 'positive':
+            badge = self._create_badge("😊", "#10b981")
+            self.badges_layout.addWidget(badge)
+        elif analysis.get('sentiment') == 'negative':
+            badge = self._create_badge("⚠️", "#ef4444")
+            self.badges_layout.addWidget(badge)
         
-        priority_badge = QLabel(f"⚡ {priority.upper()}")
-        priority_badge.setFont(QFont("SF Pro Display", 9))
-        priority_badge.setStyleSheet(f"""
-            background-color: {priority_colors.get(priority, '#f3f4f6')};
-            color: {priority_text_colors.get(priority, '#666666')};
-            padding: 3px 8px;
-            border-radius: 10px;
-        """)
-        self.badges_layout.addWidget(priority_badge)
+        # Badge urgent
+        if analysis.get('urgent'):
+            badge = self._create_badge("🔥 Urgent", "#dc2626")
+            self.badges_layout.addWidget(badge)
         
         self.badges_layout.addStretch()
     
+    def _create_badge(self, text: str, color: str) -> QLabel:
+        """Crée un badge."""
+        badge = QLabel(text)
+        badge.setFont(QFont("Arial", 9, QFont.Bold))
+        badge.setFixedHeight(24)
+        badge.setStyleSheet(f"""
+            QLabel {{
+                background-color: {color};
+                color: white;
+                border-radius: 12px;
+                padding: 4px 12px;
+            }}
+        """)
+        return badge
+    
+    def _get_category_icon(self, category: str) -> str:
+        """Icône de catégorie."""
+        icons = {
+            'cv': '📄 CV',
+            'meeting': '📅 RDV',
+            'invoice': '💰',
+            'newsletter': '📰',
+            'support': '🛠️',
+            'important': '⭐',
+            'spam': '🚫'
+        }
+        return icons.get(category, '📧')
+    
     def mousePressEvent(self, event):
-        """Gère le clic sur l'email."""
-        self.clicked.emit(self.email)
+        """Clic."""
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self.email)
         super().mousePressEvent(event)
 
-
 class SmartInboxView(QWidget):
-    """Vue de la boîte de réception intelligente."""
+    """Vue inbox optimisée."""
     
     email_selected = pyqtSignal(object)
     
@@ -177,256 +237,202 @@ class SmartInboxView(QWidget):
         
         self.gmail_client = gmail_client
         self.ai_processor = ai_processor
+        self.emails = []
+        self.email_items = {}
         self.current_folder = "INBOX"
-        self.emails: List[Email] = []
-        self.email_items: dict = {}  # Pour retrouver les items visuels
-        self.analysis_thread: Optional[AIAnalysisThread] = None
+        self.analysis_worker = None
         
         self._setup_ui()
-        
-        # Charger les emails après un court délai
-        QTimer.singleShot(100, self.refresh_emails)
     
     def _setup_ui(self):
-        """Crée l'interface."""
+        """Interface."""
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Splitter pour diviser liste/détail
-        splitter = QSplitter(Qt.Horizontal)
-        
-        # === PARTIE GAUCHE: LISTE DES EMAILS ===
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(15, 15, 15, 15)
-        left_layout.setSpacing(10)
-        
-        # Barre de recherche
-        search_layout = QHBoxLayout()
-        
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Rechercher dans les emails...")
-        self.search_input.setFont(QFont("SF Pro Display", 12))
-        self.search_input.setFixedHeight(40)
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                border: 2px solid #e0e0e0;
-                border-radius: 20px;
-                padding: 8px 15px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #5b21b6;
+        # Liste emails
+        list_container = QWidget()
+        list_container.setFixedWidth(480)
+        list_container.setStyleSheet("""
+            QWidget {
+                background-color: #ffffff;
+                border-right: 2px solid #e0e0e0;
             }
         """)
-        search_layout.addWidget(self.search_input)
         
-        refresh_btn = QPushButton("🔄")
-        refresh_btn.setFont(QFont("SF Pro Display", 14))
-        refresh_btn.setFixedSize(40, 40)
-        refresh_btn.setStyleSheet("""
-            QPushButton {
-                border: 2px solid #e0e0e0;
-                border-radius: 20px;
-                background-color: white;
-            }
-            QPushButton:hover {
-                background-color: #5b21b6;
-                border-color: #5b21b6;
-            }
-        """)
-        refresh_btn.clicked.connect(self.refresh_emails)
-        search_layout.addWidget(refresh_btn)
+        list_layout = QVBoxLayout(list_container)
+        list_layout.setContentsMargins(0, 0, 0, 0)
+        list_layout.setSpacing(0)
         
-        left_layout.addLayout(search_layout)
+        # En-tête liste
+        list_header = QFrame()
+        list_header.setFixedHeight(70)
+        list_header.setStyleSheet("background-color: #fafafa; border-bottom: 2px solid #e0e0e0;")
         
-        # Zone de liste scrollable
+        header_layout = QHBoxLayout(list_header)
+        header_layout.setContentsMargins(25, 15, 25, 15)
+        
+        self.folder_title = QLabel("📥 Réception")
+        self.folder_title.setFont(QFont("Arial", 18, QFont.Bold))
+        self.folder_title.setStyleSheet("color: #000000;")
+        header_layout.addWidget(self.folder_title)
+        
+        header_layout.addStretch()
+        
+        self.email_count_label = QLabel("0")
+        self.email_count_label.setFont(QFont("Arial", 13))
+        self.email_count_label.setStyleSheet("color: #666666;")
+        header_layout.addWidget(self.email_count_label)
+        
+        list_layout.addWidget(list_header)
+        
+        # Scroll emails
         self.emails_scroll = QScrollArea()
         self.emails_scroll.setWidgetResizable(True)
         self.emails_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.emails_scroll.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: #f9fafb;
-            }
-        """)
+        self.emails_scroll.setStyleSheet("border: none; background-color: #ffffff;")
         
         self.emails_container = QWidget()
         self.emails_layout = QVBoxLayout(self.emails_container)
         self.emails_layout.setContentsMargins(0, 0, 0, 0)
-        self.emails_layout.setSpacing(10)
+        self.emails_layout.setSpacing(0)
         self.emails_layout.addStretch()
         
         self.emails_scroll.setWidget(self.emails_container)
-        left_layout.addWidget(self.emails_scroll)
+        list_layout.addWidget(self.emails_scroll)
         
-        # === PARTIE DROITE: DÉTAIL EMAIL ===
+        layout.addWidget(list_container)
+        
+        # Vue détail
         self.email_detail_view = EmailDetailView(self.gmail_client, self.ai_processor)
-        
-        # Ajouter au splitter
-        splitter.addWidget(left_panel)
-        splitter.addWidget(self.email_detail_view)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
-        
-        layout.addWidget(splitter)
+        layout.addWidget(self.email_detail_view, 1)
     
-    def load_folder(self, folder: str):
-        """Charge les emails d'un dossier."""
-        logger.info(f"Chargement dossier: {folder}")
-        self.current_folder = folder
+    def load_folder(self, folder_id: str):
+        """Charge un dossier."""
+        self.current_folder = folder_id
+        
+        folder_names = {
+            "INBOX": "📥 Réception",
+            "STARRED": "⭐ Favoris",
+            "SENT": "📤 Envoyés",
+            "DRAFTS": "📝 Brouillons",
+            "TRASH": "🗑️ Corbeille",
+            "SPAM": "🚫 Spam"
+        }
+        self.folder_title.setText(folder_names.get(folder_id, folder_id))
+        
         self.refresh_emails()
     
     def refresh_emails(self):
-        """Rafraîchit la liste des emails."""
-        logger.info("Rafraîchissement emails...")
+        """Rafraîchit les emails."""
+        logger.info(f"Chargement: {self.current_folder}")
         
-        # Nettoyer la liste actuelle
-        while self.emails_layout.count() > 1:
-            item = self.emails_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        
-        self.email_items.clear()
-        
-        # Afficher un message de chargement
-        loading_label = QLabel("⏳ Chargement des emails...")
-        loading_label.setAlignment(Qt.AlignCenter)
-        loading_label.setFont(QFont("SF Pro Display", 14))
-        loading_label.setStyleSheet("color: #666666; padding: 50px;")
-        self.emails_layout.insertWidget(0, loading_label)
-        
-        # Charger les emails
-        QTimer.singleShot(100, self._load_emails_async)
-    
-    def _load_emails_async(self):
-        """Charge les emails de manière asynchrone - SANS ANALYSE IA."""
         try:
-            logger.info(f"Chargement emails du dossier: {self.current_folder}")
+            # Arrêter analyse en cours
+            if self.analysis_worker and self.analysis_worker.isRunning():
+                self.analysis_worker.stop()
+                self.analysis_worker.wait()
             
-            # Récupérer les emails selon le dossier
-            if self.current_folder == "INBOX":
-                self.emails = self.gmail_client.search_emails(query='in:inbox', max_results=50)
-            elif self.current_folder == "SPAM":
-                self.emails = self.gmail_client.search_emails(query='in:spam', max_results=50)
-            elif self.current_folder == "SENT":
-                self.emails = self.gmail_client.search_emails(query='in:sent', max_results=50)
-            elif self.current_folder == "DRAFTS":
-                self.emails = self.gmail_client.search_emails(query='in:draft', max_results=50)
-            elif self.current_folder == "STARRED":
-                self.emails = self.gmail_client.search_emails(query='is:starred', max_results=50)
-            elif self.current_folder == "TRASH":
-                self.emails = self.gmail_client.search_emails(query='in:trash', max_results=50)
-            else:
-                self.emails = []
+            # Charger emails
+            self.emails = self.gmail_client.list_emails(
+                folder=self.current_folder,
+                max_results=50
+            )
             
-            logger.info(f"{len(self.emails)} emails chargés (analyse IA à la demande)")
+            # Compteur
+            self.email_count_label.setText(f"{len(self.emails)}")
             
-            # Afficher les emails IMMÉDIATEMENT sans analyse IA
-            self._display_emails()
+            # Afficher IMMÉDIATEMENT
+            self._display_emails_instant()
             
+            # Analyse IA en arrière-plan
+            self._start_background_analysis()
+        
         except Exception as e:
-            logger.error(f"Erreur chargement emails: {e}")
-            import traceback
-            traceback.print_exc()
-            self._show_error(f"Erreur: {e}")
+            logger.error(f"Erreur: {e}")
+            self._show_error(f"Erreur de chargement")
     
-    def _display_emails(self):
-        """Affiche les emails dans la liste - INSTANTANÉ."""
-        # Nettoyer la liste
+    def _display_emails_instant(self):
+        """Affichage instantané."""
+        # Nettoyer
         while self.emails_layout.count() > 1:
             item = self.emails_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        
+        self.email_items = {}
         
         if not self.emails:
-            # Aucun email
-            empty_label = QLabel("📭 Aucun email dans ce dossier")
-            empty_label.setAlignment(Qt.AlignCenter)
-            empty_label.setFont(QFont("SF Pro Display", 14))
-            empty_label.setStyleSheet("color: #999999; padding: 50px;")
-            self.emails_layout.insertWidget(0, empty_label)
+            empty = QLabel("📭 Aucun email")
+            empty.setAlignment(Qt.AlignCenter)
+            empty.setFont(QFont("Arial", 14))
+            empty.setStyleSheet("color: #999999; padding: 50px;")
+            self.emails_layout.insertWidget(0, empty)
         else:
-            # Afficher les emails IMMÉDIATEMENT
             for email in self.emails:
                 item = EmailListItem(email)
                 item.clicked.connect(self._on_email_clicked)
                 self.emails_layout.insertWidget(self.emails_layout.count() - 1, item)
-                
-                # Sauvegarder la référence
                 self.email_items[email.id] = item
         
-        logger.info(f"{len(self.emails)} emails affichés instantanément")
+        logger.info(f"✅ {len(self.emails)} emails affichés")
+    
+    def _start_background_analysis(self):
+        """Analyse IA en arrière-plan."""
+        if not self.emails:
+            return
+        
+        logger.info("🤖 Analyse IA...")
+        
+        self.analysis_worker = EmailAnalysisWorker(self.ai_processor, self.emails)
+        self.analysis_worker.analysis_complete.connect(self._on_analysis_complete)
+        self.analysis_worker.start()
+    
+    def _on_analysis_complete(self, email_id: str, analysis: dict):
+        """Analyse terminée."""
+        if email_id in self.email_items:
+            self.email_items[email_id].update_ai_badges(analysis)
+            
+            for email in self.emails:
+                if email.id == email_id:
+                    email.ai_analysis = analysis
+                    break
+    
+    def _on_email_clicked(self, email: Email):
+        """Clic sur email."""
+        logger.info(f"📧 Email: {email.subject[:30]}")
+        
+        # Récupérer contenu complet
+        if not email.body:
+            try:
+                full_email = self.gmail_client.get_email(email.id)
+                if full_email:
+                    email = full_email
+            except:
+                pass
+        
+        # Afficher
+        self.email_detail_view.show_email(email)
+        self.email_selected.emit(email)
+        
+        # Marquer lu
+        try:
+            if not getattr(email, 'read', True):
+                self.gmail_client.mark_as_read(email.id)
+                email.read = True
+        except:
+            pass
     
     def _show_error(self, message: str):
-        """Affiche un message d'erreur."""
+        """Erreur."""
         while self.emails_layout.count() > 1:
             item = self.emails_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
-        error_label = QLabel(f"❌ {message}")
-        error_label.setAlignment(Qt.AlignCenter)
-        error_label.setFont(QFont("SF Pro Display", 14))
-        error_label.setStyleSheet("color: #dc2626; padding: 50px;")
-        error_label.setWordWrap(True)
-        self.emails_layout.insertWidget(0, error_label)
-    
-    def _on_email_clicked(self, email: Email):
-        """Gère le clic sur un email - ANALYSE IA ICI."""
-        logger.info(f"Email sélectionné: {email.subject}")
-        
-        # Récupérer le contenu complet si nécessaire
-        if not email.body:
-            try:
-                if hasattr(self.gmail_client, 'get_email'):
-                    full_email = self.gmail_client.get_email(email.id)
-                    if full_email:
-                        email = full_email
-            except Exception as e:
-                logger.error(f"Erreur chargement email complet: {e}")
-        
-        # Afficher dans la vue détail IMMÉDIATEMENT
-        self.email_detail_view.show_email(email)
-        self.email_selected.emit(email)
-        
-        # Lancer l'analyse IA EN ARRIÈRE-PLAN (si pas déjà fait)
-        if not hasattr(email, 'ai_analysis') or email.ai_analysis is None:
-            self._analyze_email_async(email)
-    
-    def _analyze_email_async(self, email: Email):
-        """Analyse un email en arrière-plan sans bloquer l'UI."""
-        logger.info(f"🔍 Analyse IA en arrière-plan: {email.subject}")
-        
-        # Annuler l'analyse précédente si en cours
-        if self.analysis_thread and self.analysis_thread.isRunning():
-            self.analysis_thread.quit()
-            self.analysis_thread.wait()
-        
-        # Lancer une nouvelle analyse
-        self.analysis_thread = AIAnalysisThread(self.ai_processor, email)
-        self.analysis_thread.analysis_complete.connect(self._on_analysis_complete)
-        self.analysis_thread.start()
-    
-    def _on_analysis_complete(self, email: Email, analysis: dict):
-        """Callback quand l'analyse IA est terminée."""
-        if analysis:
-            logger.info(f"✅ Analyse terminée: {analysis.get('category', 'autre')}")
-            
-            # Sauvegarder l'analyse
-            email.ai_analysis = analysis
-            email.category = analysis.get('category', 'autre')
-            
-            # Mettre à jour les badges visuels si l'email est dans la liste
-            if email.id in self.email_items:
-                item = self.email_items[email.id]
-                item.email.ai_analysis = analysis
-                item.update_ai_badges(analysis)
-            
-            # Mettre à jour la vue détail si cet email est affiché
-            if hasattr(self.email_detail_view, 'current_email') and \
-               self.email_detail_view.current_email and \
-               self.email_detail_view.current_email.id == email.id:
-                self.email_detail_view.show_email(email)
-        else:
-            logger.warning(f"⚠️ Échec analyse IA pour: {email.subject}")
+        error = QLabel(f"❌ {message}")
+        error.setAlignment(Qt.AlignCenter)
+        error.setFont(QFont("Arial", 14))
+        error.setStyleSheet("color: #dc2626; padding: 50px;")
+        error.setWordWrap(True)
+        self.emails_layout.insertWidget(0, error)

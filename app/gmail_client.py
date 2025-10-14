@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Client Gmail - MÉTHODES COMPLÈTES
+Client Gmail - VERSION OPTIMISÉE ULTRA-RAPIDE
 """
 import logging
-import base64
 import os
-from typing import List, Optional, Dict
-from datetime import datetime, timezone
+import base64
+from typing import List, Optional
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -16,20 +16,20 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
-from models.email_model import Email, EmailAttachment
+from app.models.email_model import Email
 
 logger = logging.getLogger(__name__)
 
-SCOPES = [
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/gmail.modify',
-    'https://www.googleapis.com/auth/gmail.compose'
-]
-
 class GmailClient:
-    """Client pour l'API Gmail."""
+    """Client Gmail optimisé."""
+    
+    SCOPES = [
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/gmail.modify'
+    ]
     
     def __init__(self, credentials_file: str = "client_secret.json", mock_mode: bool = False):
         self.credentials_file = credentials_file
@@ -41,19 +41,19 @@ class GmailClient:
             self._authenticate()
     
     def _authenticate(self):
-        """Authentifie avec Gmail API."""
+        """Authentification."""
         try:
             creds = None
             
             if os.path.exists('token.json'):
-                creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+                creds = Credentials.from_authorized_user_file('token.json', self.SCOPES)
             
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
                 else:
                     flow = InstalledAppFlow.from_client_secrets_file(
-                        self.credentials_file, SCOPES
+                        self.credentials_file, self.SCOPES
                     )
                     creds = flow.run_local_server(port=0)
                 
@@ -62,20 +62,32 @@ class GmailClient:
             
             self.service = build('gmail', 'v1', credentials=creds)
             self.authenticated = True
-            logger.info("Authentification Gmail réussie")
-            
+            logger.info("✅ Gmail authentifié")
+        
         except Exception as e:
-            logger.error(f"Erreur authentification Gmail: {e}")
+            logger.error(f"❌ Erreur auth: {e}")
             self.authenticated = False
     
-    def get_inbox_emails(self, max_results: int = 50) -> List[Email]:
-        """Récupère les emails de la boîte de réception."""
+    def list_emails(self, folder: str = "INBOX", max_results: int = 50) -> List[Email]:
+        """Liste emails - RAPIDE."""
+        if self.mock_mode or not self.authenticated:
+            return []
+        
         try:
-            logger.info(f"Récupération de {max_results} emails de la boîte de réception")
+            label_map = {
+                "INBOX": "INBOX",
+                "SENT": "SENT",
+                "DRAFTS": "DRAFT",
+                "TRASH": "TRASH",
+                "SPAM": "SPAM",
+                "STARRED": "STARRED"
+            }
+            
+            label_id = label_map.get(folder, folder)
             
             results = self.service.users().messages().list(
                 userId='me',
-                labelIds=['INBOX'],
+                labelIds=[label_id],
                 maxResults=max_results
             ).execute()
             
@@ -83,355 +95,186 @@ class GmailClient:
             emails = []
             
             for msg in messages:
-                email = self._get_email_by_id(msg['id'])
-                if email:
-                    emails.append(email)
+                try:
+                    email = self._parse_light(msg['id'])
+                    if email:
+                        emails.append(email)
+                except:
+                    pass
             
-            logger.info(f"{len(emails)} emails récupérés de INBOX")
+            logger.info(f"📧 {len(emails)} emails de {folder}")
             return emails
-            
+        
         except Exception as e:
-            logger.error(f"Erreur récupération inbox: {e}")
+            logger.error(f"❌ Erreur: {e}")
             return []
     
-    def get_sent_emails(self, max_results: int = 50) -> List[Email]:
-        """Récupère les emails envoyés."""
-        try:
-            results = self.service.users().messages().list(
-                userId='me',
-                labelIds=['SENT'],
-                maxResults=max_results
-            ).execute()
-            
-            messages = results.get('messages', [])
-            emails = []
-            
-            for msg in messages:
-                email = self._get_email_by_id(msg['id'])
-                if email:
-                    emails.append(email)
-            
-            logger.info(f"{len(emails)} emails envoyés récupérés")
-            return emails
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération emails envoyés: {e}")
-            return []
-    
-    def get_archived_emails(self, max_results: int = 50) -> List[Email]:
-        """Récupère les emails archivés."""
-        try:
-            # Les emails archivés n'ont pas le label INBOX mais ne sont pas dans TRASH
-            results = self.service.users().messages().list(
-                userId='me',
-                q='-in:inbox -in:trash -in:spam',
-                maxResults=max_results
-            ).execute()
-            
-            messages = results.get('messages', [])
-            emails = []
-            
-            for msg in messages:
-                email = self._get_email_by_id(msg['id'])
-                if email:
-                    emails.append(email)
-            
-            logger.info(f"{len(emails)} emails archivés récupérés")
-            return emails
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération archives: {e}")
-            return []
-    
-    def get_draft_emails(self, max_results: int = 50) -> List[Email]:
-        """Récupère les brouillons."""
-        try:
-            results = self.service.users().drafts().list(
-                userId='me',
-                maxResults=max_results
-            ).execute()
-            
-            drafts = results.get('drafts', [])
-            emails = []
-            
-            for draft in drafts:
-                msg = draft.get('message', {})
-                email = self._get_email_by_id(msg['id'])
-                if email:
-                    emails.append(email)
-            
-            logger.info(f"{len(emails)} brouillons récupérés")
-            return emails
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération brouillons: {e}")
-            return []
-    
-    def get_trash_emails(self, max_results: int = 50) -> List[Email]:
-        """Récupère les emails de la corbeille."""
-        try:
-            results = self.service.users().messages().list(
-                userId='me',
-                labelIds=['TRASH'],
-                maxResults=max_results
-            ).execute()
-            
-            messages = results.get('messages', [])
-            emails = []
-            
-            for msg in messages:
-                email = self._get_email_by_id(msg['id'])
-                if email:
-                    emails.append(email)
-            
-            logger.info(f"{len(emails)} emails de la corbeille récupérés")
-            return emails
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération corbeille: {e}")
-            return []
-    
-    def get_spam_emails(self, max_results: int = 50) -> List[Email]:
-        """Récupère les spams."""
-        try:
-            results = self.service.users().messages().list(
-                userId='me',
-                labelIds=['SPAM'],
-                maxResults=max_results
-            ).execute()
-            
-            messages = results.get('messages', [])
-            emails = []
-            
-            for msg in messages:
-                email = self._get_email_by_id(msg['id'])
-                if email:
-                    emails.append(email)
-            
-            logger.info(f"{len(emails)} spams récupérés")
-            return emails
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération spam: {e}")
-            return []
-    
-    def _get_email_by_id(self, email_id: str) -> Optional[Email]:
-        """Récupère un email par son ID."""
+    def _parse_light(self, message_id: str) -> Optional[Email]:
+        """Parse léger - RAPIDE."""
         try:
             message = self.service.users().messages().get(
                 userId='me',
-                id=email_id,
-                format='full'
+                id=message_id,
+                format='metadata',
+                metadataHeaders=['From', 'To', 'Subject', 'Date']
             ).execute()
             
-            headers = message['payload'].get('headers', [])
-            
-            # Extraction des informations
-            subject = self._get_header(headers, 'Subject')
-            sender = self._get_header(headers, 'From')
-            to = self._get_header(headers, 'To')
-            cc = self._get_header(headers, 'Cc')
-            date_str = self._get_header(headers, 'Date')
-            
-            # Snippet (aperçu court)
-            snippet = message.get('snippet', '')
-            
-            # Parser la date
-            received_date = None
-            if date_str:
-                try:
-                    from email.utils import parsedate_to_datetime
-                    received_date = parsedate_to_datetime(date_str)
-                except:
-                    received_date = datetime.now(timezone.utc)
-            
-            # Corps du message
-            body, is_html = self._get_body(message['payload'])
-            
-            # Pièces jointes
-            attachments = self._get_attachments(message['payload'], email_id)
-            
-            # Labels
-            labels = message.get('labelIds', [])
-            is_read = 'UNREAD' not in labels
+            headers = message.get('payload', {}).get('headers', [])
             
             email = Email(
-                id=email_id,
-                subject=subject,
-                sender=sender,
-                to=[to] if to else [],
-                cc=[cc] if cc else [],
-                body=body,
-                snippet=snippet,  # AJOUT DU SNIPPET
-                received_date=received_date,
-                is_read=is_read,
-                is_html=is_html,
-                attachments=attachments,
-                labels=labels
+                id=message['id'],
+                thread_id=message.get('threadId'),
+                sender=self._get_header(headers, 'From'),
+                to=self._get_header(headers, 'To'),
+                subject=self._get_header(headers, 'Subject'),
+                snippet=message.get('snippet', ''),
+                received_date=self._parse_date(self._get_header(headers, 'Date')),
+                read='UNREAD' not in message.get('labelIds', [])
             )
             
             return email
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération email {email_id}: {e}")
+        
+        except:
             return None
     
-    def _get_header(self, headers: List[Dict], name: str) -> Optional[str]:
-        """Extrait une en-tête."""
-        for header in headers:
-            if header['name'].lower() == name.lower():
-                return header['value']
-        return None
+    def get_email(self, message_id: str) -> Optional[Email]:
+        """Récupère email complet."""
+        if self.mock_mode or not self.authenticated:
+            return None
+        
+        try:
+            message = self.service.users().messages().get(
+                userId='me',
+                id=message_id,
+                format='full'
+            ).execute()
+            
+            headers = message.get('payload', {}).get('headers', [])
+            payload = message.get('payload', {})
+            
+            email = Email(
+                id=message['id'],
+                thread_id=message.get('threadId'),
+                sender=self._get_header(headers, 'From'),
+                to=self._get_header(headers, 'To'),
+                subject=self._get_header(headers, 'Subject'),
+                snippet=message.get('snippet', ''),
+                body=self._extract_body(payload),
+                received_date=self._parse_date(self._get_header(headers, 'Date')),
+                read='UNREAD' not in message.get('labelIds', [])
+            )
+            
+            return email
+        
+        except:
+            return None
     
-    def _get_body(self, payload: Dict) -> tuple[str, bool]:
-        """Extrait le corps du message."""
-        body = ""
-        is_html = False
-        
-        if 'parts' in payload:
-            for part in payload['parts']:
-                if part['mimeType'] == 'text/html':
-                    data = part['body'].get('data', '')
-                    if data:
-                        body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
-                        is_html = True
-                        break
-                elif part['mimeType'] == 'text/plain' and not body:
-                    data = part['body'].get('data', '')
-                    if data:
-                        body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
-        else:
-            if payload['mimeType'] == 'text/html':
-                data = payload['body'].get('data', '')
-                if data:
-                    body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
-                    is_html = True
-            elif payload['mimeType'] == 'text/plain':
-                data = payload['body'].get('data', '')
-                if data:
-                    body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
-        
-        return body, is_html
+    def _extract_body(self, payload: dict) -> str:
+        """Extrait body."""
+        try:
+            if 'body' in payload and payload['body'].get('data'):
+                return base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8', errors='ignore')
+            
+            if 'parts' in payload:
+                for part in payload['parts']:
+                    if part.get('mimeType') == 'text/plain':
+                        if part.get('body', {}).get('data'):
+                            return base64.urlsafe_b64decode(part['body']['data']).decode('utf-8', errors='ignore')
+                    
+                    if 'parts' in part:
+                        body = self._extract_body(part)
+                        if body:
+                            return body
+            
+            return ""
+        except:
+            return ""
     
-    def _get_attachments(self, payload: Dict, message_id: str) -> List[EmailAttachment]:
-        """Extrait les pièces jointes."""
-        attachments = []
-        
-        if 'parts' in payload:
-            for part in payload['parts']:
-                if part.get('filename'):
-                    attachment = EmailAttachment(
-                        id=part['body'].get('attachmentId', ''),
-                        filename=part['filename'],
-                        mime_type=part['mimeType'],
-                        size=part['body'].get('size', 0),
-                        message_id=message_id
-                    )
-                    attachments.append(attachment)
-        
-        return attachments
+    def _get_header(self, headers: list, name: str) -> str:
+        """Header."""
+        for h in headers:
+            if h.get('name', '').lower() == name.lower():
+                return h.get('value', '')
+        return ''
     
-    def send_email(self, to: List[str], subject: str, body: str, 
-                   cc: Optional[List[str]] = None, 
-                   attachments: Optional[List[str]] = None) -> bool:
-        """Envoie un email."""
+    def _parse_date(self, date_str: str) -> Optional[datetime]:
+        """Parse date."""
+        try:
+            from email.utils import parsedate_to_datetime
+            return parsedate_to_datetime(date_str)
+        except:
+            return None
+    
+    def send_email(self, to: str, subject: str, body: str, cc: str = None, attachments: list = None):
+        """Envoie email."""
+        if self.mock_mode or not self.authenticated:
+            logger.info(f"📤 [MOCK] Email à {to}")
+            return
+        
         try:
             message = MIMEMultipart()
-            message['To'] = ', '.join(to)
+            message['To'] = to
             message['Subject'] = subject
             
             if cc:
-                message['Cc'] = ', '.join(cc)
+                message['Cc'] = cc
             
             message.attach(MIMEText(body, 'plain'))
             
-            # Ajouter les pièces jointes
             if attachments:
                 for filepath in attachments:
                     self._attach_file(message, filepath)
             
-            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+            raw = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
             
             self.service.users().messages().send(
                 userId='me',
-                body={'raw': raw_message}
+                body={'raw': raw}
             ).execute()
             
-            logger.info(f"Email envoyé à {to}")
-            return True
-            
+            logger.info(f"✅ Email envoyé à {to}")
+        
         except Exception as e:
-            logger.error(f"Erreur envoi email: {e}")
-            return False
+            logger.error(f"❌ Erreur envoi: {e}")
+            raise
     
     def _attach_file(self, message: MIMEMultipart, filepath: str):
-        """Attache un fichier au message."""
-        with open(filepath, 'rb') as f:
-            part = MIMEBase('application', 'octet-stream')
-            part.set_payload(f.read())
-        
-        encoders.encode_base64(part)
-        part.add_header(
-            'Content-Disposition',
-            f'attachment; filename={os.path.basename(filepath)}'
-        )
-        message.attach(part)
+        """Attache fichier."""
+        try:
+            with open(filepath, 'rb') as f:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(f.read())
+            
+            encoders.encode_base64(part)
+            part.add_header(
+                'Content-Disposition',
+                f'attachment; filename= {os.path.basename(filepath)}'
+            )
+            message.attach(part)
+        except:
+            pass
     
-    def mark_as_read(self, email_id: str) -> bool:
-        """Marque un email comme lu."""
+    def mark_as_read(self, message_id: str):
+        """Marquer lu."""
+        if self.mock_mode or not self.authenticated:
+            return
+        
         try:
             self.service.users().messages().modify(
                 userId='me',
-                id=email_id,
+                id=message_id,
                 body={'removeLabelIds': ['UNREAD']}
             ).execute()
-            return True
-        except Exception as e:
-            logger.error(f"Erreur marquage lu: {e}")
-            return False
-    
-    def mark_as_unread(self, email_id: str) -> bool:
-        """Marque un email comme non lu."""
-        try:
-            self.service.users().messages().modify(
-                userId='me',
-                id=email_id,
-                body={'addLabelIds': ['UNREAD']}
-            ).execute()
-            return True
-        except Exception as e:
-            logger.error(f"Erreur marquage non lu: {e}")
-            return False
-    
-    def archive_email(self, email_id: str) -> bool:
-        """Archive un email."""
-        try:
-            self.service.users().messages().modify(
-                userId='me',
-                id=email_id,
-                body={'removeLabelIds': ['INBOX']}
-            ).execute()
-            logger.info(f"Email {email_id} archivé")
-            return True
-        except Exception as e:
-            logger.error(f"Erreur archivage: {e}")
-            return False
-    
-    def delete_email(self, email_id: str) -> bool:
-        """Supprime un email (le met à la corbeille)."""
-        try:
-            self.service.users().messages().trash(
-                userId='me',
-                id=email_id
-            ).execute()
-            logger.info(f"Email {email_id} supprimé")
-            return True
-        except Exception as e:
-            logger.error(f"Erreur suppression: {e}")
-            return False
+            
+            logger.info(f"✅ Marqué lu: {message_id}")
+        except:
+            pass
     
     def search_emails(self, query: str, max_results: int = 50) -> List[Email]:
-        """Recherche des emails."""
+        """Recherche."""
+        if self.mock_mode or not self.authenticated:
+            return []
+        
         try:
             results = self.service.users().messages().list(
                 userId='me',
@@ -443,13 +286,42 @@ class GmailClient:
             emails = []
             
             for msg in messages:
-                email = self._get_email_by_id(msg['id'])
+                email = self._parse_light(msg['id'])
                 if email:
                     emails.append(email)
             
-            logger.info(f"{len(emails)} emails trouvés pour: {query}")
+            logger.info(f"🔍 {len(emails)} résultats")
             return emails
-            
-        except Exception as e:
-            logger.error(f"Erreur recherche: {e}")
+        except:
             return []
+    
+    def archive_email(self, message_id: str):
+        """Archive."""
+        if self.mock_mode or not self.authenticated:
+            return
+        
+        try:
+            self.service.users().messages().modify(
+                userId='me',
+                id=message_id,
+                body={'removeLabelIds': ['INBOX']}
+            ).execute()
+            
+            logger.info(f"✅ Archivé: {message_id}")
+        except Exception as e:
+            raise
+    
+    def delete_email(self, message_id: str):
+        """Supprime."""
+        if self.mock_mode or not self.authenticated:
+            return
+        
+        try:
+            self.service.users().messages().trash(
+                userId='me',
+                id=message_id
+            ).execute()
+            
+            logger.info(f"✅ Supprimé: {message_id}")
+        except Exception as e:
+            raise
