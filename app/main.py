@@ -73,9 +73,9 @@ def main():
         print("🖥️  ÉTAPE 2/4: Initialisation de l'interface...")
         print("=" * 60)
         
-        from PyQt5.QtWidgets import QApplication, QMessageBox
-        from PyQt5.QtCore import Qt
-        from PyQt5.QtGui import QFont
+        from PyQt6.QtWidgets import QApplication, QMessageBox
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QFont
         
         app = QApplication(sys.argv)
         app.setApplicationName("Dynovate Mail")
@@ -154,15 +154,29 @@ def main():
         print("\n" + "=" * 60)
         print("🧠 ÉTAPE 4/4: Chargement des services IA...")
         print("=" * 60)
-        
+
+        # Imports
+        from app.ollama_client import OllamaClient
         from ai_processor import AIProcessor
         from calendar_manager import CalendarManager
         from auto_responder import AutoResponder
         from ui.main_window import MainWindow
         
-        ai_processor = AIProcessor()
+        # Initialiser le client Ollama
+        ollama_client = OllamaClient(
+            base_url="http://localhost:11434",
+            model="nchapman/ministral-8b-instruct-2410:8b"
+        )
+        
+        # Initialiser AIProcessor avec le client
+        ai_processor = AIProcessor(ollama_client=ollama_client)
+        
+        # Initialiser les autres services
         calendar_manager = CalendarManager()
-        auto_responder = AutoResponder(ai_processor)
+        auto_responder = AutoResponder(
+            gmail_client=gmail_client,
+            ai_processor=ai_processor
+        )
         
         print("✅ Services IA chargés!")
         

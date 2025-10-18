@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Interface principale - VERSION OPTIMISÉE FINALE
+Interface principale - VERSION OPTIMISÉE FINALE CORRIGÉE
 """
 import logging
 import os
 from datetime import datetime
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QMessageBox, QApplication
 )
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont
 
 from app.gmail_client import GmailClient
 from app.ai_processor import AIProcessor
@@ -92,7 +92,7 @@ class MainWindow(QMainWindow):
         
         # Sidebar
         self.sidebar = EmailFoldersSidebar()
-        self.sidebar.setFixedWidth(240)
+        self.sidebar.setFixedWidth(250)
         content_layout.addWidget(self.sidebar)
         
         # Contenu
@@ -122,17 +122,25 @@ class MainWindow(QMainWindow):
     
     def _setup_connections(self):
         """Connexions."""
+        # Top toolbar
         self.top_toolbar.view_requested.connect(self._switch_view)
         self.top_toolbar.compose_requested.connect(self._open_compose)
         self.top_toolbar.refresh_requested.connect(self._refresh_current_view)
         self.top_toolbar.search_requested.connect(self._perform_search)
         
+        # Sidebar
         self.sidebar.folder_changed.connect(self._on_folder_changed)
+        
+        # Inbox view
         self.inbox_view.email_selected.connect(self._on_email_selected)
         self.inbox_view.email_detail_view.reply_requested.connect(self._open_reply)
         self.inbox_view.email_detail_view.forward_requested.connect(self._open_forward)
         
+        # Settings
         self.settings_view.settings_changed.connect(self._on_settings_changed)
+        
+        # ✨ Assistant IA - Navigation vers emails
+        self.ai_view.email_selected.connect(self._on_ai_email_selected)
     
     def _load_initial_data(self):
         """Charge les données."""
@@ -201,6 +209,25 @@ class MainWindow(QMainWindow):
     def _on_email_selected(self, email: Email):
         """Email sélectionné."""
         logger.info(f"Email: {email.subject[:30]}")
+    
+    def _on_ai_email_selected(self, email: Email):
+        """Email sélectionné depuis l'assistant IA."""
+        logger.info(f"📧 Ouverture email depuis IA: {email.subject[:30]}")
+        
+        # Basculer vers inbox
+        self._switch_view("inbox")
+        
+        # Récupérer l'email complet si nécessaire
+        if not email.body:
+            try:
+                full_email = self.gmail_client.get_email(email.id)
+                if full_email:
+                    email = full_email
+            except Exception as e:
+                logger.error(f"Erreur récupération email: {e}")
+        
+        # Afficher l'email dans la vue détail
+        self.inbox_view.email_detail_view.show_email(email)
     
     def _open_compose(self):
         """Ouvre composition."""
@@ -309,10 +336,10 @@ class MainWindow(QMainWindow):
         reply = QMessageBox.question(
             self, "Confirmation",
             "Fermer Dynovate Mail ?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self.refresh_timer.stop()
             if hasattr(self.inbox_view, 'analysis_worker') and self.inbox_view.analysis_worker:
                 if self.inbox_view.analysis_worker.isRunning():

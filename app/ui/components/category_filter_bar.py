@@ -3,9 +3,9 @@
 Barre de filtres par catégories - CORRIGÉE
 """
 import logging
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 

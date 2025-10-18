@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Barre d'outils supérieure - OPTIMISÉE
+Barre d'outils supérieure - VERSION CORRIGÉE
 """
 import logging
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QPushButton, QLineEdit, QLabel, QFrame
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 
@@ -26,45 +26,30 @@ class TopToolbar(QWidget):
     
     def _setup_ui(self):
         """Interface."""
-        self.setFixedHeight(75)
+        self.setFixedHeight(70)
         self.setStyleSheet("""
             QWidget {
                 background-color: #ffffff;
-                border-bottom: 3px solid #5b21b6;
+                border-bottom: 1px solid #e5e7eb;
             }
         """)
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(25, 12, 25, 12)
-        layout.setSpacing(20)
-        
-        # Logo + Titre
-        logo_layout = QHBoxLayout()
-        logo_layout.setSpacing(15)
-        
-        logo = QLabel("📧")
-        logo.setFont(QFont("Arial", 32))
-        logo_layout.addWidget(logo)
-        
-        title = QLabel("Dynovate Mail")
-        title.setFont(QFont("Arial", 20, QFont.Bold))
-        title.setStyleSheet("color: #5b21b6;")
-        logo_layout.addWidget(title)
-        
-        layout.addLayout(logo_layout)
+        layout.setContentsMargins(25, 10, 25, 10)
+        layout.setSpacing(15)
         
         # Barre de recherche
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Rechercher...")
+        self.search_input.setPlaceholderText("🔍  Rechercher dans vos emails...")
         self.search_input.setFont(QFont("Arial", 13))
-        self.search_input.setFixedWidth(450)
-        self.search_input.setFixedHeight(45)
+        self.search_input.setFixedWidth(500)
+        self.search_input.setFixedHeight(42)
         self.search_input.returnPressed.connect(self._on_search)
         self.search_input.setStyleSheet("""
             QLineEdit {
-                background-color: #f3f4f6;
-                border: 2px solid #e5e7eb;
-                border-radius: 22px;
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 21px;
                 padding: 0 20px;
                 color: #000000;
             }
@@ -82,43 +67,34 @@ class TopToolbar(QWidget):
             ("📥 Inbox", "inbox"),
             ("📅 Calendrier", "calendar"),
             ("🤖 Assistant IA", "ai"),
-            ("⚙️ Paramètres", "settings")
         ]
         
         self.nav_buttons = {}
         
         for text, view_id in nav_buttons:
             btn = QPushButton(text)
-            btn.setFont(QFont("Arial", 12, QFont.Bold))
-            btn.setFixedHeight(45)
-            btn.setFixedWidth(155)
-            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFont(QFont("Arial", 12))
+            btn.setFixedHeight(42)
+            btn.setFixedWidth(140)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setCheckable(True)
             btn.clicked.connect(lambda checked, v=view_id: self._on_nav_clicked(v))
             layout.addWidget(btn)
             self.nav_buttons[view_id] = btn
         
-        # Séparateur
-        separator = QFrame()
-        separator.setFrameShape(QFrame.VLine)
-        separator.setFixedWidth(2)
-        separator.setFixedHeight(45)
-        separator.setStyleSheet("background-color: #e5e7eb;")
-        layout.addWidget(separator)
-        
         # Bouton composer
         compose_btn = QPushButton("✉️ Nouveau")
-        compose_btn.setFont(QFont("Arial", 13, QFont.Bold))
-        compose_btn.setFixedHeight(45)
-        compose_btn.setFixedWidth(145)
-        compose_btn.setCursor(Qt.PointingHandCursor)
+        compose_btn.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        compose_btn.setFixedHeight(42)
+        compose_btn.setFixedWidth(135)
+        compose_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         compose_btn.clicked.connect(self.compose_requested.emit)
         compose_btn.setStyleSheet("""
             QPushButton {
                 background-color: #5b21b6;
                 color: white;
                 border: none;
-                border-radius: 22px;
+                border-radius: 21px;
             }
             QPushButton:hover {
                 background-color: #4c1d95;
@@ -131,18 +107,19 @@ class TopToolbar(QWidget):
         
         # Bouton rafraîchir
         refresh_btn = QPushButton("🔄")
-        refresh_btn.setFont(QFont("Arial", 18))
-        refresh_btn.setFixedSize(45, 45)
-        refresh_btn.setCursor(Qt.PointingHandCursor)
+        refresh_btn.setFont(QFont("Arial", 16))
+        refresh_btn.setFixedSize(42, 42)
+        refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         refresh_btn.clicked.connect(self.refresh_requested.emit)
         refresh_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f3f4f6;
-                border: 2px solid #e5e7eb;
-                border-radius: 22px;
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 21px;
             }
             QPushButton:hover {
                 background-color: #5b21b6;
+                color: white;
                 border-color: #5b21b6;
             }
         """)
@@ -178,16 +155,17 @@ class TopToolbar(QWidget):
                 QPushButton {
                     background-color: transparent;
                     color: #6b7280;
-                    border: 2px solid transparent;
-                    border-radius: 22px;
+                    border: 1px solid transparent;
+                    border-radius: 21px;
                 }
                 QPushButton:hover {
-                    background-color: #f3f4f6;
+                    background-color: #f9fafb;
                     color: #000000;
                 }
                 QPushButton:checked {
                     background-color: #ede9fe;
                     color: #5b21b6;
                     border-color: #5b21b6;
+                    font-weight: bold;
                 }
             """)

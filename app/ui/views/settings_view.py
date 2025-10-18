@@ -5,14 +5,14 @@ Vue Paramètres - FONCTIONNELLE COMPLÈTE
 import logging
 import json
 import os
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QLineEdit, QTextEdit, QCheckBox,
     QSpinBox, QComboBox, QGroupBox, QScrollArea,
     QMessageBox, QFileDialog, QFrame
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class SettingsView(QScrollArea):
     def _setup_ui(self):
         """Crée l'interface."""
         self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -39,7 +39,7 @@ class SettingsView(QScrollArea):
         
         # Titre
         title = QLabel("⚙️ Paramètres")
-        title.setFont(QFont("Arial", 24, QFont.Bold))
+        title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
         title.setStyleSheet("color: #5b21b6;")
         layout.addWidget(title)
         
@@ -71,7 +71,7 @@ class SettingsView(QScrollArea):
         actions_layout = QHBoxLayout()
         
         save_btn = QPushButton("💾 Enregistrer les paramètres")
-        save_btn.setFont(QFont("Arial", 13, QFont.Bold))
+        save_btn.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         save_btn.setFixedHeight(50)
         save_btn.clicked.connect(self._save_settings)
         actions_layout.addWidget(save_btn)
@@ -92,7 +92,7 @@ class SettingsView(QScrollArea):
     def _create_profile_section(self) -> QGroupBox:
         """Crée la section profil."""
         group = QGroupBox("👤 Profil utilisateur")
-        group.setFont(QFont("Arial", 14, QFont.Bold))
+        group.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
@@ -145,7 +145,7 @@ class SettingsView(QScrollArea):
     def _create_ai_section(self) -> QGroupBox:
         """Crée la section IA."""
         group = QGroupBox("🤖 Intelligence Artificielle")
-        group.setFont(QFont("Arial", 14, QFont.Bold))
+        group.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
@@ -202,7 +202,7 @@ class SettingsView(QScrollArea):
     def _create_auto_response_section(self) -> QGroupBox:
         """Crée la section réponses automatiques."""
         group = QGroupBox("✍️ Réponses automatiques")
-        group.setFont(QFont("Arial", 14, QFont.Bold))
+        group.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
@@ -231,7 +231,7 @@ class SettingsView(QScrollArea):
         
         # Types d'emails à traiter
         types_label = QLabel("Répondre automatiquement aux:")
-        types_label.setFont(QFont("Arial", 12, QFont.Bold))
+        types_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         layout.addWidget(types_label)
         
         self.auto_cv = QCheckBox("CV et candidatures")
@@ -261,7 +261,7 @@ class SettingsView(QScrollArea):
     def _create_notifications_section(self) -> QGroupBox:
         """Crée la section notifications."""
         group = QGroupBox("🔔 Notifications")
-        group.setFont(QFont("Arial", 14, QFont.Bold))
+        group.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
@@ -290,7 +290,7 @@ class SettingsView(QScrollArea):
     def _create_appearance_section(self) -> QGroupBox:
         """Crée la section apparence."""
         group = QGroupBox("🎨 Apparence")
-        group.setFont(QFont("Arial", 14, QFont.Bold))
+        group.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)
@@ -338,7 +338,7 @@ class SettingsView(QScrollArea):
     def _create_privacy_section(self) -> QGroupBox:
         """Crée la section confidentialité."""
         group = QGroupBox("🔒 Données et confidentialité")
-        group.setFont(QFont("Arial", 14, QFont.Bold))
+        group.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         
         layout = QVBoxLayout()
         layout.setSpacing(15)

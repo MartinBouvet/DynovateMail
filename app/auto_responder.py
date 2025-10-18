@@ -1,293 +1,271 @@
 #!/usr/bin/env python3
 """
-Gestionnaire de réponses automatiques - VERSION CORRIGÉE
-Corrections: Validation, évitement de boucles, sécurité
+Auto Responder - Réponses automatiques aux emails
 """
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Optional
 from datetime import datetime, timedelta
-from collections import defaultdict
 
+from app.gmail_client import GmailClient
 from app.ai_processor import AIProcessor
 from app.models.email_model import Email
 
 logger = logging.getLogger(__name__)
 
-
 class AutoResponder:
-    """Gestionnaire de réponses automatiques sécurisé - CORRIGÉ."""
+    """Gestionnaire de réponses automatiques."""
     
-    def __init__(self, ai_processor: AIProcessor):
+    def __init__(self, gmail_client: GmailClient, ai_processor: AIProcessor):
+        """
+        Initialise l'auto-responder.
+        
+        Args:
+            gmail_client: Client Gmail
+            ai_processor: Processeur IA
+        """
+        self.gmail_client = gmail_client
         self.ai_processor = ai_processor
-        
-        # Configuration
-        self.enabled = True
-        self.delay_minutes = 5  # Délai avant envoi
-        self.respond_to_cv = True
-        self.respond_to_rdv = True
-        self.respond_to_support = True
-        self.respond_to_partenariat = False
-        self.avoid_loops = True
-        
-        # Historique des réponses (pour éviter les boucles)
-        self.response_history = defaultdict(list)  # sender -> [timestamps]
-        self.max_responses_per_day = 2
-        
-        # Réponses en attente de validation
-        self.pending_responses = {}  # response_id -> response_data
+        self.enabled = False
+        self.responded_emails = set()
+        self.last_check = datetime.now()
         
         logger.info("AutoResponder initialisé avec sécurité renforcée")
     
-    def process_email_for_auto_response(self, email: Email) -> Optional[Dict]:
+    def enable(self):
+        """Active les réponses automatiques."""
+        self.enabled = True
+        logger.info("✅ Réponses automatiques activées")
+    
+    def disable(self):
+        """Désactive les réponses automatiques."""
+        self.enabled = False
+        logger.info("⛔ Réponses automatiques désactivées")
+    
+    def should_respond(self, email: Email) -> bool:
         """
-        Traite un email pour une éventuelle réponse automatique - CORRIGÉ.
+        Détermine si on doit répondre automatiquement à cet email.
         
         Args:
-            email: L'email à traiter
+            email: Email à analyser
             
         Returns:
-            Dict contenant les détails de la réponse suggérée, ou None
+            True si on doit répondre, False sinon
         """
+        if not self.enabled:
+            return False
+        
+        # Ne pas répondre si déjà répondu
+        if email.id in self.responded_emails:
+            return False
+        
+        # Ne pas répondre aux emails envoyés
+        if 'SENT' in email.labels:
+            return False
+        
+        # Ne pas répondre aux newsletters
+        sender_lower = (email.sender or '').lower()
+        if 'noreply' in sender_lower or 'no-reply' in sender_lower:
+            return False
+        
+        # Ne pas répondre au spam
+        if 'SPAM' in email.labels:
+            return False
+        
+        # Analyser avec l'IA
         try:
-            if not self.enabled:
-                logger.debug("Réponses automatiques désactivées")
-                return None
+            analysis = self.ai_processor.analyze_email(email)
+            category = analysis.get('category', '')
             
-            # Vérifier que l'email a une analyse IA
-            if not hasattr(email, 'ai_analysis') or not email.ai_analysis:
-                logger.debug(f"Email {email.id} sans analyse IA")
-                return None
-            
-            analysis = email.ai_analysis
-            
-            # Vérifier si une réponse auto est recommandée
-            if not analysis.should_auto_respond:
-                logger.debug(f"Email {email.id} ne nécessite pas de réponse auto")
-                return None
-            
-            # Vérifier la catégorie
-            if not self._is_category_enabled(analysis.category):
-                logger.debug(f"Réponses auto désactivées pour catégorie: {analysis.category}")
-                return None
-            
-            # === SÉCURITÉ: Éviter les boucles ===
-            if self.avoid_loops:
-                if self._is_response_loop_risk(email.sender):
-                    logger.warning(f"Risque de boucle détecté pour {email.sender}")
-                    return None
-            
-            # Vérifier qu'il y a une réponse suggérée
-            if not analysis.suggested_response:
-                logger.debug(f"Email {email.id} sans réponse suggérée")
-                return None
-            
-            # Créer les données de la réponse
-            response_data = {
-                'email_id': email.id,
-                'sender': email.sender,
-                'subject': f"Re: {email.subject}" if email.subject else "Re: (sans sujet)",
-                'body': analysis.suggested_response,
-                'category': analysis.category,
-                'confidence': analysis.confidence,
-                'created_at': datetime.now(),
-                'scheduled_send_time': datetime.now() + timedelta(minutes=self.delay_minutes),
-                'status': 'pending'
-            }
-            
-            logger.info(
-                f"Réponse automatique suggérée pour email {email.id} "
-                f"(catégorie: {analysis.category}, confiance: {analysis.confidence:.2f})"
-            )
-            
-            return response_data
-            
+            # Répondre aux CVs et demandes de support
+            if category in ['cv', 'support', 'meeting']:
+                return True
+        
         except Exception as e:
-            logger.error(f"Erreur traitement réponse auto: {e}")
-            return None
-    
-    def _is_category_enabled(self, category: str) -> bool:
-        """Vérifie si les réponses auto sont activées pour cette catégorie."""
-        category_settings = {
-            'cv': self.respond_to_cv,
-            'rdv': self.respond_to_rdv,
-            'support': self.respond_to_support,
-            'partenariat': self.respond_to_partenariat
-        }
-        return category_settings.get(category, False)
-    
-    def _is_response_loop_risk(self, sender: str) -> bool:
-        """
-        Détecte un risque de boucle de réponses - CORRIGÉ.
-        
-        Args:
-            sender: Adresse email de l'expéditeur
-            
-        Returns:
-            True si risque de boucle détecté
-        """
-        if not sender:
-            return True
-        
-        # Nettoyer l'historique (supprimer les anciennes entrées)
-        cutoff_time = datetime.now() - timedelta(days=1)
-        self.response_history[sender] = [
-            timestamp for timestamp in self.response_history[sender]
-            if timestamp > cutoff_time
-        ]
-        
-        # Vérifier le nombre de réponses dans les dernières 24h
-        response_count = len(self.response_history[sender])
-        
-        if response_count >= self.max_responses_per_day:
-            logger.warning(
-                f"Limite de réponses atteinte pour {sender}: "
-                f"{response_count}/{self.max_responses_per_day}"
-            )
-            return True
+            logger.error(f"Erreur analyse pour auto-réponse: {e}")
         
         return False
     
-    def register_response_sent(self, sender: str):
-        """Enregistre qu'une réponse a été envoyée à cet expéditeur."""
-        self.response_history[sender].append(datetime.now())
-        logger.debug(f"Réponse enregistrée pour {sender}")
-    
-    def add_pending_response(self, response_id: str, response_data: Dict):
-        """Ajoute une réponse en attente de validation."""
-        self.pending_responses[response_id] = response_data
-        logger.info(f"Réponse en attente ajoutée: {response_id}")
-    
-    def get_pending_responses(self) -> List[Dict]:
-        """Retourne toutes les réponses en attente."""
-        return list(self.pending_responses.values())
-    
-    def approve_response(self, response_id: str, 
-                        modified_content: Optional[str] = None) -> bool:
+    def generate_response(self, email: Email) -> Optional[str]:
         """
-        Approuve une réponse pour envoi - CORRIGÉ.
+        Génère une réponse automatique.
         
         Args:
-            response_id: ID de la réponse
-            modified_content: Contenu modifié (optionnel)
+            email: Email auquel répondre
             
         Returns:
-            True si approuvée avec succès
+            Texte de la réponse ou None
         """
-        if response_id not in self.pending_responses:
-            logger.error(f"Réponse inconnue: {response_id}")
-            return False
+        try:
+            # Analyser l'email
+            analysis = self.ai_processor.analyze_email(email)
+            category = analysis.get('category', 'work')
+            
+            # Templates selon la catégorie
+            if category == 'cv':
+                response = self._generate_cv_response(email)
+            elif category == 'support':
+                response = self._generate_support_response(email)
+            elif category == 'meeting':
+                response = self._generate_meeting_response(email)
+            else:
+                response = self._generate_generic_response(email)
+            
+            logger.info(f"✅ Réponse générée pour catégorie: {category}")
+            return response
         
-        response_data = self.pending_responses[response_id]
-        
-        # Appliquer les modifications si présentes
-        if modified_content:
-            response_data['body'] = modified_content
-            response_data['modified'] = True
-        
-        response_data['status'] = 'approved'
-        response_data['approved_at'] = datetime.now()
-        
-        logger.info(f"Réponse approuvée: {response_id}")
-        return True
+        except Exception as e:
+            logger.error(f"Erreur génération réponse: {e}")
+            return None
     
-    def reject_response(self, response_id: str) -> bool:
+    def _generate_cv_response(self, email: Email) -> str:
+        """Génère une réponse pour une candidature."""
+        return f"""Bonjour,
+
+Nous avons bien reçu votre candidature et nous vous en remercions.
+
+Votre profil sera étudié avec attention par notre équipe et nous reviendrons vers vous dans les plus brefs délais.
+
+Cordialement,
+L'équipe de recrutement"""
+    
+    def _generate_support_response(self, email: Email) -> str:
+        """Génère une réponse pour une demande de support."""
+        return f"""Bonjour,
+
+Nous avons bien reçu votre demande de support.
+
+Notre équipe va l'examiner et vous apportera une réponse dans les meilleurs délais.
+
+Merci de votre patience.
+
+Cordialement,
+L'équipe support"""
+    
+    def _generate_meeting_response(self, email: Email) -> str:
+        """Génère une réponse pour une demande de réunion."""
+        return f"""Bonjour,
+
+Nous avons bien reçu votre demande de réunion.
+
+Nous allons vérifier nos disponibilités et reviendrons vers vous rapidement pour convenir d'un créneau.
+
+Cordialement"""
+    
+    def _generate_generic_response(self, email: Email) -> str:
+        """Génère une réponse générique."""
+        # Utiliser l'IA pour générer une réponse personnalisée
+        try:
+            response = self.ai_processor.generate_response(email, tone='professional')
+            return response
+        except:
+            return f"""Bonjour,
+
+Nous avons bien reçu votre message et nous vous en remercions.
+
+Nous reviendrons vers vous dans les plus brefs délais.
+
+Cordialement"""
+    
+    def send_auto_response(self, email: Email) -> bool:
         """
-        Rejette une réponse suggérée.
+        Envoie une réponse automatique.
         
         Args:
-            response_id: ID de la réponse
+            email: Email auquel répondre
             
         Returns:
-            True si rejetée avec succès
+            True si envoyé, False sinon
         """
-        if response_id not in self.pending_responses:
-            logger.error(f"Réponse inconnue: {response_id}")
+        try:
+            if not self.should_respond(email):
+                return False
+            
+            # Générer la réponse
+            response_body = self.generate_response(email)
+            
+            if not response_body:
+                return False
+            
+            # Envoyer la réponse
+            subject = f"Re: {email.subject}" if email.subject else "Re: Votre message"
+            
+            success = self.gmail_client.send_email(
+                to=email.sender,
+                subject=subject,
+                body=response_body
+            )
+            
+            if success:
+                # Marquer comme répondu
+                self.responded_emails.add(email.id)
+                logger.info(f"✅ Réponse automatique envoyée à {email.sender}")
+                return True
+            else:
+                logger.error(f"❌ Échec envoi réponse à {email.sender}")
+                return False
+        
+        except Exception as e:
+            logger.error(f"Erreur envoi auto-réponse: {e}")
             return False
-        
-        response_data = self.pending_responses[response_id]
-        response_data['status'] = 'rejected'
-        response_data['rejected_at'] = datetime.now()
-        
-        # Retirer de la liste des réponses en attente
-        del self.pending_responses[response_id]
-        
-        logger.info(f"Réponse rejetée: {response_id}")
-        return True
     
-    def get_response_by_email_id(self, email_id: str) -> Optional[Dict]:
-        """Récupère une réponse par l'ID de l'email associé."""
-        for response_id, response_data in self.pending_responses.items():
-            if response_data.get('email_id') == email_id:
-                return response_data
-        return None
-    
-    def configure(self, settings: Dict[str, Any]):
+    def check_and_respond(self, max_emails: int = 10) -> int:
         """
-        Configure le gestionnaire de réponses automatiques.
+        Vérifie les nouveaux emails et répond automatiquement si nécessaire.
         
         Args:
-            settings: Dictionnaire de configuration
+            max_emails: Nombre maximum d'emails à traiter
+            
+        Returns:
+            Nombre de réponses envoyées
         """
-        if 'enabled' in settings:
-            self.enabled = settings['enabled']
+        if not self.enabled:
+            return 0
         
-        if 'delay_minutes' in settings:
-            self.delay_minutes = max(0, int(settings['delay_minutes']))
+        try:
+            # Récupérer les emails récents non lus
+            emails = self.gmail_client.list_emails(
+                folder="INBOX",
+                max_results=max_emails
+            )
+            
+            # Filtrer les non lus
+            unread_emails = [e for e in emails if not getattr(e, 'read', True)]
+            
+            responses_sent = 0
+            
+            for email in unread_emails:
+                if self.send_auto_response(email):
+                    responses_sent += 1
+            
+            self.last_check = datetime.now()
+            
+            if responses_sent > 0:
+                logger.info(f"✅ {responses_sent} réponses automatiques envoyées")
+            
+            return responses_sent
         
-        if 'respond_to_cv' in settings:
-            self.respond_to_cv = settings['respond_to_cv']
-        
-        if 'respond_to_rdv' in settings:
-            self.respond_to_rdv = settings['respond_to_rdv']
-        
-        if 'respond_to_support' in settings:
-            self.respond_to_support = settings['respond_to_support']
-        
-        if 'respond_to_partenariat' in settings:
-            self.respond_to_partenariat = settings['respond_to_partenariat']
-        
-        if 'avoid_loops' in settings:
-            self.avoid_loops = settings['avoid_loops']
-        
-        if 'max_responses_per_day' in settings:
-            self.max_responses_per_day = max(1, int(settings['max_responses_per_day']))
-        
-        logger.info("Configuration AutoResponder mise à jour")
+        except Exception as e:
+            logger.error(f"Erreur vérification auto-réponse: {e}")
+            return 0
     
-    def get_configuration(self) -> Dict[str, Any]:
-        """Retourne la configuration actuelle."""
+    def get_stats(self) -> dict:
+        """
+        Récupère les statistiques des réponses automatiques.
+        
+        Returns:
+            Dictionnaire avec les stats
+        """
         return {
             'enabled': self.enabled,
-            'delay_minutes': self.delay_minutes,
-            'respond_to_cv': self.respond_to_cv,
-            'respond_to_rdv': self.respond_to_rdv,
-            'respond_to_support': self.respond_to_support,
-            'respond_to_partenariat': self.respond_to_partenariat,
-            'avoid_loops': self.avoid_loops,
-            'max_responses_per_day': self.max_responses_per_day
+            'total_responses': len(self.responded_emails),
+            'last_check': self.last_check.isoformat() if self.last_check else None
         }
     
-    def get_statistics(self) -> Dict[str, Any]:
-        """Retourne les statistiques des réponses automatiques."""
-        pending_count = len(self.pending_responses)
-        
-        # Compter par statut
-        status_counts = defaultdict(int)
-        for response_data in self.pending_responses.values():
-            status = response_data.get('status', 'unknown')
-            status_counts[status] += 1
-        
-        # Compter par catégorie
-        category_counts = defaultdict(int)
-        for response_data in self.pending_responses.values():
-            category = response_data.get('category', 'unknown')
-            category_counts[category] += 1
-        
-        return {
-            'enabled': self.enabled,
-            'pending_responses': pending_count,
-            'status_breakdown': dict(status_counts),
-            'category_breakdown': dict(category_counts),
-            'delay_minutes': self.delay_minutes,
-            'response_history_size': len(self.response_history)
-        }
+    def reset_stats(self):
+        """Réinitialise les statistiques."""
+        self.responded_emails.clear()
+        logger.info("📊 Statistiques réinitialisées")
+    
+    def is_enabled(self) -> bool:
+        """Vérifie si l'auto-responder est activé."""
+        return self.enabled

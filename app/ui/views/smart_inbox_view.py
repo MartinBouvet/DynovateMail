@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 """
-Vue Inbox - VERSION OPTIMISÉE ULTRA-RAPIDE
+Vue inbox intelligente - VERSION CORRIGÉE
 """
 import logging
-from datetime import datetime, timezone
-from typing import List, Dict, Optional
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QScrollArea
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QFrame
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QThread
-from PyQt5.QtGui import QFont
+from PyQt6.QtCore import Qt, pyqtSignal, QThread
+from PyQt6.QtGui import QFont
 
 from app.gmail_client import GmailClient
 from app.ai_processor import AIProcessor
 from app.models.email_model import Email
 from app.ui.views.email_detail_view import EmailDetailView
+from app.ui.components.smart_email_card import SmartEmailCard
 
 logger = logging.getLogger(__name__)
 
@@ -24,208 +22,30 @@ class EmailAnalysisWorker(QThread):
     
     analysis_complete = pyqtSignal(str, dict)
     
-    def __init__(self, ai_processor: AIProcessor, emails: List[Email]):
+    def __init__(self, ai_processor: AIProcessor, emails: list):
         super().__init__()
         self.ai_processor = ai_processor
         self.emails = emails
-        self._is_running = True
+        self.running = True
     
     def run(self):
-        """Analyse en arrière-plan."""
+        """Lance l'analyse."""
         for email in self.emails:
-            if not self._is_running:
+            if not self.running:
                 break
             
             try:
-                if not hasattr(email, 'ai_analysis') or email.ai_analysis is None:
-                    analysis = self.ai_processor.analyze_email_fast(
-                        subject=email.subject or "",
-                        body=email.snippet or email.body or "",
-                        sender=email.sender or ""
-                    )
-                    
-                    if analysis:
-                        self.analysis_complete.emit(email.id, analysis)
-            except:
-                pass
+                analysis = self.ai_processor.analyze_email(email)
+                self.analysis_complete.emit(email.id, analysis)
+            except Exception as e:
+                logger.error(f"Erreur analyse {email.id}: {e}")
+        
+        logger.info("✅ Analyse IA terminée")
     
     def stop(self):
         """Arrête l'analyse."""
-        self._is_running = False
+        self.running = False
 
-class EmailListItem(QFrame):
-    """Item de liste d'email optimisé."""
-    
-    clicked = pyqtSignal(object)
-    
-    def __init__(self, email: Email):
-        super().__init__()
-        self.email = email
-        self.setObjectName("email-item")
-        self.setCursor(Qt.PointingHandCursor)
-        self._setup_ui()
-    
-    def _setup_ui(self):
-        """Interface."""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(8)
-        
-        # Ligne 1: Indicateur + Expéditeur + Date
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(12)
-        
-        # Indicateur non lu
-        if not getattr(self.email, 'read', True):
-            indicator = QLabel("●")
-            indicator.setFont(QFont("Arial", 12, QFont.Bold))
-            indicator.setStyleSheet("color: #5b21b6;")
-            indicator.setFixedWidth(20)
-            header_layout.addWidget(indicator)
-        else:
-            spacer = QLabel("")
-            spacer.setFixedWidth(20)
-            header_layout.addWidget(spacer)
-        
-        # Expéditeur
-        sender_label = QLabel(self.email.sender or "Inconnu")
-        sender_label.setFont(QFont("Arial", 13, QFont.Bold))
-        sender_label.setStyleSheet("color: #000000;")
-        header_layout.addWidget(sender_label)
-        
-        header_layout.addStretch()
-        
-        # Date
-        if self.email.received_date:
-            date_str = self._format_date(self.email.received_date)
-            date_label = QLabel(date_str)
-            date_label.setFont(QFont("Arial", 11))
-            date_label.setStyleSheet("color: #666666;")
-            header_layout.addWidget(date_label)
-        
-        layout.addLayout(header_layout)
-        
-        # Ligne 2: Sujet
-        subject_label = QLabel(self.email.subject or "(Sans sujet)")
-        subject_label.setFont(QFont("Arial", 12))
-        subject_label.setStyleSheet("color: #1a1a1a;")
-        subject_label.setWordWrap(False)
-        layout.addWidget(subject_label)
-        
-        # Ligne 3: Aperçu
-        if self.email.snippet:
-            snippet = self.email.snippet[:150]
-            snippet_label = QLabel(snippet + "...")
-            snippet_label.setFont(QFont("Arial", 11))
-            snippet_label.setStyleSheet("color: #666666;")
-            snippet_label.setWordWrap(True)
-            snippet_label.setMaximumHeight(45)
-            layout.addWidget(snippet_label)
-        
-        # Ligne 4: Badges IA
-        self.badges_layout = QHBoxLayout()
-        self.badges_layout.setSpacing(8)
-        layout.addLayout(self.badges_layout)
-        
-        # Style
-        self.setStyleSheet("""
-            QFrame#email-item {
-                background-color: #ffffff;
-                border: none;
-                border-bottom: 1px solid #f0f0f0;
-            }
-            QFrame#email-item:hover {
-                background-color: #faf5ff;
-                border-left: 4px solid #5b21b6;
-            }
-        """)
-    
-    def _format_date(self, dt) -> str:
-        """Formate la date."""
-        try:
-            now = datetime.now(timezone.utc)
-            
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            elif dt.tzinfo is not None:
-                now = now.astimezone(dt.tzinfo)
-            
-            diff = now - dt
-            
-            if diff.days == 0:
-                return dt.strftime("%H:%M")
-            elif diff.days == 1:
-                return "Hier"
-            elif diff.days < 7:
-                days = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
-                return days[dt.weekday()]
-            else:
-                return dt.strftime("%d/%m/%Y")
-        except:
-            return dt.strftime("%d/%m/%Y") if dt else ""
-    
-    def update_ai_badges(self, analysis: dict):
-        """Met à jour les badges IA."""
-        # Effacer anciens badges
-        while self.badges_layout.count():
-            item = self.badges_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        
-        # Badge catégorie
-        if 'category' in analysis and analysis['category'] != 'general':
-            icon = self._get_category_icon(analysis['category'])
-            badge = self._create_badge(icon, "#5b21b6")
-            self.badges_layout.addWidget(badge)
-        
-        # Badge sentiment
-        if analysis.get('sentiment') == 'positive':
-            badge = self._create_badge("😊", "#10b981")
-            self.badges_layout.addWidget(badge)
-        elif analysis.get('sentiment') == 'negative':
-            badge = self._create_badge("⚠️", "#ef4444")
-            self.badges_layout.addWidget(badge)
-        
-        # Badge urgent
-        if analysis.get('urgent'):
-            badge = self._create_badge("🔥 Urgent", "#dc2626")
-            self.badges_layout.addWidget(badge)
-        
-        self.badges_layout.addStretch()
-    
-    def _create_badge(self, text: str, color: str) -> QLabel:
-        """Crée un badge."""
-        badge = QLabel(text)
-        badge.setFont(QFont("Arial", 9, QFont.Bold))
-        badge.setFixedHeight(24)
-        badge.setStyleSheet(f"""
-            QLabel {{
-                background-color: {color};
-                color: white;
-                border-radius: 12px;
-                padding: 4px 12px;
-            }}
-        """)
-        return badge
-    
-    def _get_category_icon(self, category: str) -> str:
-        """Icône de catégorie."""
-        icons = {
-            'cv': '📄 CV',
-            'meeting': '📅 RDV',
-            'invoice': '💰',
-            'newsletter': '📰',
-            'support': '🛠️',
-            'important': '⭐',
-            'spam': '🚫'
-        }
-        return icons.get(category, '📧')
-    
-    def mousePressEvent(self, event):
-        """Clic."""
-        if event.button() == Qt.LeftButton:
-            self.clicked.emit(self.email)
-        super().mousePressEvent(event)
 
 class SmartInboxView(QWidget):
     """Vue inbox optimisée."""
@@ -238,7 +58,7 @@ class SmartInboxView(QWidget):
         self.gmail_client = gmail_client
         self.ai_processor = ai_processor
         self.emails = []
-        self.email_items = {}
+        self.email_cards = {}
         self.current_folder = "INBOX"
         self.analysis_worker = None
         
@@ -252,11 +72,11 @@ class SmartInboxView(QWidget):
         
         # Liste emails
         list_container = QWidget()
-        list_container.setFixedWidth(480)
+        list_container.setFixedWidth(450)
         list_container.setStyleSheet("""
             QWidget {
                 background-color: #ffffff;
-                border-right: 2px solid #e0e0e0;
+                border-right: 1px solid #e5e7eb;
             }
         """)
         
@@ -266,22 +86,22 @@ class SmartInboxView(QWidget):
         
         # En-tête liste
         list_header = QFrame()
-        list_header.setFixedHeight(70)
-        list_header.setStyleSheet("background-color: #fafafa; border-bottom: 2px solid #e0e0e0;")
+        list_header.setFixedHeight(65)
+        list_header.setStyleSheet("background-color: #fafafa; border-bottom: 1px solid #e5e7eb;")
         
         header_layout = QHBoxLayout(list_header)
-        header_layout.setContentsMargins(25, 15, 25, 15)
+        header_layout.setContentsMargins(20, 12, 20, 12)
         
         self.folder_title = QLabel("📥 Réception")
-        self.folder_title.setFont(QFont("Arial", 18, QFont.Bold))
+        self.folder_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         self.folder_title.setStyleSheet("color: #000000;")
         header_layout.addWidget(self.folder_title)
         
         header_layout.addStretch()
         
         self.email_count_label = QLabel("0")
-        self.email_count_label.setFont(QFont("Arial", 13))
-        self.email_count_label.setStyleSheet("color: #666666;")
+        self.email_count_label.setFont(QFont("Arial", 12))
+        self.email_count_label.setStyleSheet("color: #6b7280;")
         header_layout.addWidget(self.email_count_label)
         
         list_layout.addWidget(list_header)
@@ -289,7 +109,7 @@ class SmartInboxView(QWidget):
         # Scroll emails
         self.emails_scroll = QScrollArea()
         self.emails_scroll.setWidgetResizable(True)
-        self.emails_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.emails_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.emails_scroll.setStyleSheet("border: none; background-color: #ffffff;")
         
         self.emails_container = QWidget()
@@ -340,7 +160,7 @@ class SmartInboxView(QWidget):
             )
             
             # Compteur
-            self.email_count_label.setText(f"{len(self.emails)}")
+            self.email_count_label.setText(f"{len(self.emails)} emails")
             
             # Afficher IMMÉDIATEMENT
             self._display_emails_instant()
@@ -360,20 +180,20 @@ class SmartInboxView(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         
-        self.email_items = {}
+        self.email_cards = {}
         
         if not self.emails:
             empty = QLabel("📭 Aucun email")
-            empty.setAlignment(Qt.AlignCenter)
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty.setFont(QFont("Arial", 14))
-            empty.setStyleSheet("color: #999999; padding: 50px;")
+            empty.setStyleSheet("color: #9ca3af; padding: 50px;")
             self.emails_layout.insertWidget(0, empty)
         else:
             for email in self.emails:
-                item = EmailListItem(email)
-                item.clicked.connect(self._on_email_clicked)
-                self.emails_layout.insertWidget(self.emails_layout.count() - 1, item)
-                self.email_items[email.id] = item
+                card = SmartEmailCard(email)
+                card.clicked.connect(self._on_email_clicked)
+                self.emails_layout.insertWidget(self.emails_layout.count() - 1, card)
+                self.email_cards[email.id] = card
         
         logger.info(f"✅ {len(self.emails)} emails affichés")
     
@@ -390,13 +210,11 @@ class SmartInboxView(QWidget):
     
     def _on_analysis_complete(self, email_id: str, analysis: dict):
         """Analyse terminée."""
-        if email_id in self.email_items:
-            self.email_items[email_id].update_ai_badges(analysis)
-            
-            for email in self.emails:
-                if email.id == email_id:
-                    email.ai_analysis = analysis
-                    break
+        # Mettre à jour l'email
+        for email in self.emails:
+            if email.id == email_id:
+                email.ai_analysis = analysis
+                break
     
     def _on_email_clicked(self, email: Email):
         """Clic sur email."""
@@ -420,6 +238,12 @@ class SmartInboxView(QWidget):
             if not getattr(email, 'read', True):
                 self.gmail_client.mark_as_read(email.id)
                 email.read = True
+                
+                # Mettre à jour la carte
+                if email.id in self.email_cards:
+                    card = self.email_cards[email.id]
+                    card.email.read = True
+                    card._apply_styles()
         except:
             pass
     
@@ -431,7 +255,7 @@ class SmartInboxView(QWidget):
                 item.widget().deleteLater()
         
         error = QLabel(f"❌ {message}")
-        error.setAlignment(Qt.AlignCenter)
+        error.setAlignment(Qt.AlignmentFlag.AlignCenter)
         error.setFont(QFont("Arial", 14))
         error.setStyleSheet("color: #dc2626; padding: 50px;")
         error.setWordWrap(True)

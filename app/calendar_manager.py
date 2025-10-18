@@ -1,327 +1,200 @@
 #!/usr/bin/env python3
 """
 Gestionnaire de calendrier - VERSION CORRIGÉE
-Corrections: CRUD événements, conflits, extraction emails
 """
 import logging
-import uuid
-from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
-from dataclasses import asdict
-
-from app.models.calendar_model import CalendarEvent
+from typing import List, Optional
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+@dataclass
+class CalendarEvent:
+    """Représente un événement de calendrier."""
+    id: str
+    title: str
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    participants: List[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    email_id: Optional[str] = None  # ID de l'email source
+    
+    def __post_init__(self):
+        if self.participants is None:
+            self.participants = []
 
 class CalendarManager:
-    """Gestionnaire de calendrier avec détection de conflits - CORRIGÉ."""
+    """Gestionnaire de calendrier avec extraction depuis emails."""
     
     def __init__(self):
-        """Initialise le gestionnaire de calendrier."""
-        self.events = {}  # event_id -> CalendarEvent
+        """Initialise le gestionnaire."""
+        self.events = []
         logger.info("CalendarManager initialisé")
     
-    def create_event(self, title: str, start_time: datetime,
-                     duration: int = 60, location: str = "",
-                     description: str = "", **kwargs) -> CalendarEvent:
+    def get_events(self, days_ahead: int = 30) -> List[CalendarEvent]:
         """
-        Crée un nouvel événement - CORRIGÉ.
+        Récupère les événements à venir.
         
         Args:
-            title: Titre de l'événement
-            start_time: Date et heure de début
-            duration: Durée en minutes
-            location: Lieu
-            description: Description
+            days_ahead: Nombre de jours à l'avance
             
         Returns:
-            CalendarEvent: L'événement créé
+            Liste des événements
         """
         try:
-            # Générer un ID unique
-            event_id = str(uuid.uuid4())
+            # Filtrer les événements futurs
+            now = datetime.now()
+            future_limit = now + timedelta(days=days_ahead)
             
-            # Calculer l'heure de fin
-            end_time = start_time + timedelta(minutes=duration)
+            future_events = [
+                event for event in self.events
+                if event.start_time >= now and event.start_time <= future_limit
+            ]
             
-            # Créer l'événement
-            event = CalendarEvent(
-                id=event_id,
-                title=title,
-                start_time=start_time,
-                end_time=end_time,
-                duration=duration,
-                location=location,
-                description=description,
-                status='confirmed',
-                created_at=datetime.now()
-            )
+            # Trier par date
+            future_events.sort(key=lambda e: e.start_time)
             
-            # Vérifier les conflits
-            conflicts = self.check_conflicts(start_time, end_time, exclude_event_id=event_id)
-            if conflicts:
-                logger.warning(f"Événement créé avec {len(conflicts)} conflit(s)")
-                event.has_conflict = True
-            
-            # Stocker
-            self.events[event_id] = event
-            
-            logger.info(f"Événement créé: {event.title} ({event_id})")
-            return event
-            
+            logger.info(f"✅ {len(future_events)} événements à venir sur {days_ahead} jours")
+            return future_events
+        
         except Exception as e:
-            logger.error(f"Erreur création événement: {e}")
-            raise
+            logger.error(f"Erreur get_events: {e}")
+            return []
     
-    def get_event(self, event_id: str) -> Optional[CalendarEvent]:
+    def extract_meeting_from_email(self, email) -> Optional[CalendarEvent]:
+        """
+        Extrait un rendez-vous depuis un email.
+        
+        Args:
+            email: Email à analyser
+            
+        Returns:
+            CalendarEvent si détecté, None sinon
+        """
+        try:
+            import re
+            
+            # Mots-clés de réunion
+            meeting_keywords = [
+                'réunion', 'meeting', 'rdv', 'rendez-vous', 
+                'zoom', 'teams', 'entretien', 'call', 'visio'
+            ]
+            
+            subject_lower = (email.subject or '').lower()
+            body_lower = (email.body or email.snippet or '').lower()
+            
+            # Vérifier si c'est un email de réunion
+            is_meeting = any(keyword in subject_lower or keyword in body_lower 
+                           for keyword in meeting_keywords)
+            
+            if not is_meeting:
+                return None
+            
+            # Extraire la date/heure (patterns simples)
+            text = f"{email.subject} {email.body or email.snippet or ''}"
+            
+            # Pattern pour dates françaises: "le 15/10/2025 à 14h30"
+            date_pattern = r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:à|a)?\s*(\d{1,2})h?(\d{2})?'
+            date_match = re.search(date_pattern, text)
+            
+            if date_match:
+                date_str, hour, minute = date_match.groups()
+                minute = minute or '00'
+                
+                # Parser la date
+                try:
+                    # Essayer différents formats
+                    for date_format in ['%d/%m/%Y', '%d-%m-%Y', '%d/%m/%y']:
+                        try:
+                            date_obj = datetime.strptime(date_str, date_format)
+                            break
+                        except:
+                            continue
+                    else:
+                        return None
+                    
+                    # Ajouter l'heure
+                    event_time = date_obj.replace(hour=int(hour), minute=int(minute))
+                    
+                    # Créer l'événement
+                    event = CalendarEvent(
+                        id=f"email_{email.id}",
+                        title=email.subject or "Réunion",
+                        start_time=event_time,
+                        end_time=event_time + timedelta(hours=1),  # 1h par défaut
+                        participants=[email.sender],
+                        email_id=email.id
+                    )
+                    
+                    logger.info(f"✅ Réunion extraite: {event.title} le {event_time}")
+                    return event
+                
+                except Exception as e:
+                    logger.error(f"Erreur parsing date: {e}")
+                    return None
+            
+            return None
+        
+        except Exception as e:
+            logger.error(f"Erreur extraction réunion: {e}")
+            return None
+    
+    def add_event(self, event: CalendarEvent):
+        """Ajoute un événement au calendrier."""
+        self.events.append(event)
+        logger.info(f"✅ Événement ajouté: {event.title}")
+    
+    def remove_event(self, event_id: str):
+        """Supprime un événement."""
+        self.events = [e for e in self.events if e.id != event_id]
+        logger.info(f"🗑️ Événement supprimé: {event_id}")
+    
+    def get_event_by_id(self, event_id: str) -> Optional[CalendarEvent]:
         """Récupère un événement par son ID."""
-        return self.events.get(event_id)
+        for event in self.events:
+            if event.id == event_id:
+                return event
+        return None
     
-    def get_all_events(self) -> List[CalendarEvent]:
-        """Retourne tous les événements."""
-        return list(self.events.values())
+    def get_events_for_date(self, date: datetime) -> List[CalendarEvent]:
+        """Récupère tous les événements d'une date donnée."""
+        target_date = date.date()
+        
+        events_on_date = [
+            event for event in self.events
+            if event.start_time.date() == target_date
+        ]
+        
+        events_on_date.sort(key=lambda e: e.start_time)
+        return events_on_date
     
-    def get_events_in_range(self, start: datetime, end: datetime) -> List[CalendarEvent]:
-        """
-        Récupère les événements dans une plage de dates.
-        
-        Args:
-            start: Date de début
-            end: Date de fin
-            
-        Returns:
-            List[CalendarEvent]: Liste des événements
-        """
-        events_in_range = []
-        
-        for event in self.events.values():
-            if event.start_time and event.end_time:
-                # Vérifier le chevauchement
-                if not (event.end_time < start or event.start_time > end):
-                    events_in_range.append(event)
-        
-        # Trier par date de début
-        events_in_range.sort(key=lambda e: e.start_time)
-        
-        return events_in_range
-    
-    def update_event(self, event_id: str, **kwargs) -> Optional[CalendarEvent]:
-        """
-        Met à jour un événement - CORRIGÉ.
-        
-        Args:
-            event_id: ID de l'événement
-            **kwargs: Champs à mettre à jour
-            
-        Returns:
-            CalendarEvent mis à jour ou None
-        """
-        if event_id not in self.events:
-            logger.error(f"Événement introuvable: {event_id}")
-            return None
-        
-        try:
-            event = self.events[event_id]
-            
-            # Mettre à jour les champs
-            if 'title' in kwargs:
-                event.title = kwargs['title']
-            
-            if 'start_time' in kwargs:
-                event.start_time = kwargs['start_time']
-                # Recalculer end_time si nécessaire
-                if 'duration' in kwargs or event.duration:
-                    duration = kwargs.get('duration', event.duration)
-                    event.end_time = event.start_time + timedelta(minutes=duration)
-            
-            if 'duration' in kwargs:
-                event.duration = kwargs['duration']
-                if event.start_time:
-                    event.end_time = event.start_time + timedelta(minutes=event.duration)
-            
-            if 'location' in kwargs:
-                event.location = kwargs['location']
-            
-            if 'description' in kwargs:
-                event.description = kwargs['description']
-            
-            if 'status' in kwargs:
-                event.status = kwargs['status']
-            
-            # Vérifier les conflits
-            if event.start_time and event.end_time:
-                conflicts = self.check_conflicts(
-                    event.start_time, 
-                    event.end_time,
-                    exclude_event_id=event_id
-                )
-                event.has_conflict = len(conflicts) > 0
-            
-            logger.info(f"Événement mis à jour: {event.title} ({event_id})")
-            return event
-            
-        except Exception as e:
-            logger.error(f"Erreur mise à jour événement: {e}")
-            return None
-    
-    def delete_event(self, event_id: str) -> bool:
-        """
-        Supprime un événement.
-        
-        Args:
-            event_id: ID de l'événement
-            
-        Returns:
-            True si supprimé avec succès
-        """
-        if event_id not in self.events:
-            logger.error(f"Événement introuvable: {event_id}")
-            return False
-        
-        try:
-            event = self.events[event_id]
-            del self.events[event_id]
-            logger.info(f"Événement supprimé: {event.title} ({event_id})")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Erreur suppression événement: {e}")
-            return False
-    
-    def check_conflicts(self, start_time: datetime, end_time: datetime,
-                       exclude_event_id: Optional[str] = None) -> List[CalendarEvent]:
-        """
-        Vérifie les conflits de planning - CORRIGÉ.
-        
-        Args:
-            start_time: Heure de début
-            end_time: Heure de fin
-            exclude_event_id: ID d'événement à exclure (pour mise à jour)
-            
-        Returns:
-            List[CalendarEvent]: Liste des événements en conflit
-        """
-        conflicts = []
-        
-        for event_id, event in self.events.items():
-            # Exclure l'événement spécifié
-            if event_id == exclude_event_id:
-                continue
-            
-            # Ignorer les événements annulés
-            if event.status == 'cancelled':
-                continue
-            
+    def has_conflict(self, new_event: CalendarEvent) -> bool:
+        """Vérifie si un nouvel événement entre en conflit avec des existants."""
+        for event in self.events:
             # Vérifier le chevauchement
-            if event.start_time and event.end_time:
-                # Il y a conflit si les périodes se chevauchent
-                if not (end_time <= event.start_time or start_time >= event.end_time):
-                    conflicts.append(event)
+            if new_event.start_time < event.end_time and new_event.end_time > event.start_time:
+                return True
         
-        return conflicts
+        return False
     
-    def extract_event_from_email(self, email) -> Optional[CalendarEvent]:
-        """
-        Extrait un événement depuis un email - CORRIGÉ pour créer automatiquement.
-    
-        Args:
-            email: Email avec analyse IA
+    def get_next_event(self) -> Optional[CalendarEvent]:
+        """Récupère le prochain événement à venir."""
+        now = datetime.now()
+        future_events = [e for e in self.events if e.start_time > now]
         
-        Returns:
-            CalendarEvent ou None
-        """
-        try:
-            if not hasattr(email, 'ai_analysis') or not email.ai_analysis:
-                return None
+        if future_events:
+            future_events.sort(key=lambda e: e.start_time)
+            return future_events[0]
         
-            analysis = email.ai_analysis
-        
-        # Vérifier que c'est un email de RDV
-            if analysis.category != 'rdv':
-                return None
-        
-        # Extraire les informations
-            extracted_info = analysis.extracted_info
-        
-        # Créer un événement par défaut
-            sender_name = email.get_sender_name() if hasattr(email, 'get_sender_name') else email.sender
-        
-        # Date par défaut: demain à 14h
-            from datetime import datetime, timedelta
-            default_start = datetime.now() + timedelta(days=1)
-            default_start = default_start.replace(hour=14, minute=0, second=0, microsecond=0)
-            default_end = default_start + timedelta(hours=1)
-        
-            event = CalendarEvent(
-                id=f"rdv_{email.id}",
-                title=f"RDV: {email.subject[:50]}",
-                description=f"Demande de RDV de {sender_name}\n\nExtrait:\n{email.snippet}",
-                start_time=default_start,
-                end_time=default_end,
-                location="À confirmer",
-                attendees=[email.get_sender_email() if hasattr(email, 'get_sender_email') else email.sender],
-                status='tentative',
-                created_from_email=email.id
-            )
-        
-        # CORRECTION: Ajouter automatiquement à la liste d'événements
-            self.events[event.id] = event
-            self._save_events()
-        
-            logger.info(f"Événement créé automatiquement depuis email {email.id}")
-            return event
-        
-        except Exception as e:
-            logger.error(f"Erreur extraction événement: {e}")
-            return None
+        return None
     
     def get_today_events(self) -> List[CalendarEvent]:
-        """Retourne les événements d'aujourd'hui."""
-        now = datetime.now()
-        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_of_day = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-        
-        return self.get_events_in_range(start_of_day, end_of_day)
+        """Récupère les événements d'aujourd'hui."""
+        return self.get_events_for_date(datetime.now())
     
-    def get_upcoming_events(self, days: int = 7) -> List[CalendarEvent]:
-        """
-        Retourne les événements à venir.
-        
-        Args:
-            days: Nombre de jours à l'avance
-            
-        Returns:
-            List[CalendarEvent]: Événements à venir
-        """
-        now = datetime.now()
-        end_date = now + timedelta(days=days)
-        
-        return self.get_events_in_range(now, end_date)
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        """Retourne les statistiques du calendrier."""
-        total_events = len(self.events)
-        
-        # Compter par statut
-        status_counts = {'confirmed': 0, 'tentative': 0, 'cancelled': 0}
-        for event in self.events.values():
-            status = event.status or 'confirmed'
-            status_counts[status] = status_counts.get(status, 0) + 1
-        
-        # Événements avec conflits
-        conflict_count = sum(1 for e in self.events.values() if e.has_conflict)
-        
-        # Événements aujourd'hui
-        today_count = len(self.get_today_events())
-        
-        # Événements à venir (7 jours)
-        upcoming_count = len(self.get_upcoming_events(7))
-        
-        return {
-            'total_events': total_events,
-            'status_breakdown': status_counts,
-            'events_with_conflicts': conflict_count,
-            'events_today': today_count,
-            'upcoming_events_7days': upcoming_count
-        }
+    def clear_all_events(self):
+        """Supprime tous les événements."""
+        self.events.clear()
+        logger.info("🗑️ Tous les événements supprimés")

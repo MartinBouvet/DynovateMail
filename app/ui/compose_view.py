@@ -4,13 +4,13 @@ Vue composition email - CORRIGÉE COMPLÈTEMENT
 """
 import logging
 import os
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QLineEdit, QTextEdit, QFrame,
     QFileDialog, QMessageBox, QWidget
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 
 from app.gmail_client import GmailClient
 from app.ai_processor import AIProcessor
@@ -59,7 +59,7 @@ class ComposeView(QDialog):
         header_layout.setContentsMargins(30, 15, 30, 15)
         
         title = QLabel("✉️ Nouveau message")
-        title.setFont(QFont("Arial", 22, QFont.Bold))
+        title.setFont(QFont("Arial", 22, QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         header_layout.addWidget(title)
         
@@ -67,9 +67,9 @@ class ComposeView(QDialog):
         
         # Bouton aide IA
         ai_btn = QPushButton("🤖 Aide IA")
-        ai_btn.setFont(QFont("Arial", 11, QFont.Bold))
+        ai_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         ai_btn.setFixedHeight(40)
-        ai_btn.setCursor(Qt.PointingHandCursor)
+        ai_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         ai_btn.clicked.connect(self._request_ai_help)
         ai_btn.setStyleSheet("""
             QPushButton {
@@ -98,7 +98,7 @@ class ComposeView(QDialog):
         # Destinataire
         to_layout = QHBoxLayout()
         to_label = QLabel("À:")
-        to_label.setFont(QFont("Arial", 13, QFont.Bold))
+        to_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         to_label.setFixedWidth(100)
         to_label.setStyleSheet("color: #1a1a1a;")
         to_layout.addWidget(to_label)
@@ -113,7 +113,7 @@ class ComposeView(QDialog):
         # CC
         cc_layout = QHBoxLayout()
         cc_label = QLabel("Cc:")
-        cc_label.setFont(QFont("Arial", 13, QFont.Bold))
+        cc_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         cc_label.setFixedWidth(100)
         cc_label.setStyleSheet("color: #1a1a1a;")
         cc_layout.addWidget(cc_label)
@@ -128,7 +128,7 @@ class ComposeView(QDialog):
         # Sujet
         subject_layout = QHBoxLayout()
         subject_label = QLabel("Sujet:")
-        subject_label.setFont(QFont("Arial", 13, QFont.Bold))
+        subject_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         subject_label.setFixedWidth(100)
         subject_label.setStyleSheet("color: #1a1a1a;")
         subject_layout.addWidget(subject_label)
@@ -142,7 +142,7 @@ class ComposeView(QDialog):
         
         # Message
         message_label = QLabel("Message:")
-        message_label.setFont(QFont("Arial", 13, QFont.Bold))
+        message_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         message_label.setStyleSheet("color: #1a1a1a;")
         form_layout.addWidget(message_label)
         
@@ -154,7 +154,7 @@ class ComposeView(QDialog):
         
         # Pièces jointes
         attachments_label = QLabel("📎 Pièces jointes:")
-        attachments_label.setFont(QFont("Arial", 13, QFont.Bold))
+        attachments_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         attachments_label.setStyleSheet("color: #1a1a1a;")
         form_layout.addWidget(attachments_label)
         
@@ -175,7 +175,7 @@ class ComposeView(QDialog):
         no_attachments = QLabel("Aucune pièce jointe")
         no_attachments.setFont(QFont("Arial", 11))
         no_attachments.setStyleSheet("color: #9ca3af;")
-        no_attachments.setAlignment(Qt.AlignCenter)
+        no_attachments.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.attachments_layout.addWidget(no_attachments)
         
         form_layout.addWidget(self.attachments_container)
@@ -184,7 +184,7 @@ class ComposeView(QDialog):
         attach_btn = QPushButton("📎 Ajouter une pièce jointe")
         attach_btn.setFont(QFont("Arial", 11))
         attach_btn.setFixedHeight(40)
-        attach_btn.setCursor(Qt.PointingHandCursor)
+        attach_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         attach_btn.clicked.connect(self._add_attachment)
         attach_btn.setStyleSheet("""
             QPushButton {
@@ -221,10 +221,10 @@ class ComposeView(QDialog):
         
         # Bouton annuler
         cancel_btn = QPushButton("❌ Annuler")
-        cancel_btn.setFont(QFont("Arial", 12, QFont.Bold))
+        cancel_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         cancel_btn.setFixedHeight(50)
         cancel_btn.setFixedWidth(140)
-        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         cancel_btn.clicked.connect(self.reject)
         cancel_btn.setStyleSheet("""
             QPushButton {
@@ -242,10 +242,10 @@ class ComposeView(QDialog):
         
         # Bouton envoyer
         send_btn = QPushButton("📤 Envoyer")
-        send_btn.setFont(QFont("Arial", 12, QFont.Bold))
+        send_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         send_btn.setFixedHeight(50)
         send_btn.setFixedWidth(150)
-        send_btn.setCursor(Qt.PointingHandCursor)
+        send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         send_btn.clicked.connect(self._send_email)
         send_btn.setStyleSheet("""
             QPushButton {
@@ -370,7 +370,7 @@ class ComposeView(QDialog):
         remove_btn = QPushButton("✖")
         remove_btn.setFont(QFont("Arial", 12))
         remove_btn.setFixedSize(30, 30)
-        remove_btn.setCursor(Qt.PointingHandCursor)
+        remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         remove_btn.clicked.connect(lambda: self._remove_attachment(filepath, widget))
         remove_btn.setStyleSheet("""
             QPushButton {
@@ -399,7 +399,7 @@ class ComposeView(QDialog):
             no_att = QLabel("Aucune pièce jointe")
             no_att.setFont(QFont("Arial", 11))
             no_att.setStyleSheet("color: #9ca3af;")
-            no_att.setAlignment(Qt.AlignCenter)
+            no_att.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.attachments_layout.addWidget(no_att)
         
         logger.info(f"Pièce jointe supprimée: {filepath}")
@@ -437,10 +437,10 @@ class ComposeView(QDialog):
                 reply = QMessageBox.question(
                     self, "Suggestion IA",
                     f"Suggestion:\n\n{response}\n\nUtiliser ?",
-                    QMessageBox.Yes | QMessageBox.No
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
                 
-                if reply == QMessageBox.Yes:
+                if reply == QMessageBox.StandardButton.Yes:
                     self.body_input.setPlainText(response)
         except Exception as e:
             logger.error(f"Erreur IA: {e}")
@@ -461,9 +461,9 @@ class ComposeView(QDialog):
             reply = QMessageBox.question(
                 self, "Confirmation",
                 "Envoyer sans sujet ?",
-                QMessageBox.Yes | QMessageBox.No
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
-            if reply == QMessageBox.No:
+            if reply == QMessageBox.StandardButton.No:
                 self.subject_input.setFocus()
                 return
         
