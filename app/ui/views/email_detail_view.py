@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Vue détail email - VERSION CORRIGÉE COMPLÈTE
+Vue détail email - AFFICHAGE PARFAIT FINAL
 """
 import logging
 import re
@@ -18,7 +18,7 @@ from app.models.email_model import Email
 logger = logging.getLogger(__name__)
 
 class EmailDetailView(QWidget):
-    """Vue détail d'un email."""
+    """Vue détail email - PARFAIT."""
     
     reply_requested = pyqtSignal(Email)
     forward_requested = pyqtSignal(Email)
@@ -39,264 +39,403 @@ class EmailDetailView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # En-tête avec actions
-        header = QFrame()
-        header.setFixedHeight(70)
-        header.setStyleSheet("background-color: #fafafa; border-bottom: 1px solid #e5e7eb;")
+        # Fond blanc partout
+        self.setStyleSheet("QWidget { background-color: #ffffff; }")
         
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(25, 12, 25, 12)
-        header_layout.setSpacing(10)
-        
-        self.subject_label = QLabel("Sélectionnez un email")
-        self.subject_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        self.subject_label.setStyleSheet("color: #000000;")
-        self.subject_label.setWordWrap(True)
-        header_layout.addWidget(self.subject_label, 1)
-        
-        # Boutons d'action
-        btn_style = """
-            QPushButton {
-                background-color: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 8px 16px;
-                color: #374151;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #5b21b6;
-                color: white;
-                border-color: #5b21b6;
-            }
-        """
-        
-        self.reply_btn = QPushButton("↩️ Répondre")
-        self.reply_btn.setFont(QFont("Arial", 12))
-        self.reply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.reply_btn.clicked.connect(self._on_reply)
-        self.reply_btn.setStyleSheet(btn_style)
-        header_layout.addWidget(self.reply_btn)
-        
-        self.forward_btn = QPushButton("➡️ Transférer")
-        self.forward_btn.setFont(QFont("Arial", 12))
-        self.forward_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.forward_btn.clicked.connect(self._on_forward)
-        self.forward_btn.setStyleSheet(btn_style)
-        header_layout.addWidget(self.forward_btn)
-        
-        self.archive_btn = QPushButton("📥 Archiver")
-        self.archive_btn.setFont(QFont("Arial", 12))
-        self.archive_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.archive_btn.clicked.connect(self._on_archive)
-        self.archive_btn.setStyleSheet(btn_style)
-        header_layout.addWidget(self.archive_btn)
-        
-        layout.addWidget(header)
-        
-        # Zone de scroll pour le contenu
+        # Zone de scroll
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
-        self.scroll.setStyleSheet("border: none; background-color: #ffffff;")
+        self.scroll.setStyleSheet("""
+            QScrollArea { 
+                border: none; 
+                background-color: #ffffff;
+            }
+        """)
         
         self.content_widget = QWidget()
+        self.content_widget.setStyleSheet("background-color: #ffffff;")
         self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(30, 25, 30, 25)
-        self.content_layout.setSpacing(20)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(0)
         
         # Message vide
+        empty_container = QWidget()
+        empty_container.setStyleSheet("background-color: #ffffff;")
+        empty_layout = QVBoxLayout(empty_container)
+        empty_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.empty_label = QLabel("📭 Sélectionnez un email pour le lire")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_label.setFont(QFont("Arial", 14))
-        self.empty_label.setStyleSheet("color: #9ca3af; padding: 100px;")
-        self.content_layout.addWidget(self.empty_label)
+        self.empty_label.setFont(QFont("Arial", 16))
+        self.empty_label.setStyleSheet("""
+            color: #5f6368; 
+            padding: 100px; 
+            background-color: #ffffff;
+        """)
+        empty_layout.addWidget(self.empty_label)
+        
+        self.content_layout.addWidget(empty_container)
         
         self.scroll.setWidget(self.content_widget)
         layout.addWidget(self.scroll)
     
     def show_email(self, email: Email):
-        """Affiche un email."""
+        """Affiche un email - PARFAIT."""
         self.current_email = email
         
         logger.info(f"📧 Affichage: {email.subject[:50]}")
         
-        # Mettre à jour le sujet
-        self.subject_label.setText(email.subject or "(Sans sujet)")
-        
-        # Nettoyer le contenu
+        # Nettoyer
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
-        # Informations expéditeur
-        sender_frame = QFrame()
-        sender_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 15px;
+        # Container principal - FOND BLANC
+        main_container = QWidget()
+        main_container.setStyleSheet("background-color: #ffffff;")
+        
+        main_layout = QVBoxLayout(main_container)
+        main_layout.setContentsMargins(40, 30, 40, 30)
+        main_layout.setSpacing(24)
+        
+        # Sujet en gros
+        subject_label = QLabel(email.subject or "(Sans sujet)")
+        subject_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        subject_label.setStyleSheet("color: #202124; background-color: transparent;")
+        subject_label.setWordWrap(True)
+        main_layout.addWidget(subject_label)
+        
+        # Boutons d'action
+        actions_layout = QHBoxLayout()
+        actions_layout.setSpacing(10)
+        
+        btn_style = """
+            QPushButton {
+                background-color: #f1f3f4;
+                border: none;
+                border-radius: 20px;
+                padding: 12px 28px;
+                color: #3c4043;
+                font-size: 14px;
+                font-weight: 600;
             }
+            QPushButton:hover {
+                background-color: #e8eaed;
+            }
+        """
+        
+        reply_btn = QPushButton("↩️ Répondre")
+        reply_btn.setFont(QFont("Arial", 13))
+        reply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reply_btn.clicked.connect(self._on_reply)
+        reply_btn.setStyleSheet(btn_style)
+        actions_layout.addWidget(reply_btn)
+        
+        forward_btn = QPushButton("➡️ Transférer")
+        forward_btn.setFont(QFont("Arial", 13))
+        forward_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        forward_btn.clicked.connect(self._on_forward)
+        forward_btn.setStyleSheet(btn_style)
+        actions_layout.addWidget(forward_btn)
+        
+        actions_layout.addStretch()
+        main_layout.addLayout(actions_layout)
+        
+        # Ligne de séparation
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFixedHeight(1)
+        separator.setStyleSheet("background-color: #dadce0; border: none;")
+        main_layout.addWidget(separator)
+        
+        # Header email (expéditeur + date)
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(16)
+        
+        # Avatar coloré
+        avatar = QLabel(email.sender[0].upper() if email.sender else "?")
+        avatar.setFixedSize(56, 56)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setFont(QFont("Arial", 22, QFont.Weight.Bold))
+        avatar.setStyleSheet("""
+            background-color: #1a73e8;
+            color: white;
+            border-radius: 28px;
         """)
+        header_layout.addWidget(avatar)
         
-        sender_layout = QVBoxLayout(sender_frame)
-        sender_layout.setSpacing(8)
+        # Info expéditeur
+        sender_info = QVBoxLayout()
+        sender_info.setSpacing(4)
         
-        # De
-        from_label = QLabel(f"<b>De:</b> {email.sender}")
-        from_label.setFont(QFont("Arial", 12))
-        from_label.setStyleSheet("color: #1f2937;")
-        from_label.setWordWrap(True)
-        sender_layout.addWidget(from_label)
+        from_label = QLabel(email.sender)
+        from_label.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+        from_label.setStyleSheet("color: #202124; background-color: transparent;")
+        sender_info.addWidget(from_label)
         
-        # À
-        to_label = QLabel(f"<b>À:</b> {email.to}")
-        to_label.setFont(QFont("Arial", 12))
-        to_label.setStyleSheet("color: #1f2937;")
-        to_label.setWordWrap(True)
-        sender_layout.addWidget(to_label)
+        to_me = QLabel("À moi")
+        to_me.setFont(QFont("Arial", 13))
+        to_me.setStyleSheet("color: #5f6368; background-color: transparent;")
+        sender_info.addWidget(to_me)
+        
+        header_layout.addLayout(sender_info)
+        header_layout.addStretch()
         
         # Date
         if email.received_date:
-            date_str = email.received_date.strftime("%d/%m/%Y à %H:%M")
-            date_label = QLabel(f"<b>Date:</b> {date_str}")
-            date_label.setFont(QFont("Arial", 12))
-            date_label.setStyleSheet("color: #6b7280;")
-            sender_layout.addWidget(date_label)
+            date_str = self._format_date(email.received_date)
+            date_label = QLabel(date_str)
+            date_label.setFont(QFont("Arial", 13))
+            date_label.setStyleSheet("color: #5f6368; background-color: transparent;")
+            header_layout.addWidget(date_label)
         
-        self.content_layout.addWidget(sender_frame)
+        main_layout.addLayout(header_layout)
         
-        # Contenu de l'email
+        main_layout.addSpacing(20)
+        
+        # Contenu email - ZONE DÉDIÉE AVEC FOND
+        content_frame = QFrame()
+        content_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dadce0;
+                border-radius: 8px;
+                padding: 24px;
+            }
+        """)
+        
+        content_layout = QVBoxLayout(content_frame)
+        content_layout.setContentsMargins(24, 24, 24, 24)
+        content_layout.setSpacing(0)
+        
         body_browser = QTextBrowser()
         body_browser.setOpenExternalLinks(True)
-        body_browser.setMinimumHeight(400)
+        body_browser.setFrameShape(QFrame.Shape.NoFrame)
+        body_browser.setMinimumHeight(300)
         body_browser.setStyleSheet("""
             QTextBrowser {
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 20px;
+                border: none;
                 background-color: #ffffff;
-                font-size: 13px;
-                line-height: 1.6;
+                color: #202124;
+                font-family: Arial, sans-serif;
+                font-size: 15px;
+                line-height: 1.8;
+                padding: 0;
             }
         """)
         
         # Formater le contenu
         if email.body:
-            # Détecter si c'est du HTML
-            if '<html' in email.body.lower() or '<div' in email.body.lower():
-                # C'est du HTML
-                clean_html = self._clean_html(email.body)
+            if self._is_html(email.body):
+                clean_html = self._clean_html_final(email.body, email)
                 body_browser.setHtml(clean_html)
             else:
-                # C'est du texte brut
-                formatted_text = self._format_plain_text(email.body)
-                body_browser.setHtml(formatted_text)
+                formatted = self._format_plain_text_final(email.body)
+                body_browser.setHtml(formatted)
         elif email.snippet:
-            body_browser.setHtml(f'<div style="color: #6b7280;">{email.snippet}</div>')
+            body_browser.setHtml(f'<div style="color: #5f6368; font-style: italic; padding: 20px;">{email.snippet}</div>')
         else:
-            body_browser.setHtml('<div style="color: #9ca3af;">Aucun contenu disponible</div>')
+            body_browser.setHtml('<div style="color: #80868b; padding: 20px;">Aucun contenu disponible</div>')
         
-        self.content_layout.addWidget(body_browser)
+        content_layout.addWidget(body_browser)
+        
+        main_layout.addWidget(content_frame)
         
         # Pièces jointes
         if email.has_attachments:
-            attachments_label = QLabel(f"📎 {email.attachment_count} pièce(s) jointe(s)")
-            attachments_label.setFont(QFont("Arial", 12))
-            attachments_label.setStyleSheet("""
-                color: #5b21b6;
-                padding: 10px;
-                background-color: #ede9fe;
-                border-radius: 6px;
+            att_frame = QFrame()
+            att_frame.setStyleSheet("""
+                QFrame {
+                    background-color: #f8f9fa;
+                    border: 1px solid #dadce0;
+                    border-radius: 8px;
+                    padding: 16px 20px;
+                }
             """)
-            self.content_layout.addWidget(attachments_label)
+            
+            att_layout = QHBoxLayout(att_frame)
+            att_layout.setSpacing(12)
+            
+            att_icon = QLabel("📎")
+            att_icon.setFont(QFont("Arial", 18))
+            att_layout.addWidget(att_icon)
+            
+            att_text = QLabel(f"{email.attachment_count} pièce(s) jointe(s)")
+            att_text.setFont(QFont("Arial", 14))
+            att_text.setStyleSheet("color: #3c4043; background-color: transparent;")
+            att_layout.addWidget(att_text)
+            
+            att_layout.addStretch()
+            
+            main_layout.addWidget(att_frame)
         
-        # Analyse IA
-        if hasattr(email, 'ai_analysis') and email.ai_analysis:
-            self._show_ai_analysis(email.ai_analysis)
+        main_layout.addStretch()
         
-        self.content_layout.addStretch()
+        self.content_layout.addWidget(main_container)
     
-    def _clean_html(self, html_content: str) -> str:
-        """Nettoie et sécurise le HTML."""
-        # Wrapper CSS pour un rendu propre
+    def _format_date(self, date):
+        """Formate la date."""
+        from datetime import datetime
+        now = datetime.now()
+        
+        if date.date() == now.date():
+            return date.strftime("%H:%M")
+        elif date.year == now.year:
+            return date.strftime("%d %b à %H:%M")
+        else:
+            return date.strftime("%d %b %Y")
+    
+    def _is_html(self, text: str) -> bool:
+        """Détecte HTML."""
+        return '<html' in text.lower() or '<div' in text.lower() or '<p>' in text.lower() or '<br' in text.lower()
+    
+    def _clean_html_final(self, html_content: str, email: Email) -> str:
+        """Nettoie le HTML - VERSION FINALE."""
+        
         css = """
         <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
             body {
                 font-family: Arial, sans-serif;
-                font-size: 13px;
-                line-height: 1.6;
-                color: #1f2937;
-                max-width: 100%;
-                overflow-wrap: break-word;
+                font-size: 15px;
+                line-height: 1.8;
+                color: #202124;
+                background-color: #ffffff;
+                padding: 0;
+                margin: 0;
+            }
+            p {
+                margin: 0 0 16px 0;
             }
             img {
-                max-width: 100%;
-                height: auto;
+                max-width: 100% !important;
+                height: auto !important;
                 display: block;
-                margin: 10px 0;
-            }
-            table {
-                border-collapse: collapse;
-                max-width: 100%;
+                margin: 20px 0;
+                border-radius: 4px;
             }
             a {
-                color: #5b21b6;
+                color: #1a73e8;
                 text-decoration: none;
             }
             a:hover {
                 text-decoration: underline;
             }
+            table {
+                border-collapse: collapse;
+                max-width: 100%;
+                margin: 20px 0;
+            }
+            td, th {
+                padding: 10px;
+                border: 1px solid #dadce0;
+                text-align: left;
+            }
             blockquote {
-                border-left: 3px solid #e5e7eb;
-                margin: 10px 0;
-                padding-left: 15px;
-                color: #6b7280;
+                border-left: 4px solid #dadce0;
+                margin: 20px 0;
+                padding-left: 20px;
+                color: #5f6368;
+                font-style: italic;
+            }
+            pre, code {
+                background-color: #f1f3f4;
+                padding: 12px;
+                border-radius: 4px;
+                font-family: monospace;
+                font-size: 14px;
+                overflow-x: auto;
+            }
+            h1, h2, h3, h4 {
+                color: #202124;
+                margin: 24px 0 12px 0;
+                font-weight: 600;
+            }
+            h1 { font-size: 24px; }
+            h2 { font-size: 20px; }
+            h3 { font-size: 18px; }
+            h4 { font-size: 16px; }
+            ul, ol {
+                margin: 16px 0;
+                padding-left: 28px;
+            }
+            li {
+                margin: 8px 0;
             }
         </style>
         """
         
-        # Ajouter le CSS
+        # Injecter le CSS
         if '<head>' in html_content:
             html_content = html_content.replace('<head>', f'<head>{css}')
-        elif '<html>' in html_content:
+        elif '<html>' in html_content.lower():
             html_content = html_content.replace('<html>', f'<html><head>{css}</head>')
+            html_content = html_content.replace('<HTML>', f'<HTML><head>{css}</head>')
         else:
             html_content = f'<html><head>{css}</head><body>{html_content}</body></html>'
         
-        # Intégrer les images inline
-        html_content = self._embed_images(html_content, self.current_email)
+        # Intégrer images
+        html_content = self._embed_images(html_content, email)
         
         return html_content
     
-    def _format_plain_text(self, text: str) -> str:
-        """Formate du texte brut en HTML."""
+    def _format_plain_text_final(self, text: str) -> str:
+        """Formate texte brut - VERSION FINALE."""
         import html
         
-        # Échapper le HTML
+        # Échapper HTML
         text = html.escape(text)
         
-        # Remplacer les retours à la ligne
-        text = text.replace('\n', '<br>')
+        # Paragraphes
+        paragraphs = text.split('\n\n')
+        formatted = []
+        for p in paragraphs:
+            if p.strip():
+                p = p.replace('\n', '<br>')
+                formatted.append(f'<p style="margin: 0 0 16px 0;">{p}</p>')
         
-        # Détecter les URLs et les transformer en liens
+        html_text = '\n'.join(formatted)
+        
+        # URLs cliquables
         url_pattern = r'(https?://[^\s<>"]+)'
-        text = re.sub(url_pattern, r'<a href="\1" target="_blank">\1</a>', text)
+        html_text = re.sub(
+            url_pattern, 
+            r'<a href="\1" style="color: #1a73e8; text-decoration: none;">\1</a>', 
+            html_text
+        )
         
-        # Wrapper avec style
+        # Emails cliquables
+        email_pattern = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
+        html_text = re.sub(
+            email_pattern, 
+            r'<a href="mailto:\1" style="color: #1a73e8; text-decoration: none;">\1</a>', 
+            html_text
+        )
+        
         return f'''
+        <!DOCTYPE html>
         <html>
         <head>
         <style>
             body {{
                 font-family: Arial, sans-serif;
-                font-size: 13px;
-                line-height: 1.6;
-                color: #1f2937;
+                font-size: 15px;
+                line-height: 1.8;
+                color: #202124;
+                background-color: #ffffff;
+                margin: 0;
+                padding: 0;
+            }}
+            p {{
+                margin: 0 0 16px 0;
             }}
             a {{
-                color: #5b21b6;
+                color: #1a73e8;
                 text-decoration: none;
             }}
             a:hover {{
@@ -304,31 +443,29 @@ class EmailDetailView(QWidget):
             }}
         </style>
         </head>
-        <body>{text}</body>
+        <body>
+        {html_text}
+        </body>
         </html>
         '''
     
     def _embed_images(self, html_content: str, email: Email) -> str:
-        """Intègre les images inline."""
+        """Intègre images."""
         try:
             if not hasattr(self.gmail_client, 'service') or not email.id:
                 return html_content
             
-            # Récupérer le message complet
             message = self.gmail_client.service.users().messages().get(
                 userId='me',
                 id=email.id,
                 format='full'
             ).execute()
             
-            # Extraire les images
-            images = self._extract_images(message.get('payload', {}))
+            images = {}
+            self._extract_images_recursive(message.get('payload', {}), images)
             
-            # Remplacer les CID par des data URIs
             for cid, image_data in images.items():
-                cid_pattern = f'cid:{cid}'
-                
-                # Détecter le type MIME
+                # Type MIME
                 if image_data.startswith('/9j/'):
                     mime_type = 'image/jpeg'
                 elif image_data.startswith('iVBORw'):
@@ -339,103 +476,48 @@ class EmailDetailView(QWidget):
                     mime_type = 'image/jpeg'
                 
                 data_uri = f'data:{mime_type};base64,{image_data}'
-                
-                # Remplacer dans le HTML
-                html_content = html_content.replace(f'src="{cid_pattern}"', f'src="{data_uri}"')
-                html_content = html_content.replace(f"src='{cid_pattern}'", f'src="{data_uri}"')
+                html_content = html_content.replace(f'cid:{cid}', data_uri)
             
-            logger.info(f"✅ {len(images)} images inline intégrées")
+            logger.info(f"✅ {len(images)} images")
         
         except Exception as e:
             logger.error(f"Erreur images: {e}")
         
         return html_content
     
-    def _extract_images(self, payload: dict, images: dict = None) -> dict:
-        """Extrait les images du payload."""
-        if images is None:
-            images = {}
-        
-        mime_type = payload.get('mimeType', '')
-        
-        # Si c'est une image
-        if mime_type.startswith('image/'):
-            headers = payload.get('headers', [])
-            content_id = None
+    def _extract_images_recursive(self, payload: dict, images: dict):
+        """Extrait images."""
+        try:
+            mime_type = payload.get('mimeType', '')
             
-            # Chercher le Content-ID
-            for header in headers:
-                if header.get('name', '').lower() == 'content-id':
-                    content_id = header.get('value', '').strip('<>')
-                    break
+            if mime_type.startswith('image/'):
+                headers = payload.get('headers', [])
+                content_id = None
+                
+                for header in headers:
+                    if header.get('name', '').lower() == 'content-id':
+                        content_id = header.get('value', '').strip('<>')
+                        break
+                
+                body_data = payload.get('body', {}).get('data', '')
+                
+                if body_data and content_id:
+                    images[content_id] = body_data
             
-            # Récupérer les données
-            body_data = payload.get('body', {}).get('data', '')
-            
-            if body_data and content_id:
-                images[content_id] = body_data
+            for part in payload.get('parts', []):
+                self._extract_images_recursive(part, images)
         
-        # Récursion sur les parts
-        for part in payload.get('parts', []):
-            self._extract_images(part, images)
-        
-        return images
-    
-    def _show_ai_analysis(self, analysis: dict):
-        """Affiche l'analyse IA."""
-        ai_frame = QFrame()
-        ai_frame.setStyleSheet("""
-            QFrame {
-                background-color: #ede9fe;
-                border: 1px solid #c4b5fd;
-                border-radius: 8px;
-                padding: 15px;
-            }
-        """)
-        
-        ai_layout = QVBoxLayout(ai_frame)
-        ai_layout.setSpacing(8)
-        
-        title = QLabel("🤖 Analyse IA")
-        title.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        title.setStyleSheet("color: #5b21b6;")
-        ai_layout.addWidget(title)
-        
-        # Catégorie
-        if 'category' in analysis:
-            cat_label = QLabel(f"<b>Catégorie:</b> {analysis['category'].title()}")
-            cat_label.setFont(QFont("Arial", 12))
-            cat_label.setStyleSheet("color: #1f2937;")
-            ai_layout.addWidget(cat_label)
-        
-        # Sentiment
-        if 'sentiment' in analysis:
-            sent_label = QLabel(f"<b>Sentiment:</b> {analysis['sentiment'].title()}")
-            sent_label.setFont(QFont("Arial", 12))
-            sent_label.setStyleSheet("color: #1f2937;")
-            ai_layout.addWidget(sent_label)
-        
-        # Résumé
-        if 'summary' in analysis:
-            summary_label = QLabel(f"<b>Résumé:</b> {analysis['summary']}")
-            summary_label.setFont(QFont("Arial", 12))
-            summary_label.setStyleSheet("color: #374151;")
-            summary_label.setWordWrap(True)
-            ai_layout.addWidget(summary_label)
-        
-        self.content_layout.addWidget(ai_frame)
+        except Exception as e:
+            logger.error(f"Erreur: {e}")
     
     def _on_reply(self):
-        """Répondre."""
         if self.current_email:
             self.reply_requested.emit(self.current_email)
     
     def _on_forward(self):
-        """Transférer."""
         if self.current_email:
             self.forward_requested.emit(self.current_email)
     
     def _on_archive(self):
-        """Archiver."""
         if self.current_email:
             self.archive_requested.emit(self.current_email)

@@ -54,3 +54,6 @@ config.json
 Thumbs.db
 
 token.json
+token_calendar.pickle
+token.pickle
+*.pickle
