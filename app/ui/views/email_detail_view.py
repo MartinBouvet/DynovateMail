@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Vue détail email - AFFICHAGE PARFAIT avec IMAGES CORRIGÉES
+Vue détail email - VERSION CORRIGÉE
+Affichage parfait des emails avec images, HTML responsive, et formatage optimal
 """
 import logging
 import re
@@ -19,7 +20,7 @@ from app.models.email_model import Email
 logger = logging.getLogger(__name__)
 
 class EmailDetailView(QWidget):
-    """Vue détail email avec affichage correct des images."""
+    """Vue détail email avec affichage correct des images et du HTML."""
     
     reply_requested = pyqtSignal(Email)
     forward_requested = pyqtSignal(Email)
@@ -83,7 +84,7 @@ class EmailDetailView(QWidget):
         """Affiche un email avec images correctement intégrées."""
         self.current_email = email
         
-        logger.info(f"📧 Affichage email: {email.subject[:50]}")
+        logger.info(f"📧 Affichage email: {email.subject[:50] if email.subject else 'Sans sujet'}")
         
         # Nettoyer le layout
         while self.content_layout.count():
@@ -159,7 +160,7 @@ class EmailDetailView(QWidget):
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         avatar.setFont(QFont("Arial", 22, QFont.Weight.Bold))
         avatar.setStyleSheet("""
-            background-color: #5b21b6;
+            background-color: #000000;
             color: white;
             border-radius: 28px;
         """)
@@ -198,7 +199,7 @@ class EmailDetailView(QWidget):
         content_frame.setStyleSheet("""
             QFrame {
                 background-color: #ffffff;
-                border: 1px solid #dadce0;
+                border: 1px solid #e0e0e0;
                 border-radius: 8px;
                 padding: 24px;
             }
@@ -246,7 +247,7 @@ class EmailDetailView(QWidget):
             att_frame.setStyleSheet("""
                 QFrame {
                     background-color: #f8f9fa;
-                    border: 1px solid #dadce0;
+                    border: 1px solid #e0e0e0;
                     border-radius: 8px;
                     padding: 16px 20px;
                 }
@@ -287,8 +288,12 @@ class EmailDetailView(QWidget):
         return '<html' in text.lower() or '<div' in text.lower() or '<p>' in text.lower() or '<br' in text.lower()
     
     def _clean_html_with_images(self, html_content: str, email: Email) -> str:
-        """Nettoie le HTML ET intègre les images en base64 - CORRIGÉ."""
+        """
+        Nettoie le HTML ET intègre les images en base64.
+        C'EST LA FONCTION CLÉE qui résout tous les problèmes d'affichage.
+        """
         
+        # CSS moderne et responsive
         css = """
         <style>
             * {
@@ -297,13 +302,15 @@ class EmailDetailView(QWidget):
                 box-sizing: border-box;
             }
             body {
-                font-family: Arial, sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                 font-size: 15px;
-                line-height: 1.8;
+                line-height: 1.6;
                 color: #202124;
                 background-color: #ffffff;
                 padding: 0;
                 margin: 0;
+                max-width: 100%;
+                overflow-x: hidden;
             }
             p {
                 margin: 0 0 16px 0;
@@ -312,28 +319,46 @@ class EmailDetailView(QWidget):
                 max-width: 100% !important;
                 height: auto !important;
                 display: block;
-                margin: 20px 0;
-                border-radius: 4px;
+                margin: 16px 0;
+                border-radius: 8px;
             }
             a {
-                color: #5b21b6;
+                color: #000000;
                 text-decoration: none;
+                border-bottom: 1px solid #000000;
             }
             a:hover {
-                text-decoration: underline;
+                opacity: 0.7;
             }
             table {
                 border-collapse: collapse;
-                max-width: 100%;
+                max-width: 100% !important;
+                width: 100% !important;
                 margin: 20px 0;
+                table-layout: fixed !important;
             }
             td, th {
-                padding: 10px;
-                border: 1px solid #dadce0;
+                padding: 12px;
+                border: 1px solid #e0e0e0;
                 text-align: left;
+                word-wrap: break-word !important;
+                overflow-wrap: break-word !important;
+            }
+            /* FIX Instagram et emails avec layouts complexes */
+            table table {
+                width: 100% !important;
+            }
+            td[style*="vertical-align"] {
+                vertical-align: top !important;
+            }
+            /* Fix pour les tables imbriquées */
+            .gmail_quote {
+                margin: 20px 0;
+                padding-left: 20px;
+                border-left: 4px solid #e0e0e0;
             }
             blockquote {
-                border-left: 4px solid #dadce0;
+                border-left: 4px solid #e0e0e0;
                 margin: 20px 0;
                 padding-left: 20px;
                 color: #5f6368;
@@ -343,9 +368,11 @@ class EmailDetailView(QWidget):
                 background-color: #f1f3f4;
                 padding: 12px;
                 border-radius: 4px;
-                font-family: monospace;
+                font-family: 'Courier New', monospace;
                 font-size: 14px;
                 overflow-x: auto;
+                white-space: pre-wrap;
+                word-wrap: break-word;
             }
             h1, h2, h3, h4 {
                 color: #202124;
@@ -363,6 +390,22 @@ class EmailDetailView(QWidget):
             li {
                 margin: 8px 0;
             }
+            /* Forcer le responsive */
+            div, span, p, td {
+                max-width: 100% !important;
+            }
+            /* Fix pour les emails avec width fixes */
+            [width] {
+                width: auto !important;
+                max-width: 100% !important;
+            }
+            /* Support mode sombre potentiel */
+            @media (prefers-color-scheme: dark) {
+                body {
+                    background-color: #ffffff;
+                    color: #202124;
+                }
+            }
         </style>
         """
         
@@ -370,10 +413,10 @@ class EmailDetailView(QWidget):
         if '<head>' in html_content:
             html_content = html_content.replace('<head>', f'<head>{css}')
         elif '<html>' in html_content.lower():
-            html_content = html_content.replace('<html>', f'<html><head>{css}</head>')
-            html_content = html_content.replace('<HTML>', f'<HTML><head>{css}</head>')
+            html_content = html_content.replace('<html>', f'<html><head>{css}</head>', 1)
+            html_content = html_content.replace('<HTML>', f'<HTML><head>{css}</head>', 1)
         else:
-            html_content = f'<html><head>{css}</head><body>{html_content}</body></html>'
+            html_content = f'<!DOCTYPE html><html><head>{css}</head><body>{html_content}</body></html>'
         
         # CORRECTION CRITIQUE : Intégrer les images
         html_content = self._embed_images_correctly(html_content, email)
@@ -382,7 +425,7 @@ class EmailDetailView(QWidget):
     
     def _embed_images_correctly(self, html_content: str, email: Email) -> str:
         """
-        Intègre correctement les images en base64 - VERSION CORRIGÉE.
+        Intègre correctement les images en base64.
         Remplace les cid: par des data URIs.
         """
         try:
@@ -411,13 +454,13 @@ class EmailDetailView(QWidget):
                 # Créer la data URI
                 data_uri = f'data:{mime_type};base64,{image_data}'
                 
-                # Remplacer dans le HTML
-                # Formats possibles: cid:xxxxx ou "cid:xxxxx"
+                # Remplacer dans le HTML - TOUS les formats possibles
                 html_content = html_content.replace(f'cid:{cid}', data_uri)
                 html_content = html_content.replace(f'"cid:{cid}"', f'"{data_uri}"')
                 html_content = html_content.replace(f"'cid:{cid}'", f"'{data_uri}'")
+                html_content = html_content.replace(f'src="cid:{cid}"', f'src="{data_uri}"')
                 
-                logger.info(f"✅ Image remplacée: cid:{cid} -> data URI")
+                logger.info(f"✅ Image remplacée: cid:{cid[:20]}... -> data URI ({mime_type})")
             
             return html_content
         
@@ -508,7 +551,7 @@ class EmailDetailView(QWidget):
         url_pattern = r'(https?://[^\s<>"]+)'
         html_text = re.sub(
             url_pattern, 
-            r'<a href="\1" style="color: #5b21b6; text-decoration: none;">\1</a>', 
+            r'<a href="\1" style="color: #000000; text-decoration: none; border-bottom: 1px solid #000000;">\1</a>', 
             html_text
         )
         
@@ -516,7 +559,7 @@ class EmailDetailView(QWidget):
         email_pattern = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
         html_text = re.sub(
             email_pattern, 
-            r'<a href="mailto:\1" style="color: #5b21b6; text-decoration: none;">\1</a>', 
+            r'<a href="mailto:\1" style="color: #000000; text-decoration: none; border-bottom: 1px solid #000000;">\1</a>', 
             html_text
         )
         
@@ -526,9 +569,9 @@ class EmailDetailView(QWidget):
         <head>
         <style>
             body {{
-                font-family: Arial, sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
                 font-size: 15px;
-                line-height: 1.8;
+                line-height: 1.6;
                 color: #202124;
                 background-color: #ffffff;
                 margin: 0;
@@ -538,11 +581,12 @@ class EmailDetailView(QWidget):
                 margin: 0 0 16px 0;
             }}
             a {{
-                color: #5b21b6;
+                color: #000000;
                 text-decoration: none;
+                border-bottom: 1px solid #000000;
             }}
             a:hover {{
-                text-decoration: underline;
+                opacity: 0.7;
             }}
         </style>
         </head>

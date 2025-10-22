@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-Vue Calendrier - CORRIGÉ COMPLET avec scroll, invités et Teams
+Vue calendrier - VERSION CORRIGÉE
+Design moderne, boutons visibles, invitations Teams fonctionnelles
 """
 import logging
 from datetime import datetime, timedelta
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QScrollArea, QCalendarWidget, QDialog, QLineEdit,
-    QTextEdit, QDateTimeEdit, QMessageBox, QComboBox
+    QCalendarWidget, QFrame, QScrollArea, QLineEdit, QTextEdit,
+    QComboBox, QCheckBox, QDialog, QDialogButtonBox, QDateTimeEdit,
+    QMessageBox
 )
-from PyQt6.QtCore import Qt, QDate, QDateTime
+from PyQt6.QtCore import Qt, QDate, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCharFormat, QColor
 
 from app.calendar_manager import CalendarManager, CalendarEvent
@@ -17,153 +19,101 @@ from app.calendar_manager import CalendarManager, CalendarEvent
 logger = logging.getLogger(__name__)
 
 
-class NewEventDialog(QDialog):
-    """Dialogue pour créer un événement - AVEC SCROLL + INVITÉS + TEAMS."""
+class EventDialog(QDialog):
+    """Dialog pour créer/éditer un événement avec design moderne."""
     
-    def __init__(self, parent=None, default_date: datetime = None):
+    def __init__(self, parent=None, event: CalendarEvent = None):
         super().__init__(parent)
         
+        self.event = event
         self.event_data = None
-        self.default_date = default_date or datetime.now()
         
-        self.setWindowTitle("📅 Nouvel événement")
-        self.setMinimumSize(600, 700)  # Taille augmentée pour tout afficher
-        
-        # Style avec fond blanc et texte noir visible
+        self.setWindowTitle("✨ Nouvel événement" if not event else "✏️ Modifier l'événement")
+        self.setMinimumWidth(600)
         self.setStyleSheet("""
             QDialog {
                 background-color: #ffffff;
             }
             QLabel {
-                color: #000000;
-                background-color: transparent;
+                color: #202124;
+                font-size: 14px;
             }
             QLineEdit, QTextEdit, QDateTimeEdit, QComboBox {
-                color: #000000;
-                background-color: #ffffff;
-                border: 2px solid #d1d5db;
+                border: 2px solid #e0e0e0;
                 border-radius: 8px;
-                padding: 10px;
-                selection-background-color: #5b21b6;
-                selection-color: #ffffff;
+                padding: 12px;
+                font-size: 14px;
+                background-color: #ffffff;
+                color: #202124;
             }
             QLineEdit:focus, QTextEdit:focus, QDateTimeEdit:focus, QComboBox:focus {
-                border-color: #5b21b6;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 30px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid #000000;
-                width: 0;
-                height: 0;
-            }
-            QCalendarWidget {
-                background-color: #ffffff;
-            }
-            QCalendarWidget QAbstractItemView {
-                color: #000000;
-                background-color: #ffffff;
-                selection-background-color: #5b21b6;
-                selection-color: #ffffff;
-            }
-            QCalendarWidget QWidget {
-                color: #000000;
+                border-color: #000000;
             }
             QPushButton {
-                background-color: #5b21b6;
-                color: white;
+                background-color: #000000;
+                color: #ffffff;
                 border: none;
                 border-radius: 8px;
                 padding: 12px 24px;
+                font-size: 14px;
                 font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #4c1d95;
+                background-color: #333333;
             }
-            QPushButton#cancel-btn {
-                background-color: #6b7280;
-            }
-            QPushButton#cancel-btn:hover {
-                background-color: #4b5563;
+            QPushButton:pressed {
+                background-color: #666666;
             }
             QCheckBox {
-                color: #000000;
-                spacing: 8px;
+                color: #202124;
+                font-size: 14px;
             }
             QCheckBox::indicator {
                 width: 20px;
                 height: 20px;
-                border: 2px solid #d1d5db;
+                border: 2px solid #e0e0e0;
                 border-radius: 4px;
-                background-color: #ffffff;
             }
             QCheckBox::indicator:checked {
-                background-color: #5b21b6;
-                border-color: #5b21b6;
+                background-color: #000000;
+                border-color: #000000;
             }
         """)
         
         self._setup_ui()
+        
+        if event:
+            self._load_event_data()
     
     def _setup_ui(self):
-        """Interface avec scroll activé."""
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        
-        # CRITIQUE : Zone scrollable pour tout le contenu
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: #ffffff; }")
-        
-        scroll_widget = QWidget()
-        scroll_widget.setStyleSheet("background-color: #ffffff;")
-        layout = QVBoxLayout(scroll_widget)
-        layout.setContentsMargins(30, 30, 30, 30)
+        """Interface moderne."""
+        layout = QVBoxLayout(self)
         layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
         
         # Titre
-        title = QLabel("Créer un nouvel événement")
-        title.setFont(QFont("Arial", 20, QFont.Weight.Bold))
-        title.setStyleSheet("color: #000000;")
-        layout.addWidget(title)
-        
-        # Titre de l'événement
         title_label = QLabel("Titre de l'événement *")
         title_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        title_label.setStyleSheet("color: #000000;")
         layout.addWidget(title_label)
         
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Ex: Réunion d'équipe")
-        self.title_input.setFont(QFont("Arial", 13))
-        self.title_input.setFixedHeight(45)
         layout.addWidget(self.title_input)
         
         # Date et heure de début
-        start_label = QLabel("Date et heure de début *")
-        start_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        start_label.setStyleSheet("color: #000000;")
-        layout.addWidget(start_label)
+        datetime_label = QLabel("Date et heure de début *")
+        datetime_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        layout.addWidget(datetime_label)
         
         self.start_datetime = QDateTimeEdit()
-        self.start_datetime.setDateTime(QDateTime(self.default_date))
         self.start_datetime.setCalendarPopup(True)
+        self.start_datetime.setDateTime(datetime.now())
         self.start_datetime.setDisplayFormat("dd/MM/yyyy HH:mm")
-        self.start_datetime.setFont(QFont("Arial", 13))
-        self.start_datetime.setFixedHeight(45)
         layout.addWidget(self.start_datetime)
         
         # Durée
         duration_label = QLabel("Durée")
         duration_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        duration_label.setStyleSheet("color: #000000;")
         layout.addWidget(duration_label)
         
         self.duration_combo = QComboBox()
@@ -177,87 +127,109 @@ class NewEventDialog(QDialog):
             "3 heures",
             "Toute la journée"
         ])
-        self.duration_combo.setCurrentText("1 heure")
-        self.duration_combo.setFont(QFont("Arial", 13))
-        self.duration_combo.setFixedHeight(45)
+        self.duration_combo.setCurrentIndex(3)  # 1 heure par défaut
         layout.addWidget(self.duration_combo)
         
         # Lieu
-        location_label = QLabel("Lieu")
+        location_label = QLabel("Lieu (optionnel)")
         location_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        location_label.setStyleSheet("color: #000000;")
         layout.addWidget(location_label)
         
         self.location_input = QLineEdit()
         self.location_input.setPlaceholderText("Ex: Salle de réunion A")
-        self.location_input.setFont(QFont("Arial", 13))
-        self.location_input.setFixedHeight(45)
         layout.addWidget(self.location_input)
         
-        # NOUVEAU : Invités
-        invites_label = QLabel("Invités (emails séparés par des virgules)")
+        # Description
+        desc_label = QLabel("Description (optionnel)")
+        desc_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        layout.addWidget(desc_label)
+        
+        self.description_input = QTextEdit()
+        self.description_input.setPlaceholderText("Ajoutez des détails...")
+        self.description_input.setMaximumHeight(100)
+        layout.addWidget(self.description_input)
+        
+        # Invités
+        invites_label = QLabel("Invités (séparés par des virgules)")
         invites_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        invites_label.setStyleSheet("color: #000000;")
         layout.addWidget(invites_label)
         
         self.invites_input = QLineEdit()
-        self.invites_input.setPlaceholderText("Ex: jean@example.com, marie@example.com")
-        self.invites_input.setFont(QFont("Arial", 13))
-        self.invites_input.setFixedHeight(45)
+        self.invites_input.setPlaceholderText("email1@exemple.com, email2@exemple.com")
         layout.addWidget(self.invites_input)
         
-        # NOUVEAU : Créer lien Teams
-        from PyQt6.QtWidgets import QCheckBox
-        self.teams_checkbox = QCheckBox("Créer un lien de réunion Teams")
+        # Checkbox Teams
+        self.teams_checkbox = QCheckBox("📹 Créer un lien Microsoft Teams")
         self.teams_checkbox.setFont(QFont("Arial", 13))
-        self.teams_checkbox.setChecked(False)
         layout.addWidget(self.teams_checkbox)
         
-        teams_info = QLabel("💡 Un lien Teams sera généré et envoyé aux invités par email")
-        teams_info.setFont(QFont("Arial", 11))
-        teams_info.setStyleSheet("color: #6b7280; padding-left: 30px;")
-        teams_info.setWordWrap(True)
-        layout.addWidget(teams_info)
+        layout.addStretch()
         
-        # Description
-        description_label = QLabel("Description")
-        description_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        description_label.setStyleSheet("color: #000000;")
-        layout.addWidget(description_label)
-        
-        self.description_input = QTextEdit()
-        self.description_input.setPlaceholderText("Détails supplémentaires...")
-        self.description_input.setFont(QFont("Arial", 13))
-        self.description_input.setMaximumHeight(120)
-        layout.addWidget(self.description_input)
-        
-        # Boutons
+        # Boutons d'action avec style visible
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(12)
         
         cancel_btn = QPushButton("Annuler")
-        cancel_btn.setObjectName("cancel-btn")
-        cancel_btn.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        cancel_btn.setFixedHeight(45)
-        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f1f3f4;
+                color: #202124;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+        """)
         cancel_btn.clicked.connect(self.reject)
         buttons_layout.addWidget(cancel_btn)
         
-        save_btn = QPushButton("Créer l'événement")
-        save_btn.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        save_btn.setFixedHeight(45)
-        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        save_btn.clicked.connect(self._save_event)
+        buttons_layout.addStretch()
+        
+        save_btn = QPushButton("💾 Sauvegarder" if not self.event else "✏️ Modifier")
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #000000;
+                color: #ffffff;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 32px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #333333;
+            }
+        """)
+        save_btn.clicked.connect(self._on_save)
         buttons_layout.addWidget(save_btn)
         
         layout.addLayout(buttons_layout)
-        
-        # Ajouter le widget scrollable au scroll
-        scroll.setWidget(scroll_widget)
-        main_layout.addWidget(scroll)
     
-    def _save_event(self):
-        """Sauvegarde l'événement avec invités et Teams."""
+    def _load_event_data(self):
+        """Charge les données d'un événement existant."""
+        if not self.event:
+            return
+        
+        self.title_input.setText(self.event.title)
+        
+        if self.event.start_time:
+            self.start_datetime.setDateTime(self.event.start_time)
+        
+        if self.event.location:
+            self.location_input.setText(self.event.location)
+        
+        if self.event.description:
+            self.description_input.setPlainText(self.event.description)
+        
+        if self.event.participants:
+            self.invites_input.setText(', '.join(self.event.participants))
+    
+    def _on_save(self):
+        """Sauvegarde l'événement."""
         title = self.title_input.text().strip()
         
         if not title:
@@ -296,7 +268,6 @@ class NewEventDialog(QDialog):
         # Lien Teams
         teams_link = None
         if self.teams_checkbox.isChecked():
-            # Générer un faux lien Teams (dans une vraie app, utiliser l'API Teams)
             import uuid
             meeting_id = str(uuid.uuid4())[:8]
             teams_link = f"https://teams.microsoft.com/l/meetup-join/{meeting_id}"
@@ -316,223 +287,302 @@ class NewEventDialog(QDialog):
 
 
 class CalendarView(QWidget):
-    """Vue calendrier avec fonctionnalités complètes."""
+    """Vue calendrier moderne et intuitive."""
     
-    def __init__(self, calendar_manager: CalendarManager):
+    def __init__(self, calendar_manager: CalendarManager, gmail_client=None):
         super().__init__()
         
         self.calendar_manager = calendar_manager
+        self.gmail_client = gmail_client
         self.current_date = datetime.now()
         
         self._setup_ui()
         self.refresh()
     
     def _setup_ui(self):
-        """Interface."""
+        """Interface moderne."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # En-tête
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #ffffff;
+            }
+        """)
+        
+        # Header
         header = QFrame()
-        header.setFixedHeight(70)
-        header.setStyleSheet("background-color: #fafafa; border-bottom: 1px solid #e5e7eb;")
+        header.setStyleSheet("""
+            QFrame {
+                background-color: #000000;
+                border: none;
+            }
+        """)
+        header.setFixedHeight(80)
         
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(30, 15, 30, 15)
+        header_layout.setContentsMargins(30, 20, 30, 20)
         
-        title = QLabel("📅 Calendrier")
-        title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        title.setStyleSheet("color: #000000;")
-        header_layout.addWidget(title)
+        # Titre
+        title_label = QLabel("📅 Calendrier")
+        title_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        title_label.setStyleSheet("color: #ffffff;")
+        header_layout.addWidget(title_label)
         
         header_layout.addStretch()
         
-        # Bouton nouvel événement
-        self.new_event_btn = QPushButton("+ Nouvel événement")
-        self.new_event_btn.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        self.new_event_btn.setFixedHeight(42)
-        self.new_event_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.new_event_btn.clicked.connect(self._open_new_event_dialog)
-        self.new_event_btn.setStyleSheet("""
+        # Bouton créer événement
+        create_btn = QPushButton("➕ Nouvel événement")
+        create_btn.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        create_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        create_btn.setStyleSheet("""
             QPushButton {
-                background-color: #5b21b6;
-                color: white;
+                background-color: #ffffff;
+                color: #000000;
                 border: none;
-                border-radius: 21px;
-                padding: 0 25px;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-size: 14px;
+                font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #4c1d95;
+                background-color: #f0f0f0;
             }
         """)
-        header_layout.addWidget(self.new_event_btn)
+        create_btn.clicked.connect(self._on_create_event)
+        header_layout.addWidget(create_btn)
         
         layout.addWidget(header)
         
-        # Contenu
+        # Contenu principal
         content_layout = QHBoxLayout()
         content_layout.setContentsMargins(30, 30, 30, 30)
         content_layout.setSpacing(30)
         
         # Calendrier
+        calendar_container = QFrame()
+        calendar_container.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #e0e0e0;
+                border-radius: 12px;
+                padding: 20px;
+            }
+        """)
+        calendar_container.setFixedWidth(400)
+        
+        calendar_layout = QVBoxLayout(calendar_container)
+        calendar_layout.setSpacing(15)
+        
         self.calendar = QCalendarWidget()
-        self.calendar.setFixedSize(450, 400)
-        self.calendar.setFont(QFont("Arial", 11))
-        self.calendar.setGridVisible(True)
-        self.calendar.clicked.connect(self._on_date_selected)
         self.calendar.setStyleSheet("""
             QCalendarWidget {
-                background-color: white;
-                border: 1px solid #e5e7eb;
-                border-radius: 10px;
+                background-color: #ffffff;
+                border: none;
             }
             QCalendarWidget QToolButton {
-                color: #5b21b6;
-                background-color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 5px;
-                font-weight: bold;
+                background-color: #000000;
+                color: #ffffff;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 14px;
+                font-weight: 600;
             }
             QCalendarWidget QToolButton:hover {
-                background-color: #ede9fe;
+                background-color: #333333;
+            }
+            QCalendarWidget QMenu {
+                background-color: #ffffff;
+                border: 1px solid #e0e0e0;
+            }
+            QCalendarWidget QSpinBox {
+                background-color: #ffffff;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                padding: 5px;
+            }
+            QCalendarWidget QWidget#qt_calendar_navigationbar {
+                background-color: #ffffff;
+            }
+            QCalendarWidget QWidget {
+                alternate-background-color: #f8f9fa;
             }
             QCalendarWidget QAbstractItemView:enabled {
-                color: #1f2937;
-                background-color: white;
-                selection-background-color: #5b21b6;
-                selection-color: white;
+                color: #202124;
+                background-color: #ffffff;
+                selection-background-color: #000000;
+                selection-color: #ffffff;
+            }
+            QCalendarWidget QAbstractItemView:disabled {
+                color: #9ca3af;
+            }
+        """)
+        self.calendar.setVerticalHeaderFormat(QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader)
+        self.calendar.clicked.connect(self._on_date_selected)
+        calendar_layout.addWidget(self.calendar)
+        
+        content_layout.addWidget(calendar_container)
+        
+        # Liste des événements
+        events_container = QFrame()
+        events_container.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: none;
             }
         """)
         
-        self._highlight_event_days()
-        content_layout.addWidget(self.calendar)
-        
-        # Liste des événements (scrollable)
-        events_container = QWidget()
         events_layout = QVBoxLayout(events_container)
-        events_layout.setContentsMargins(0, 0, 0, 0)
         events_layout.setSpacing(15)
+        events_layout.setContentsMargins(0, 0, 0, 0)
         
+        # Titre section
         events_title = QLabel("📋 Événements à venir")
-        events_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        events_title.setStyleSheet("color: #000000;")
+        events_title.setFont(QFont("Arial", 20, QFont.Weight.Bold))
+        events_title.setStyleSheet("color: #202124;")
         events_layout.addWidget(events_title)
         
-        # CRITIQUE : Scroll pour les événements
-        self.events_scroll = QScrollArea()
-        self.events_scroll.setWidgetResizable(True)
-        self.events_scroll.setStyleSheet("""
+        # Scroll area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
             QScrollArea {
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
+                border: none;
                 background-color: #ffffff;
             }
         """)
         
-        self.events_container = QWidget()
-        self.events_layout = QVBoxLayout(self.events_container)
-        self.events_layout.setContentsMargins(15, 15, 15, 15)
-        self.events_layout.setSpacing(12)
+        scroll_widget = QWidget()
+        scroll_widget.setStyleSheet("background-color: #ffffff;")
+        self.events_layout = QVBoxLayout(scroll_widget)
+        self.events_layout.setSpacing(15)
+        self.events_layout.setContentsMargins(0, 0, 10, 0)
         self.events_layout.addStretch()
         
-        self.events_scroll.setWidget(self.events_container)
-        events_layout.addWidget(self.events_scroll)
+        scroll.setWidget(scroll_widget)
+        events_layout.addWidget(scroll)
         
         content_layout.addWidget(events_container, 1)
         
         layout.addLayout(content_layout)
     
-    def _open_new_event_dialog(self):
-        """Ouvre le dialogue de création d'événement."""
-        logger.info("🆕 Ouverture dialogue nouvel événement")
-        
-        selected_date = self.calendar.selectedDate()
-        default_datetime = datetime(
-            selected_date.year(),
-            selected_date.month(),
-            selected_date.day(),
-            9, 0
-        )
-        
-        dialog = NewEventDialog(self, default_datetime)
+    def _on_create_event(self):
+        """Crée un nouvel événement."""
+        dialog = EventDialog(self)
         
         if dialog.exec() == QDialog.DialogCode.Accepted:
             event_data = dialog.event_data
             
             if event_data:
-                try:
-                    import uuid
-                    event = CalendarEvent(
-                        id=f"manual_{uuid.uuid4().hex[:8]}",
-                        title=event_data['title'],
-                        start_time=event_data['start_time'],
-                        end_time=event_data['end_time'],
-                        location=event_data.get('location'),
-                        description=event_data.get('description'),
-                        participants=event_data.get('invites', [])
-                    )
-                    
-                    self.calendar_manager.add_event(event)
-                    
-                    # Si Teams activé, envoyer les invitations
-                    if event_data.get('create_teams') and event_data.get('invites'):
-                        self._send_teams_invitations(event, event_data)
-                    
-                    self.refresh()
-                    
-                    QMessageBox.information(
-                        self,
-                        "✅ Événement créé",
-                        f"L'événement '{event_data['title']}' a été créé avec succès !"
-                    )
-                    
-                    logger.info(f"✅ Événement créé: {event_data['title']}")
-                    
-                except Exception as e:
-                    logger.error(f"❌ Erreur: {e}")
-                    QMessageBox.critical(self, "❌ Erreur", f"Impossible de créer l'événement:\n{str(e)}")
+                # Créer l'événement
+                event = CalendarEvent(
+                    id=f"manual_{datetime.now().timestamp()}",
+                    title=event_data['title'],
+                    start_time=event_data['start_time'],
+                    end_time=event_data['end_time'],
+                    location=event_data['location'],
+                    description=event_data['description'],
+                    participants=event_data['invites']
+                )
+                
+                self.calendar_manager.add_event(event)
+                
+                # Envoyer les invitations si nécessaire
+                if event_data['invites'] and self.gmail_client:
+                    self._send_invitations(event, event_data['teams_link'])
+                
+                # Rafraîchir
+                self.refresh()
+                
+                QMessageBox.information(
+                    self,
+                    "✅ Événement créé",
+                    f"L'événement '{event.title}' a été ajouté au calendrier."
+                )
     
-    def _send_teams_invitations(self, event: CalendarEvent, event_data: dict):
-        """Envoie des invitations par email avec le lien Teams."""
+    def _send_invitations(self, event: CalendarEvent, teams_link: str = None):
+        """Envoie les invitations par email via Gmail."""
         try:
-            from app.gmail_client import GmailClient
+            if not self.gmail_client or not hasattr(self.gmail_client, 'send_email'):
+                logger.warning("Gmail client non disponible pour envoyer les invitations")
+                return
             
-            # Note : Dans une vraie app, il faudrait passer le gmail_client en paramètre
-            # Pour l'instant, on log juste l'action
-            teams_link = event_data.get('teams_link', '')
-            invites = event_data.get('invites', [])
+            # Construire le corps de l'email
+            email_body = f"""
+            <html>
+            <head>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        line-height: 1.6;
+                        color: #202124;
+                    }}
+                    .invitation {{
+                        background-color: #f8f9fa;
+                        border-left: 4px solid #000000;
+                        padding: 20px;
+                        margin: 20px 0;
+                    }}
+                    .details {{
+                        margin: 15px 0;
+                    }}
+                    .label {{
+                        font-weight: bold;
+                        color: #000000;
+                    }}
+                    .teams-link {{
+                        background-color: #000000;
+                        color: #ffffff;
+                        padding: 12px 24px;
+                        text-decoration: none;
+                        border-radius: 6px;
+                        display: inline-block;
+                        margin-top: 15px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <h2>📅 Vous êtes invité(e) à un événement</h2>
+                
+                <div class="invitation">
+                    <h3>{event.title}</h3>
+                    
+                    <div class="details">
+                        <p><span class="label">📅 Date :</span> {event.start_time.strftime('%d/%m/%Y')}</p>
+                        <p><span class="label">🕐 Heure :</span> {event.start_time.strftime('%H:%M')} - {event.end_time.strftime('%H:%M')}</p>
+                        {f'<p><span class="label">📍 Lieu :</span> {event.location}</p>' if event.location else ''}
+                        {f'<p><span class="label">📝 Description :</span> {event.description}</p>' if event.description else ''}
+                    </div>
+                    
+                    {f'<a href="{teams_link}" class="teams-link">🎥 Rejoindre la réunion Teams</a>' if teams_link else ''}
+                </div>
+                
+                <p>À bientôt !</p>
+            </body>
+            </html>
+            """
             
-            email_body = f"""Bonjour,
-
-Vous êtes invité(e) à l'événement suivant :
-
-📅 {event.title}
-🕐 {event.start_time.strftime('%d/%m/%Y à %H:%M')}
-📍 {event.location or 'Non spécifié'}
-
-🔗 Rejoindre la réunion Teams :
-{teams_link}
-
-Description :
-{event.description or 'Aucune description'}
-
-À bientôt !
-"""
+            # Envoyer à chaque invité
+            for invite in event.participants:
+                try:
+                    self.gmail_client.send_email(
+                        to=invite,
+                        subject=f"Invitation : {event.title}",
+                        body=email_body
+                    )
+                    logger.info(f"✅ Invitation envoyée à {invite}")
+                except Exception as e:
+                    logger.error(f"❌ Erreur envoi à {invite}: {e}")
             
-            logger.info(f"📧 Invitations à envoyer à : {', '.join(invites)}")
-            logger.info(f"🔗 Lien Teams : {teams_link}")
-            
-            # TODO : Implémenter l'envoi réel via Gmail API
-            # gmail_client.send_email(
-            #     to=invite,
-            #     subject=f"Invitation : {event.title}",
-            #     body=email_body
-            # )
+            logger.info(f"📧 Invitations envoyées à : {', '.join(event.participants)}")
+            if teams_link:
+                logger.info(f"🔗 Lien Teams : {teams_link}")
             
         except Exception as e:
             logger.error(f"❌ Erreur envoi invitations: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _on_date_selected(self, date: QDate):
         """Date sélectionnée."""
@@ -541,6 +591,7 @@ Description :
         selected_datetime = datetime(date.year(), date.month(), date.day())
         events_on_date = self.calendar_manager.get_events_for_date(selected_datetime)
         
+        # Nettoyer la liste
         while self.events_layout.count() > 1:
             item = self.events_layout.takeAt(0)
             if item.widget():
@@ -553,9 +604,153 @@ Description :
         else:
             empty = QLabel(f"📭 Aucun événement le {date.toString('dd/MM/yyyy')}")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setFont(QFont("Arial", 12))
-            empty.setStyleSheet("color: #9ca3af; padding: 30px;")
+            empty.setFont(QFont("Arial", 13))
+            empty.setStyleSheet("color: #9ca3af; padding: 40px;")
             self.events_layout.insertWidget(0, empty)
+    
+    def _create_event_card(self, event: CalendarEvent) -> QFrame:
+        """Crée une carte d'événement moderne."""
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #e0e0e0;
+                border-radius: 12px;
+                padding: 20px;
+            }
+            QFrame:hover {
+                border-color: #000000;
+                background-color: #f0f0f0;
+            }
+        """)
+        
+        layout = QVBoxLayout(card)
+        layout.setSpacing(12)
+        
+        # Titre
+        title_label = QLabel(event.title)
+        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        title_label.setStyleSheet("color: #202124; background-color: transparent;")
+        title_label.setWordWrap(True)
+        layout.addWidget(title_label)
+        
+        # Heure
+        if event.start_time:
+            time_str = event.start_time.strftime("%H:%M")
+            if event.end_time:
+                time_str += f" - {event.end_time.strftime('%H:%M')}"
+            
+            time_label = QLabel(f"🕐 {time_str}")
+            time_label.setFont(QFont("Arial", 13))
+            time_label.setStyleSheet("color: #5f6368; background-color: transparent;")
+            layout.addWidget(time_label)
+        
+        # Lieu
+        if event.location:
+            location_label = QLabel(f"📍 {event.location}")
+            location_label.setFont(QFont("Arial", 13))
+            location_label.setStyleSheet("color: #5f6368; background-color: transparent;")
+            layout.addWidget(location_label)
+        
+        # Participants
+        if event.participants:
+            participants_label = QLabel(f"👥 {len(event.participants)} participant(s)")
+            participants_label.setFont(QFont("Arial", 13))
+            participants_label.setStyleSheet("color: #5f6368; background-color: transparent;")
+            layout.addWidget(participants_label)
+        
+        # Boutons d'action
+        if hasattr(event, 'id'):
+            actions_layout = QHBoxLayout()
+            actions_layout.setSpacing(10)
+            
+            edit_btn = QPushButton("✏️ Modifier")
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #000000;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background-color: #333333;
+                }
+            """)
+            edit_btn.clicked.connect(lambda: self._on_edit_event(event))
+            actions_layout.addWidget(edit_btn)
+            
+            delete_btn = QPushButton("🗑️ Supprimer")
+            delete_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #dc2626;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background-color: #b91c1c;
+                }
+            """)
+            delete_btn.clicked.connect(lambda: self._on_delete_event(event))
+            actions_layout.addWidget(delete_btn)
+            
+            actions_layout.addStretch()
+            layout.addLayout(actions_layout)
+        
+        return card
+    
+    def _on_edit_event(self, event: CalendarEvent):
+        """Modifie un événement."""
+        dialog = EventDialog(self, event)
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            event_data = dialog.event_data
+            
+            if event_data:
+                # Mettre à jour l'événement
+                event.title = event_data['title']
+                event.start_time = event_data['start_time']
+                event.end_time = event_data['end_time']
+                event.location = event_data['location']
+                event.description = event_data['description']
+                event.participants = event_data['invites']
+                
+                # Envoyer les mises à jour
+                if event_data['invites'] and self.gmail_client:
+                    self._send_invitations(event, event_data['teams_link'])
+                
+                self.refresh()
+                
+                QMessageBox.information(
+                    self,
+                    "✅ Événement modifié",
+                    f"L'événement '{event.title}' a été mis à jour."
+                )
+    
+    def _on_delete_event(self, event: CalendarEvent):
+        """Supprime un événement."""
+        reply = QMessageBox.question(
+            self,
+            "❓ Confirmer la suppression",
+            f"Voulez-vous vraiment supprimer l'événement '{event.title}' ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.calendar_manager.remove_event(event.id)
+            self.refresh()
+            
+            QMessageBox.information(
+                self,
+                "✅ Événement supprimé",
+                "L'événement a été supprimé du calendrier."
+            )
     
     def _highlight_event_days(self):
         """Marque les jours avec événements."""
@@ -563,8 +758,8 @@ Description :
             events = self.calendar_manager.get_events(days_ahead=60)
             
             event_format = QTextCharFormat()
-            event_format.setBackground(QColor("#ede9fe"))
-            event_format.setForeground(QColor("#5b21b6"))
+            event_format.setBackground(QColor("#f0f0f0"))
+            event_format.setForeground(QColor("#000000"))
             event_format.setFontWeight(QFont.Weight.Bold)
             
             for event in events:
@@ -577,129 +772,31 @@ Description :
                     self.calendar.setDateTextFormat(date, event_format)
         
         except Exception as e:
-            logger.error(f"Erreur: {e}")
+            logger.error(f"Erreur highlight: {e}")
     
     def refresh(self):
         """Rafraîchit la vue."""
-        logger.info("🔄 Rafraîchissement calendrier")
+        logger.info("🔄 Refresh calendrier")
         
-        try:
-            while self.events_layout.count() > 1:
-                item = self.events_layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
-            
-            events = self.calendar_manager.get_events(days_ahead=30)
-            
-            now = datetime.now()
-            upcoming_events = [e for e in events if getattr(e, 'start_time', now) >= now]
-            upcoming_events.sort(key=lambda e: getattr(e, 'start_time', now))
-            
-            if not upcoming_events:
-                empty = QLabel("📭 Aucun événement à venir")
-                empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                empty.setFont(QFont("Arial", 13))
-                empty.setStyleSheet("color: #9ca3af; padding: 40px;")
-                self.events_layout.insertWidget(0, empty)
-            else:
-                for event in upcoming_events[:10]:
-                    event_card = self._create_event_card(event)
-                    self.events_layout.insertWidget(self.events_layout.count() - 1, event_card)
-            
-            self._highlight_event_days()
-            
-            logger.info(f"✅ {len(upcoming_events)} événements affichés")
+        # Nettoyer
+        while self.events_layout.count() > 1:
+            item = self.events_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
         
-        except Exception as e:
-            logger.error(f"Erreur: {e}")
-    
-    def _create_event_card(self, event: CalendarEvent) -> QFrame:
-        """Crée une carte événement avec invités."""
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background-color: #ffffff;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 16px;
-            }
-            QFrame:hover {
-                border-color: #5b21b6;
-                background-color: #faf5ff;
-            }
-        """)
+        # Charger les événements à venir
+        events = self.calendar_manager.get_events(days_ahead=30)
         
-        layout = QVBoxLayout(card)
-        layout.setSpacing(8)
+        if events:
+            for event in events:
+                card = self._create_event_card(event)
+                self.events_layout.insertWidget(self.events_layout.count() - 1, card)
+        else:
+            empty = QLabel("📭 Aucun événement à venir")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.setFont(QFont("Arial", 13))
+            empty.setStyleSheet("color: #9ca3af; padding: 40px;")
+            self.events_layout.insertWidget(0, empty)
         
-        # Titre
-        title = QLabel(event.title)
-        title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        title.setStyleSheet("color: #000000;")
-        title.setWordWrap(True)
-        layout.addWidget(title)
-        
-        # Date/Heure
-        time_str = event.start_time.strftime("%d/%m/%Y à %H:%M")
-        if event.end_time:
-            time_str += f" - {event.end_time.strftime('%H:%M')}"
-        
-        time_label = QLabel(f"🕐 {time_str}")
-        time_label.setFont(QFont("Arial", 12))
-        time_label.setStyleSheet("color: #6b7280;")
-        layout.addWidget(time_label)
-        
-        # Lieu
-        if event.location:
-            location_label = QLabel(f"📍 {event.location}")
-            location_label.setFont(QFont("Arial", 12))
-            location_label.setStyleSheet("color: #6b7280;")
-            layout.addWidget(location_label)
-        
-        # Invités
-        if event.participants and len(event.participants) > 0:
-            invites_text = f"👥 {len(event.participants)} invité(s)"
-            invites_label = QLabel(invites_text)
-            invites_label.setFont(QFont("Arial", 11))
-            invites_label.setStyleSheet("color: #9ca3af;")
-            layout.addWidget(invites_label)
-        
-        # Bouton supprimer
-        delete_btn = QPushButton("🗑️ Supprimer")
-        delete_btn.setFont(QFont("Arial", 11))
-        delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        delete_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #fee2e2;
-                color: #dc2626;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 12px;
-            }
-            QPushButton:hover {
-                background-color: #fecaca;
-            }
-        """)
-        delete_btn.clicked.connect(lambda: self._delete_event(event))
-        layout.addWidget(delete_btn)
-        
-        return card
-    
-    def _delete_event(self, event: CalendarEvent):
-        """Supprime un événement."""
-        reply = QMessageBox.question(
-            self,
-            "Confirmation",
-            f"Voulez-vous vraiment supprimer '{event.title}' ?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                self.calendar_manager.remove_event(event.id)
-                self.refresh()
-                QMessageBox.information(self, "✅ Succès", "Événement supprimé !")
-                logger.info(f"✅ Supprimé: {event.title}")
-            except Exception as e:
-                logger.error(f"❌ Erreur: {e}")
-                QMessageBox.critical(self, "❌ Erreur", f"Impossible de supprimer:\n{str(e)}")
+        # Mettre en surbrillance les jours
+        self._highlight_event_days()

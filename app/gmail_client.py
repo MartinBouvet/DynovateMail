@@ -325,3 +325,27 @@ class GmailClient:
             logger.info(f"✅ Supprimé: {message_id}")
         except Exception as e:
             raise
+    def send_email(self, to: str, subject: str, body: str):
+        """Envoie un email via Gmail API."""
+        import base64
+        from email.message import EmailMessage
+    
+        try:
+            message = EmailMessage()
+            message.set_content(body, subtype='html')
+            message['To'] = to
+            message['Subject'] = subject
+            message['From'] = 'me'
+        
+            encoded = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        
+            send_message = self.service.users().messages().send(
+                userId='me',
+                body={'raw': encoded}
+            ).execute()
+        
+            logger.info(f"✅ Email envoyé à {to}")
+            return send_message
+        except Exception as e:
+            logger.error(f"❌ Erreur envoi: {e}")
+            raise

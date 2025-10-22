@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Gestionnaire de calendrier - VERSION CORRIGÉE
+Avec méthodes get_events_for_date et remove_event
 """
 import logging
 from datetime import datetime, timedelta
@@ -24,6 +25,7 @@ class CalendarEvent:
     def __post_init__(self):
         if self.participants is None:
             self.participants = []
+
 
 class CalendarManager:
     """Gestionnaire de calendrier avec extraction depuis emails."""
@@ -61,6 +63,36 @@ class CalendarManager:
         
         except Exception as e:
             logger.error(f"Erreur get_events: {e}")
+            return []
+    
+    def get_events_for_date(self, date: datetime) -> List[CalendarEvent]:
+        """
+        Récupère les événements pour une date spécifique.
+        
+        Args:
+            date: Date à filtrer
+            
+        Returns:
+            Liste des événements pour cette date
+        """
+        try:
+            # Extraire juste la date (sans l'heure)
+            target_date = date.date()
+            
+            # Filtrer les événements
+            events_on_date = [
+                event for event in self.events
+                if event.start_time.date() == target_date
+            ]
+            
+            # Trier par heure
+            events_on_date.sort(key=lambda e: e.start_time)
+            
+            logger.info(f"✅ {len(events_on_date)} événements le {target_date.strftime('%d/%m/%Y')}")
+            return events_on_date
+        
+        except Exception as e:
+            logger.error(f"Erreur get_events_for_date: {e}")
             return []
     
     def extract_meeting_from_email(self, email) -> Optional[CalendarEvent]:
@@ -143,58 +175,40 @@ class CalendarManager:
     
     def add_event(self, event: CalendarEvent):
         """Ajoute un événement au calendrier."""
-        self.events.append(event)
-        logger.info(f"✅ Événement ajouté: {event.title}")
+        try:
+            self.events.append(event)
+            logger.info(f"✅ Événement ajouté: {event.title}")
+        except Exception as e:
+            logger.error(f"Erreur ajout événement: {e}")
     
     def remove_event(self, event_id: str):
-        """Supprime un événement."""
-        self.events = [e for e in self.events if e.id != event_id]
-        logger.info(f"🗑️ Événement supprimé: {event_id}")
-    
-    def get_event_by_id(self, event_id: str) -> Optional[CalendarEvent]:
-        """Récupère un événement par son ID."""
-        for event in self.events:
-            if event.id == event_id:
-                return event
-        return None
-    
-    def get_events_for_date(self, date: datetime) -> List[CalendarEvent]:
-        """Récupère tous les événements d'une date donnée."""
-        target_date = date.date()
+        """
+        Supprime un événement du calendrier.
         
-        events_on_date = [
-            event for event in self.events
-            if event.start_time.date() == target_date
-        ]
-        
-        events_on_date.sort(key=lambda e: e.start_time)
-        return events_on_date
+        Args:
+            event_id: ID de l'événement à supprimer
+        """
+        try:
+            self.events = [e for e in self.events if e.id != event_id]
+            logger.info(f"✅ Événement supprimé: {event_id}")
+        except Exception as e:
+            logger.error(f"Erreur suppression événement: {e}")
     
-    def has_conflict(self, new_event: CalendarEvent) -> bool:
-        """Vérifie si un nouvel événement entre en conflit avec des existants."""
-        for event in self.events:
-            # Vérifier le chevauchement
-            if new_event.start_time < event.end_time and new_event.end_time > event.start_time:
-                return True
+    def update_event(self, event_id: str, updated_event: CalendarEvent):
+        """
+        Met à jour un événement existant.
         
-        return False
-    
-    def get_next_event(self) -> Optional[CalendarEvent]:
-        """Récupère le prochain événement à venir."""
-        now = datetime.now()
-        future_events = [e for e in self.events if e.start_time > now]
-        
-        if future_events:
-            future_events.sort(key=lambda e: e.start_time)
-            return future_events[0]
-        
-        return None
-    
-    def get_today_events(self) -> List[CalendarEvent]:
-        """Récupère les événements d'aujourd'hui."""
-        return self.get_events_for_date(datetime.now())
-    
-    def clear_all_events(self):
-        """Supprime tous les événements."""
-        self.events.clear()
-        logger.info("🗑️ Tous les événements supprimés")
+        Args:
+            event_id: ID de l'événement à modifier
+            updated_event: Nouvelles données de l'événement
+        """
+        try:
+            for i, event in enumerate(self.events):
+                if event.id == event_id:
+                    self.events[i] = updated_event
+                    logger.info(f"✅ Événement mis à jour: {event_id}")
+                    return
+            
+            logger.warning(f"Événement non trouvé: {event_id}")
+        except Exception as e:
+            logger.error(f"Erreur mise à jour événement: {e}")
