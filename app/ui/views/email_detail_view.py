@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Vue détail email - AFFICHAGE PARFAIT FINAL
+Vue détail email - AFFICHAGE PARFAIT avec IMAGES CORRIGÉES
 """
 import logging
 import re
+import base64
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QFrame, QTextBrowser
@@ -18,7 +19,7 @@ from app.models.email_model import Email
 logger = logging.getLogger(__name__)
 
 class EmailDetailView(QWidget):
-    """Vue détail email - PARFAIT."""
+    """Vue détail email avec affichage correct des images."""
     
     reply_requested = pyqtSignal(Email)
     forward_requested = pyqtSignal(Email)
@@ -39,10 +40,9 @@ class EmailDetailView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Fond blanc partout
         self.setStyleSheet("QWidget { background-color: #ffffff; }")
         
-        # Zone de scroll
+        # Zone scrollable
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet("""
@@ -58,7 +58,7 @@ class EmailDetailView(QWidget):
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.setSpacing(0)
         
-        # Message vide
+        # Message vide initial
         empty_container = QWidget()
         empty_container.setStyleSheet("background-color: #ffffff;")
         empty_layout = QVBoxLayout(empty_container)
@@ -80,18 +80,18 @@ class EmailDetailView(QWidget):
         layout.addWidget(self.scroll)
     
     def show_email(self, email: Email):
-        """Affiche un email - PARFAIT."""
+        """Affiche un email avec images correctement intégrées."""
         self.current_email = email
         
-        logger.info(f"📧 Affichage: {email.subject[:50]}")
+        logger.info(f"📧 Affichage email: {email.subject[:50]}")
         
-        # Nettoyer
+        # Nettoyer le layout
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
-        # Container principal - FOND BLANC
+        # Container principal
         main_container = QWidget()
         main_container.setStyleSheet("background-color: #ffffff;")
         
@@ -99,7 +99,7 @@ class EmailDetailView(QWidget):
         main_layout.setContentsMargins(40, 30, 40, 30)
         main_layout.setSpacing(24)
         
-        # Sujet en gros
+        # Sujet
         subject_label = QLabel(email.subject or "(Sans sujet)")
         subject_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
         subject_label.setStyleSheet("color: #202124; background-color: transparent;")
@@ -142,24 +142,24 @@ class EmailDetailView(QWidget):
         actions_layout.addStretch()
         main_layout.addLayout(actions_layout)
         
-        # Ligne de séparation
+        # Séparateur
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.HLine)
         separator.setFixedHeight(1)
         separator.setStyleSheet("background-color: #dadce0; border: none;")
         main_layout.addWidget(separator)
         
-        # Header email (expéditeur + date)
+        # Header (expéditeur + date)
         header_layout = QHBoxLayout()
         header_layout.setSpacing(16)
         
-        # Avatar coloré
+        # Avatar
         avatar = QLabel(email.sender[0].upper() if email.sender else "?")
         avatar.setFixedSize(56, 56)
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         avatar.setFont(QFont("Arial", 22, QFont.Weight.Bold))
         avatar.setStyleSheet("""
-            background-color: #1a73e8;
+            background-color: #5b21b6;
             color: white;
             border-radius: 28px;
         """)
@@ -191,10 +191,9 @@ class EmailDetailView(QWidget):
             header_layout.addWidget(date_label)
         
         main_layout.addLayout(header_layout)
-        
         main_layout.addSpacing(20)
         
-        # Contenu email - ZONE DÉDIÉE AVEC FOND
+        # Contenu email avec images
         content_frame = QFrame()
         content_frame.setStyleSheet("""
             QFrame {
@@ -225,13 +224,13 @@ class EmailDetailView(QWidget):
             }
         """)
         
-        # Formater le contenu
+        # Formater le contenu AVEC IMAGES
         if email.body:
             if self._is_html(email.body):
-                clean_html = self._clean_html_final(email.body, email)
+                clean_html = self._clean_html_with_images(email.body, email)
                 body_browser.setHtml(clean_html)
             else:
-                formatted = self._format_plain_text_final(email.body)
+                formatted = self._format_plain_text(email.body)
                 body_browser.setHtml(formatted)
         elif email.snippet:
             body_browser.setHtml(f'<div style="color: #5f6368; font-style: italic; padding: 20px;">{email.snippet}</div>')
@@ -239,7 +238,6 @@ class EmailDetailView(QWidget):
             body_browser.setHtml('<div style="color: #80868b; padding: 20px;">Aucun contenu disponible</div>')
         
         content_layout.addWidget(body_browser)
-        
         main_layout.addWidget(content_frame)
         
         # Pièces jointes
@@ -267,11 +265,9 @@ class EmailDetailView(QWidget):
             att_layout.addWidget(att_text)
             
             att_layout.addStretch()
-            
             main_layout.addWidget(att_frame)
         
         main_layout.addStretch()
-        
         self.content_layout.addWidget(main_container)
     
     def _format_date(self, date):
@@ -290,8 +286,8 @@ class EmailDetailView(QWidget):
         """Détecte HTML."""
         return '<html' in text.lower() or '<div' in text.lower() or '<p>' in text.lower() or '<br' in text.lower()
     
-    def _clean_html_final(self, html_content: str, email: Email) -> str:
-        """Nettoie le HTML - VERSION FINALE."""
+    def _clean_html_with_images(self, html_content: str, email: Email) -> str:
+        """Nettoie le HTML ET intègre les images en base64 - CORRIGÉ."""
         
         css = """
         <style>
@@ -320,7 +316,7 @@ class EmailDetailView(QWidget):
                 border-radius: 4px;
             }
             a {
-                color: #1a73e8;
+                color: #5b21b6;
                 text-decoration: none;
             }
             a:hover {
@@ -379,13 +375,120 @@ class EmailDetailView(QWidget):
         else:
             html_content = f'<html><head>{css}</head><body>{html_content}</body></html>'
         
-        # Intégrer images
-        html_content = self._embed_images(html_content, email)
+        # CORRECTION CRITIQUE : Intégrer les images
+        html_content = self._embed_images_correctly(html_content, email)
         
         return html_content
     
-    def _format_plain_text_final(self, text: str) -> str:
-        """Formate texte brut - VERSION FINALE."""
+    def _embed_images_correctly(self, html_content: str, email: Email) -> str:
+        """
+        Intègre correctement les images en base64 - VERSION CORRIGÉE.
+        Remplace les cid: par des data URIs.
+        """
+        try:
+            if not hasattr(self.gmail_client, 'service') or not email.id:
+                logger.warning("Service Gmail non disponible ou email sans ID")
+                return html_content
+            
+            # Récupérer le message complet avec toutes les parties
+            message = self.gmail_client.service.users().messages().get(
+                userId='me',
+                id=email.id,
+                format='full'
+            ).execute()
+            
+            # Extraire toutes les images
+            images_map = {}
+            self._extract_all_images(message.get('payload', {}), images_map)
+            
+            logger.info(f"📷 {len(images_map)} images trouvées dans l'email")
+            
+            # Remplacer chaque référence cid: par une data URI
+            for cid, image_data in images_map.items():
+                # Déterminer le type MIME de l'image
+                mime_type = self._detect_image_type(image_data)
+                
+                # Créer la data URI
+                data_uri = f'data:{mime_type};base64,{image_data}'
+                
+                # Remplacer dans le HTML
+                # Formats possibles: cid:xxxxx ou "cid:xxxxx"
+                html_content = html_content.replace(f'cid:{cid}', data_uri)
+                html_content = html_content.replace(f'"cid:{cid}"', f'"{data_uri}"')
+                html_content = html_content.replace(f"'cid:{cid}'", f"'{data_uri}'")
+                
+                logger.info(f"✅ Image remplacée: cid:{cid} -> data URI")
+            
+            return html_content
+        
+        except Exception as e:
+            logger.error(f"❌ Erreur intégration images: {e}")
+            import traceback
+            traceback.print_exc()
+            return html_content
+    
+    def _extract_all_images(self, payload: dict, images_map: dict):
+        """Extrait récursivement toutes les images du payload."""
+        try:
+            mime_type = payload.get('mimeType', '')
+            
+            # Si c'est une image
+            if mime_type.startswith('image/'):
+                headers = payload.get('headers', [])
+                content_id = None
+                
+                # Chercher le Content-ID
+                for header in headers:
+                    if header.get('name', '').lower() == 'content-id':
+                        content_id = header.get('value', '').strip('<>')
+                        break
+                
+                # Récupérer les données
+                body_data = payload.get('body', {}).get('data', '')
+                
+                if body_data and content_id:
+                    images_map[content_id] = body_data
+                    logger.info(f"📷 Image extraite: {content_id}")
+                elif body_data:
+                    # Image sans Content-ID, utiliser un ID généré
+                    import hashlib
+                    generated_id = hashlib.md5(body_data.encode()).hexdigest()[:12]
+                    images_map[generated_id] = body_data
+                    logger.info(f"📷 Image extraite (sans CID): {generated_id}")
+            
+            # Parcourir récursivement toutes les parties
+            for part in payload.get('parts', []):
+                self._extract_all_images(part, images_map)
+        
+        except Exception as e:
+            logger.error(f"❌ Erreur extraction image: {e}")
+    
+    def _detect_image_type(self, base64_data: str) -> str:
+        """Détecte le type MIME d'une image depuis ses données base64."""
+        try:
+            # Les premiers caractères en base64 indiquent le type de fichier
+            if base64_data.startswith('/9j/'):
+                return 'image/jpeg'
+            elif base64_data.startswith('iVBORw'):
+                return 'image/png'
+            elif base64_data.startswith('R0lGOD'):
+                return 'image/gif'
+            elif base64_data.startswith('Qk'):
+                return 'image/bmp'
+            elif base64_data.startswith('SUkq') or base64_data.startswith('TU0A'):
+                return 'image/tiff'
+            elif base64_data.startswith('PD9xml') or base64_data.startswith('PHN2Zy'):
+                return 'image/svg+xml'
+            elif base64_data.startswith('UklGR'):
+                return 'image/webp'
+            else:
+                # Par défaut, JPEG
+                return 'image/jpeg'
+        except:
+            return 'image/jpeg'
+    
+    def _format_plain_text(self, text: str) -> str:
+        """Formate le texte brut en HTML."""
         import html
         
         # Échapper HTML
@@ -405,7 +508,7 @@ class EmailDetailView(QWidget):
         url_pattern = r'(https?://[^\s<>"]+)'
         html_text = re.sub(
             url_pattern, 
-            r'<a href="\1" style="color: #1a73e8; text-decoration: none;">\1</a>', 
+            r'<a href="\1" style="color: #5b21b6; text-decoration: none;">\1</a>', 
             html_text
         )
         
@@ -413,7 +516,7 @@ class EmailDetailView(QWidget):
         email_pattern = r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
         html_text = re.sub(
             email_pattern, 
-            r'<a href="mailto:\1" style="color: #1a73e8; text-decoration: none;">\1</a>', 
+            r'<a href="mailto:\1" style="color: #5b21b6; text-decoration: none;">\1</a>', 
             html_text
         )
         
@@ -435,7 +538,7 @@ class EmailDetailView(QWidget):
                 margin: 0 0 16px 0;
             }}
             a {{
-                color: #1a73e8;
+                color: #5b21b6;
                 text-decoration: none;
             }}
             a:hover {{
@@ -448,67 +551,6 @@ class EmailDetailView(QWidget):
         </body>
         </html>
         '''
-    
-    def _embed_images(self, html_content: str, email: Email) -> str:
-        """Intègre images."""
-        try:
-            if not hasattr(self.gmail_client, 'service') or not email.id:
-                return html_content
-            
-            message = self.gmail_client.service.users().messages().get(
-                userId='me',
-                id=email.id,
-                format='full'
-            ).execute()
-            
-            images = {}
-            self._extract_images_recursive(message.get('payload', {}), images)
-            
-            for cid, image_data in images.items():
-                # Type MIME
-                if image_data.startswith('/9j/'):
-                    mime_type = 'image/jpeg'
-                elif image_data.startswith('iVBORw'):
-                    mime_type = 'image/png'
-                elif image_data.startswith('R0lGOD'):
-                    mime_type = 'image/gif'
-                else:
-                    mime_type = 'image/jpeg'
-                
-                data_uri = f'data:{mime_type};base64,{image_data}'
-                html_content = html_content.replace(f'cid:{cid}', data_uri)
-            
-            logger.info(f"✅ {len(images)} images")
-        
-        except Exception as e:
-            logger.error(f"Erreur images: {e}")
-        
-        return html_content
-    
-    def _extract_images_recursive(self, payload: dict, images: dict):
-        """Extrait images."""
-        try:
-            mime_type = payload.get('mimeType', '')
-            
-            if mime_type.startswith('image/'):
-                headers = payload.get('headers', [])
-                content_id = None
-                
-                for header in headers:
-                    if header.get('name', '').lower() == 'content-id':
-                        content_id = header.get('value', '').strip('<>')
-                        break
-                
-                body_data = payload.get('body', {}).get('data', '')
-                
-                if body_data and content_id:
-                    images[content_id] = body_data
-            
-            for part in payload.get('parts', []):
-                self._extract_images_recursive(part, images)
-        
-        except Exception as e:
-            logger.error(f"Erreur: {e}")
     
     def _on_reply(self):
         if self.current_email:

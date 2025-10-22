@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Assistant IA - VERSION FINALE RÉVOLUTIONNAIRE
-Toutes les fonctionnalités utiles + Chatbot
+Assistant IA - VERSION CORRIGÉE avec design noir/blanc/violet et scroll
 """
 import logging
 from datetime import datetime, timedelta
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChatbotDialog(QDialog):
-    """Dialogue Chatbot pour générer des emails."""
+    """Dialogue Chatbot pour générer des emails - AVEC SCROLL CORRIGÉ."""
     
     def __init__(self, parent=None, ai_processor=None, gmail_client=None):
         super().__init__(parent)
@@ -28,34 +27,47 @@ class ChatbotDialog(QDialog):
         self.ai_processor = ai_processor
         self.gmail_client = gmail_client
         self.generated_email = None
+        self.selected_tone = 'professional'
         
         self.setWindowTitle("🤖 Chatbot - Générateur d'emails")
-        self.setFixedSize(700, 600)
+        self.setMinimumSize(750, 700)
         self.setStyleSheet("background-color: #ffffff;")
         
         self._setup_ui()
     
     def _setup_ui(self):
-        """Interface du chatbot."""
-        layout = QVBoxLayout(self)
+        """Interface avec scroll activé."""
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # CRITIQUE : Tout dans une zone scrollable
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #ffffff; }")
+        
+        scroll_widget = QWidget()
+        scroll_widget.setStyleSheet("background-color: #ffffff;")
+        layout = QVBoxLayout(scroll_widget)
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
         
         # Titre
         title = QLabel("🤖 Générateur d'emails intelligent")
         title.setFont(QFont("Arial", 22, QFont.Weight.Bold))
-        title.setStyleSheet("color: #1a202c;")
+        title.setStyleSheet("color: #000000;")
         layout.addWidget(title)
         
         subtitle = QLabel("Décrivez l'email que vous souhaitez envoyer")
         subtitle.setFont(QFont("Arial", 13))
-        subtitle.setStyleSheet("color: #718096;")
+        subtitle.setStyleSheet("color: #6b7280;")
         layout.addWidget(subtitle)
         
         # Destinataire
         dest_label = QLabel("À qui voulez-vous écrire ?")
         dest_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        dest_label.setStyleSheet("color: #2d3748;")
+        dest_label.setStyleSheet("color: #000000;")
         layout.addWidget(dest_label)
         
         self.recipient_input = QLineEdit()
@@ -64,14 +76,14 @@ class ChatbotDialog(QDialog):
         self.recipient_input.setFixedHeight(45)
         self.recipient_input.setStyleSheet("""
             QLineEdit {
-                border: 2px solid #e2e8f0;
+                border: 2px solid #e5e7eb;
                 border-radius: 8px;
                 padding: 0 16px;
                 background-color: #ffffff;
-                color: #1a202c;
+                color: #000000;
             }
             QLineEdit:focus {
-                border-color: #667eea;
+                border-color: #5b21b6;
             }
         """)
         layout.addWidget(self.recipient_input)
@@ -79,75 +91,73 @@ class ChatbotDialog(QDialog):
         # Sujet/Contexte
         subject_label = QLabel("Quel est le sujet / contexte ?")
         subject_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        subject_label.setStyleSheet("color: #2d3748;")
+        subject_label.setStyleSheet("color: #000000;")
         layout.addWidget(subject_label)
         
         self.context_input = QTextEdit()
-        self.context_input.setPlaceholderText("Ex: Relancer pour obtenir un devis, demander un rendez-vous, suivre une commande...")
+        self.context_input.setPlaceholderText("Ex: Je souhaite relancer un client concernant un devis envoyé il y a 2 semaines...")
         self.context_input.setFont(QFont("Arial", 13))
-        self.context_input.setFixedHeight(120)
+        self.context_input.setMaximumHeight(120)
         self.context_input.setStyleSheet("""
             QTextEdit {
-                border: 2px solid #e2e8f0;
+                border: 2px solid #e5e7eb;
                 border-radius: 8px;
                 padding: 12px;
                 background-color: #ffffff;
-                color: #1a202c;
+                color: #000000;
             }
             QTextEdit:focus {
-                border-color: #667eea;
+                border-color: #5b21b6;
             }
         """)
         layout.addWidget(self.context_input)
         
         # Ton
-        tone_label = QLabel("Ton du message")
+        tone_label = QLabel("Choisissez le ton de l'email")
         tone_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        tone_label.setStyleSheet("color: #2d3748;")
+        tone_label.setStyleSheet("color: #000000;")
         layout.addWidget(tone_label)
         
+        # Boutons de ton
         tone_layout = QHBoxLayout()
-        tone_layout.setSpacing(10)
+        tone_layout.setSpacing(12)
         
         self.tone_buttons = {}
         tones = [
-            ("Professionnel", "professional"),
-            ("Amical", "friendly"),
-            ("Formel", "formal")
+            ('professional', '💼 Professionnel'),
+            ('friendly', '😊 Amical'),
+            ('formal', '🎩 Formel')
         ]
         
-        for label, tone_id in tones:
-            btn = QPushButton(label)
+        for tone_id, tone_text in tones:
+            btn = QPushButton(tone_text)
             btn.setFont(QFont("Arial", 12))
             btn.setFixedHeight(40)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setCheckable(True)
+            btn.setChecked(tone_id == 'professional')
             btn.clicked.connect(lambda checked, t=tone_id: self._select_tone(t))
             btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #f7fafc;
-                    color: #4a5568;
-                    border: 2px solid #e2e8f0;
+                    background-color: #f3f4f6;
+                    color: #000000;
+                    border: 2px solid #e5e7eb;
                     border-radius: 8px;
+                    padding: 8px 16px;
                 }
                 QPushButton:checked {
-                    background-color: #667eea;
-                    color: white;
-                    border-color: #667eea;
+                    background-color: #5b21b6;
+                    color: #ffffff;
+                    border-color: #5b21b6;
                 }
                 QPushButton:hover {
-                    border-color: #667eea;
+                    border-color: #5b21b6;
                 }
             """)
             self.tone_buttons[tone_id] = btn
             tone_layout.addWidget(btn)
         
-        self.tone_buttons["professional"].setChecked(True)
-        self.selected_tone = "professional"
-        
         layout.addLayout(tone_layout)
-        
-        layout.addSpacing(10)
         
         # Bouton générer
         generate_btn = QPushButton("✨ Générer l'email")
@@ -157,98 +167,114 @@ class ChatbotDialog(QDialog):
         generate_btn.clicked.connect(self._generate_email)
         generate_btn.setStyleSheet("""
             QPushButton {
-                background-color: #667eea;
+                background-color: #5b21b6;
                 color: white;
                 border: none;
                 border-radius: 25px;
             }
             QPushButton:hover {
-                background-color: #5a67d8;
+                background-color: #4c1d95;
             }
         """)
         layout.addWidget(generate_btn)
         
-        # Résultat
+        # Résultat - AVEC SCROLL
         self.result_frame = QFrame()
         self.result_frame.setStyleSheet("""
             QFrame {
-                background-color: #f7fafc;
-                border: 2px solid #e2e8f0;
-                border-radius: 8px;
-                padding: 20px;
+                background-color: #f9fafb;
+                border: 2px solid #5b21b6;
+                border-radius: 12px;
             }
         """)
         self.result_frame.hide()
         
         result_layout = QVBoxLayout(self.result_frame)
-        result_layout.setSpacing(12)
+        result_layout.setContentsMargins(20, 20, 20, 20)
+        result_layout.setSpacing(15)
         
-        result_title = QLabel("📧 Email généré")
+        result_title = QLabel("📧 Email généré :")
         result_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        result_title.setStyleSheet("color: #2d3748;")
+        result_title.setStyleSheet("color: #000000;")
         result_layout.addWidget(result_title)
+        
+        # CRITIQUE : Scroll pour le résultat
+        result_scroll = QScrollArea()
+        result_scroll.setWidgetResizable(True)
+        result_scroll.setMinimumHeight(200)
+        result_scroll.setMaximumHeight(300)
+        result_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        result_scroll.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
+        """)
         
         self.result_text = QTextEdit()
         self.result_text.setReadOnly(True)
-        self.result_text.setFont(QFont("Arial", 12))
-        self.result_text.setFixedHeight(150)
+        self.result_text.setFont(QFont("Arial", 13))
         self.result_text.setStyleSheet("""
             QTextEdit {
-                border: 1px solid #cbd5e0;
-                border-radius: 6px;
-                padding: 12px;
+                border: none;
                 background-color: #ffffff;
-                color: #1a202c;
+                color: #000000;
+                padding: 12px;
             }
         """)
-        result_layout.addWidget(self.result_text)
         
-        # Boutons action
+        result_scroll.setWidget(self.result_text)
+        result_layout.addWidget(result_scroll)
+        
+        # Boutons d'action
         action_layout = QHBoxLayout()
-        action_layout.setSpacing(10)
+        action_layout.setSpacing(12)
         
         copy_btn = QPushButton("📋 Copier")
-        copy_btn.setFont(QFont("Arial", 11))
+        copy_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        copy_btn.setFixedHeight(40)
         copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_btn.clicked.connect(self._copy_email)
         copy_btn.setStyleSheet("""
             QPushButton {
-                background-color: #48bb78;
+                background-color: #5b21b6;
                 color: white;
                 border: none;
-                border-radius: 6px;
-                padding: 8px 20px;
+                border-radius: 8px;
+                padding: 0 20px;
             }
             QPushButton:hover {
-                background-color: #38a169;
+                background-color: #4c1d95;
             }
         """)
         action_layout.addWidget(copy_btn)
         
-        regenerate_btn = QPushButton("🔄 Régénérer")
-        regenerate_btn.setFont(QFont("Arial", 11))
-        regenerate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        regenerate_btn.clicked.connect(self._generate_email)
-        regenerate_btn.setStyleSheet("""
+        close_btn = QPushButton("Fermer")
+        close_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        close_btn.setFixedHeight(40)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.clicked.connect(self.close)
+        close_btn.setStyleSheet("""
             QPushButton {
-                background-color: #ed8936;
+                background-color: #6b7280;
                 color: white;
                 border: none;
-                border-radius: 6px;
-                padding: 8px 20px;
+                border-radius: 8px;
+                padding: 0 20px;
             }
             QPushButton:hover {
-                background-color: #dd6b20;
+                background-color: #4b5563;
             }
         """)
-        action_layout.addWidget(regenerate_btn)
+        action_layout.addWidget(close_btn)
         
-        action_layout.addStretch()
         result_layout.addLayout(action_layout)
-        
         layout.addWidget(self.result_frame)
         
-        layout.addStretch()
+        # Ajouter au scroll
+        scroll.setWidget(scroll_widget)
+        main_layout.addWidget(scroll)
     
     def _select_tone(self, tone_id: str):
         """Sélectionne un ton."""
@@ -257,7 +283,7 @@ class ChatbotDialog(QDialog):
             btn.setChecked(tid == tone_id)
     
     def _generate_email(self):
-        """Génère l'email."""
+        """Génère l'email avec l'IA."""
         recipient = self.recipient_input.text().strip()
         context = self.context_input.toPlainText().strip()
         
@@ -358,18 +384,15 @@ class AIAnalysisThread(QThread):
             subject_lower = email.subject.lower()
             snippet_lower = (email.snippet or '').lower()
             
-            # Mots-clés RDV
             meeting_keywords = ['réunion', 'meeting', 'rdv', 'rendez-vous', 'entretien', 'call', 'visio', 'zoom', 'teams', 'skype']
             
             has_meeting = any(kw in subject_lower or kw in snippet_lower for kw in meeting_keywords)
             
             if has_meeting:
-                # Extraire date
                 import re
                 
                 date_found = "Date à confirmer"
                 
-                # Patterns
                 patterns = [
                     r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
                     r'(\d{1,2}\s+(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre))',
@@ -399,9 +422,9 @@ class AIAnalysisThread(QThread):
     
     def _urgent_emails(self):
         """Emails urgents."""
-        self.progress.emit("🚨 Détection des urgents...", 20)
+        self.progress.emit("🚨 Recherche emails urgents...", 30)
         
-        emails = self.gmail_client.list_emails(folder="INBOX", max_results=30)
+        emails = self.gmail_client.list_emails(folder="INBOX", max_results=50)
         
         urgent = []
         
@@ -409,23 +432,18 @@ class AIAnalysisThread(QThread):
             if not self._running:
                 break
             
-            progress = 20 + int((i / len(emails)) * 70)
-            self.progress.emit(f"⚡ {i}/{len(emails)}", progress)
+            progress = 30 + int((i / len(emails)) * 60)
+            self.progress.emit(f"🔍 {i}/{len(emails)}", progress)
             
-            subject_lower = email.subject.lower()
-            snippet_lower = (email.snippet or '').lower()
+            subject = email.subject.lower()
+            snippet = (email.snippet or '').lower()
             
-            # Détection urgence
-            urgent_keywords = ['urgent', 'asap', 'immédiat', "aujourd'hui", 'deadline', 'rappel', 'important']
+            urgent_keywords = ['urgent', 'asap', 'immédiat', 'critique', 'important', 'rapidement']
             
-            is_urgent = any(kw in subject_lower for kw in urgent_keywords)
+            is_urgent = any(kw in subject or kw in snippet for kw in urgent_keywords)
             
             if is_urgent:
-                reason = next((kw for kw in urgent_keywords if kw in subject_lower), 'urgent')
-                urgent.append({
-                    'email': email,
-                    'reason': f"Contient '{reason}'"
-                })
+                urgent.append(email)
         
         self.progress.emit("✅ Terminé !", 100)
         
@@ -437,10 +455,10 @@ class AIAnalysisThread(QThread):
     
     def _needs_reply(self):
         """Emails nécessitant réponse."""
-        self.progress.emit("💬 Analyse des emails...", 20)
+        self.progress.emit("💬 Recherche emails à répondre...", 30)
         
-        emails = self.gmail_client.list_emails(folder="INBOX", max_results=20)
-        unread = [e for e in emails if not getattr(e, 'read', True)][:10]
+        unread = self.gmail_client.list_emails(folder="INBOX", max_results=30)
+        unread = [e for e in unread if not getattr(e, 'read', True)]
         
         needs_reply = []
         
@@ -448,20 +466,18 @@ class AIAnalysisThread(QThread):
             if not self._running:
                 break
             
-            progress = 20 + int((i / len(unread)) * 70)
-            self.progress.emit(f"💬 {i}/{len(unread)}", progress)
+            progress = 30 + int((i / len(unread)) * 60)
+            self.progress.emit(f"🔍 {i}/{len(unread)}", progress)
             
-            subject_lower = email.subject.lower()
-            snippet_lower = (email.snippet or '').lower()
+            subject = email.subject.lower()
+            snippet = (email.snippet or '').lower()
             
-            # Mots-clés nécessitant réponse
-            reply_keywords = ['?', 'question', 'pouvez-vous', 'pourriez-vous', 'merci de', 'besoin', 'demande', 'confirmer']
+            question_keywords = ['?', 'pouvez-vous', 'pourriez-vous', 'merci de', 'svp', 's il vous plait']
             
-            needs_response = any(kw in subject_lower or kw in snippet_lower for kw in reply_keywords)
+            needs_response = any(kw in subject or kw in snippet for kw in question_keywords)
             
             if needs_response:
-                # Générer suggestion
-                suggestion = f"Bonjour,\n\nMerci pour votre message. Je prends note et reviens vers vous rapidement.\n\nCordialement"
+                suggestion = "Bonjour,\n\nMerci pour votre message.\n\nJe prends note et reviens vers vous rapidement.\n\nCordialement"
                 
                 needs_reply.append({
                     'email': email,
@@ -488,7 +504,6 @@ class AIAnalysisThread(QThread):
         unread = len([e for e in emails if not getattr(e, 'read', True)])
         read_rate = int(((total - unread) / total * 100)) if total > 0 else 100
         
-        # Score
         score = 100
         if total > 50:
             score -= 15
@@ -499,7 +514,6 @@ class AIAnalysisThread(QThread):
         
         score = max(0, score)
         
-        # Recommandations
         recs = []
         if unread > 20:
             recs.append("📧 Beaucoup d'emails non lus. Utilisez les fonctionnalités IA pour trier.")
@@ -521,7 +535,7 @@ class AIAnalysisThread(QThread):
 
 
 class AIAssistantView(QWidget):
-    """Vue Assistant IA - FINALE."""
+    """Vue Assistant IA - DESIGN CORRIGÉ noir/blanc/violet."""
     
     email_selected = pyqtSignal(Email)
     
@@ -531,17 +545,18 @@ class AIAssistantView(QWidget):
         self.ai_processor = ai_processor
         self.gmail_client = gmail_client
         self.analysis_thread = None
+        self.stat_widgets = {}
         
         self._setup_ui()
         self._load_stats()
     
     def _setup_ui(self):
-        """Interface."""
+        """Interface avec design professionnel."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Scroll
+        # Scroll principal
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #f8f9fa; }")
@@ -551,13 +566,13 @@ class AIAssistantView(QWidget):
         scroll_layout.setContentsMargins(0, 0, 0, 0)
         scroll_layout.setSpacing(0)
         
-        # Header gradient
+        # Header avec gradient violet
         header = QFrame()
         header.setFixedHeight(200)
         header.setStyleSheet("""
             QFrame {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #667eea, stop:0.5 #764ba2, stop:1 #f093fb);
+                    stop:0 #5b21b6, stop:0.5 #7c3aed, stop:1 #a78bfa);
             }
         """)
         
@@ -581,80 +596,72 @@ class AIAssistantView(QWidget):
         stats_layout = QHBoxLayout()
         stats_layout.setSpacing(18)
         
-        self.stat_widgets = {}
-        stats = [
-            ("inbox", "📥", "0", "Inbox"),
-            ("unread", "✉️", "0", "Non lus"),
-            ("health", "💚", "0%", "Santé")
+        stats_data = [
+            ('inbox', '📥 Inbox', '0', '#ffffff'),
+            ('unread', '✉️ Non lus', '0', '#ffffff'),
+            ('health', '💚 Santé', '100%', '#ffffff')
         ]
         
-        for key, icon, value, label in stats:
-            stat = self._create_stat(icon, value, label)
-            self.stat_widgets[key] = stat
-            stats_layout.addWidget(stat)
+        for stat_id, stat_label, stat_value, color in stats_data:
+            stat_card = self._create_stat_card(stat_id, stat_label, stat_value, color)
+            self.stat_widgets[stat_id] = stat_card
+            stats_layout.addWidget(stat_card)
         
-        stats_layout.addStretch()
         header_layout.addLayout(stats_layout)
-        
         scroll_layout.addWidget(header)
         
-        # Corps
+        # Body avec padding
         body = QWidget()
+        body.setStyleSheet("background-color: #f8f9fa;")
         body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(48, 36, 48, 36)
-        body_layout.setSpacing(28)
+        body_layout.setContentsMargins(48, 40, 48, 40)
+        body_layout.setSpacing(24)
         
-        # Titre
-        main_title = QLabel("🚀 Fonctionnalités")
-        main_title.setFont(QFont("Arial", 22, QFont.Weight.Bold))
-        main_title.setStyleSheet("color: #1a202c;")
-        body_layout.addWidget(main_title)
-        
-        # Grid
+        # Cartes d'action
         grid = QVBoxLayout()
-        grid.setSpacing(16)
+        grid.setSpacing(20)
         
         # Ligne 1
         row1 = QHBoxLayout()
-        row1.setSpacing(16)
+        row1.setSpacing(20)
         
         row1.addWidget(self._create_card(
             "upcoming_meetings",
-            "📅 RDV à venir",
-            "Trouve tous vos rendez-vous à venir dans vos emails",
-            "#667eea"
+            "📅 Prochains RDV",
+            "Détectez automatiquement les rendez-vous dans vos emails",
+            "#5b21b6"
         ))
         
         row1.addWidget(self._create_card(
             "urgent_emails",
             "🚨 Emails Urgents",
-            "Détecte les emails qui nécessitent une action immédiate",
-            "#f093fb"
+            "Identifiez rapidement les messages prioritaires",
+            "#dc2626"
         ))
         
         grid.addLayout(row1)
         
         # Ligne 2
         row2 = QHBoxLayout()
-        row2.setSpacing(16)
+        row2.setSpacing(20)
         
         row2.addWidget(self._create_card(
             "needs_reply",
             "💬 Nécessitent Réponse",
             "Emails qui attendent une réponse + suggestions",
-            "#764ba2"
+            "#0891b2"
         ))
         
         row2.addWidget(self._create_card(
             "inbox_health",
             "💚 Santé Inbox",
             "Analyse complète avec score et recommandations",
-            "#00d2ff"
+            "#059669"
         ))
         
         grid.addLayout(row2)
         
-        # Ligne 3 - Chatbot
+        # Ligne 3 - Chatbot (carte spéciale)
         chatbot_card = self._create_chatbot_card()
         grid.addWidget(chatbot_card)
         
@@ -666,7 +673,7 @@ class AIAssistantView(QWidget):
             QFrame {
                 background-color: #ffffff;
                 border-radius: 16px;
-                border: 2px solid #e2e8f0;
+                border: 2px solid #e5e7eb;
             }
         """)
         self.results_container.hide()
@@ -684,18 +691,18 @@ class AIAssistantView(QWidget):
             QFrame {
                 background-color: #ffffff;
                 border-radius: 12px;
-                border: 2px solid #667eea;
+                border: 2px solid #5b21b6;
             }
         """)
         self.progress_container.hide()
         
         progress_layout = QVBoxLayout(self.progress_container)
-        progress_layout.setContentsMargins(24, 18, 24, 18)
+        progress_layout.setContentsMargins(24, 20, 24, 20)
         progress_layout.setSpacing(12)
         
-        self.progress_label = QLabel("⏳ Analyse en cours...")
-        self.progress_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        self.progress_label.setStyleSheet("color: #667eea;")
+        self.progress_label = QLabel("Analyse en cours...")
+        self.progress_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        self.progress_label.setStyleSheet("color: #000000;")
         progress_layout.addWidget(self.progress_label)
         
         self.progress_bar = QProgressBar()
@@ -703,73 +710,61 @@ class AIAssistantView(QWidget):
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setStyleSheet("""
             QProgressBar {
-                border: none;
+                background-color: #e5e7eb;
                 border-radius: 6px;
-                background-color: #e2e8f0;
+                border: none;
             }
             QProgressBar::chunk {
+                background-color: #5b21b6;
                 border-radius: 6px;
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #667eea, stop:1 #764ba2);
             }
         """)
         progress_layout.addWidget(self.progress_bar)
         
         body_layout.addWidget(self.progress_container)
         
-        body_layout.addStretch()
-        
         scroll_layout.addWidget(body)
         scroll.setWidget(scroll_widget)
         layout.addWidget(scroll)
     
-    def _create_stat(self, icon: str, value: str, label: str) -> QFrame:
-        """Crée une stat."""
-        frame = QFrame()
-        frame.setFixedSize(160, 65)
-        frame.setStyleSheet("""
-            QFrame {
-                background-color: rgba(255, 255, 255, 0.25);
-                border-radius: 10px;
-                border: 1px solid rgba(255, 255, 255, 0.3);
-            }
+    def _create_stat_card(self, stat_id: str, label: str, value: str, color: str) -> QFrame:
+        """Crée une carte de statistique."""
+        card = QFrame()
+        card.setFixedSize(200, 85)
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(255, 255, 255, 0.2);
+                border-radius: 12px;
+                border: 2px solid rgba(255, 255, 255, 0.3);
+            }}
         """)
         
-        layout = QHBoxLayout(frame)
-        layout.setContentsMargins(14, 10, 14, 10)
-        layout.setSpacing(10)
-        
-        icon_label = QLabel(icon)
-        icon_label.setFont(QFont("Arial", 26))
-        layout.addWidget(icon_label)
-        
-        text_layout = QVBoxLayout()
-        text_layout.setSpacing(2)
-        
-        value_label = QLabel(value)
-        value_label.setObjectName("stat-value")
-        value_label.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        value_label.setStyleSheet("color: #ffffff;")
-        text_layout.addWidget(value_label)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(6)
         
         label_widget = QLabel(label)
-        label_widget.setFont(QFont("Arial", 10))
-        label_widget.setStyleSheet("color: rgba(255, 255, 255, 0.85);")
-        text_layout.addWidget(label_widget)
+        label_widget.setFont(QFont("Arial", 11))
+        label_widget.setStyleSheet("color: rgba(255, 255, 255, 0.9);")
+        layout.addWidget(label_widget)
         
-        layout.addLayout(text_layout)
+        value_widget = QLabel(value)
+        value_widget.setObjectName("stat-value")
+        value_widget.setFont(QFont("Arial", 22, QFont.Weight.Bold))
+        value_widget.setStyleSheet("color: #ffffff;")
+        layout.addWidget(value_widget)
         
-        return frame
+        return card
     
     def _create_card(self, action_id: str, title: str, desc: str, color: str) -> QFrame:
-        """Crée une carte."""
+        """Crée une carte d'action - DESIGN CORRIGÉ."""
         card = QFrame()
         card.setFixedSize(400, 180)
         card.setCursor(Qt.CursorShape.PointingHandCursor)
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: #ffffff;
-                border: 2px solid #e2e8f0;
+                border: 2px solid #e5e7eb;
                 border-radius: 16px;
             }}
             QFrame:hover {{
@@ -791,7 +786,7 @@ class AIAssistantView(QWidget):
         
         desc_label = QLabel(desc)
         desc_label.setFont(QFont("Arial", 12))
-        desc_label.setStyleSheet("color: #4a5568;")
+        desc_label.setStyleSheet("color: #4b5563;")
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
         
@@ -817,19 +812,19 @@ class AIAssistantView(QWidget):
         return card
     
     def _create_chatbot_card(self) -> QFrame:
-        """Crée la carte chatbot."""
+        """Crée la carte chatbot - DESIGN CORRIGÉ."""
         card = QFrame()
         card.setFixedHeight(180)
         card.setCursor(Qt.CursorShape.PointingHandCursor)
         card.setStyleSheet("""
             QFrame {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #fa709a, stop:1 #fee140);
+                    stop:0 #5b21b6, stop:1 #7c3aed);
                 border-radius: 16px;
             }
             QFrame:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #f77062, stop:1 #fe5196);
+                    stop:0 #4c1d95, stop:1 #6d28d9);
             }
         """)
         
@@ -950,149 +945,116 @@ class AIAssistantView(QWidget):
         
         title = QLabel(f"📅 {len(meetings)} rendez-vous trouvés")
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        title.setStyleSheet("color: #1a202c;")
+        title.setStyleSheet("color: #000000;")
         self.results_layout.addWidget(title)
         
         if not meetings:
             empty = QLabel("Aucun rendez-vous détecté dans vos emails récents.")
             empty.setFont(QFont("Arial", 14))
-            empty.setStyleSheet("color: #718096; padding: 40px;")
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.setStyleSheet("color: #6b7280;")
             self.results_layout.addWidget(empty)
             return
         
-        for item in meetings:
-            email = item['email']
-            date_info = item['date_info']
-            
-            card = QFrame()
-            card.setCursor(Qt.CursorShape.PointingHandCursor)
-            card.setStyleSheet("""
-                QFrame {
-                    background-color: #fffaf0;
-                    border: 2px solid #fbd38d;
-                    border-radius: 12px;
-                    padding: 20px;
-                }
-                QFrame:hover {
-                    border-color: #f6ad55;
-                    background-color: #fef5e7;
-                }
-            """)
-            
-            card.mousePressEvent = lambda e, em=email: self.email_selected.emit(em)
-            
-            card_layout = QVBoxLayout(card)
-            card_layout.setSpacing(10)
-            
-            sender = QLabel(f"De: {email.sender}")
-            sender.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-            sender.setStyleSheet("color: #744210;")
-            card_layout.addWidget(sender)
-            
-            subject = QLabel(email.subject)
-            subject.setFont(QFont("Arial", 12))
-            subject.setStyleSheet("color: #975a16;")
-            subject.setWordWrap(True)
-            card_layout.addWidget(subject)
-            
-            date_label = QLabel(f"📅 {date_info}")
-            date_label.setFont(QFont("Arial", 11, QFont.Weight.Bold))
-            date_label.setStyleSheet("color: #c05621;")
-            card_layout.addWidget(date_label)
-            
-            self.results_layout.addWidget(card)
+        # Liste scrollable des RDV
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(300)
+        scroll.setMaximumHeight(500)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
+        """)
+        
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        scroll_layout.setSpacing(12)
+        
+        for meeting in meetings:
+            card = self._create_meeting_card(meeting)
+            scroll_layout.addWidget(card)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        self.results_layout.addWidget(scroll)
+    
+    def _create_meeting_card(self, meeting: dict) -> QFrame:
+        """Crée une carte RDV."""
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 16px;
+            }
+        """)
+        
+        layout = QVBoxLayout(card)
+        layout.setSpacing(8)
+        
+        email = meeting['email']
+        
+        subject = QLabel(email.subject)
+        subject.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        subject.setStyleSheet("color: #000000;")
+        subject.setWordWrap(True)
+        layout.addWidget(subject)
+        
+        from_label = QLabel(f"De: {email.sender}")
+        from_label.setFont(QFont("Arial", 12))
+        from_label.setStyleSheet("color: #6b7280;")
+        layout.addWidget(from_label)
+        
+        date_label = QLabel(f"📅 {meeting['date_info']}")
+        date_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        date_label.setStyleSheet("color: #5b21b6;")
+        layout.addWidget(date_label)
+        
+        return card
     
     def _show_urgent(self, results: dict):
-        """Affiche les urgents."""
+        """Affiche les emails urgents."""
         urgent = results['urgent']
         
         title = QLabel(f"🚨 {len(urgent)} emails urgents")
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        title.setStyleSheet("color: #e53e3e;")
+        title.setStyleSheet("color: #000000;")
         self.results_layout.addWidget(title)
         
         if not urgent:
-            empty_frame = QFrame()
-            empty_frame.setStyleSheet("""
-                QFrame {
-                    background-color: #f0fff4;
-                    border: 2px solid #9ae6b4;
-                    border-radius: 12px;
-                    padding: 32px;
-                }
-            """)
-            
-            empty_layout = QVBoxLayout(empty_frame)
-            empty_layout.setSpacing(12)
-            
-            emoji = QLabel("🎉")
-            emoji.setFont(QFont("Arial", 48))
-            emoji.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty_layout.addWidget(emoji)
-            
-            msg = QLabel("Aucun email urgent !\nVous êtes à jour.")
-            msg.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-            msg.setStyleSheet("color: #22543d;")
-            msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty_layout.addWidget(msg)
-            
-            self.results_layout.addWidget(empty_frame)
+            empty = QLabel("Aucun email urgent détecté. Vous êtes à jour !")
+            empty.setFont(QFont("Arial", 14))
+            empty.setStyleSheet("color: #6b7280;")
+            self.results_layout.addWidget(empty)
             return
         
-        for item in urgent:
-            email = item['email']
-            reason = item['reason']
-            
-            card = QFrame()
-            card.setCursor(Qt.CursorShape.PointingHandCursor)
-            card.setStyleSheet("""
-                QFrame {
-                    background-color: #fff5f5;
-                    border: 3px solid #fc8181;
-                    border-radius: 12px;
-                    padding: 20px;
-                }
-                QFrame:hover {
-                    background-color: #fed7d7;
-                    border-color: #f56565;
-                }
-            """)
-            
-            card.mousePressEvent = lambda e, em=email: self.email_selected.emit(em)
-            
-            card_layout = QVBoxLayout(card)
-            card_layout.setSpacing(10)
-            
-            badge = QLabel("🚨 URGENT")
-            badge.setFont(QFont("Arial", 11, QFont.Weight.Bold))
-            badge.setFixedWidth(90)
-            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            badge.setStyleSheet("""
-                background-color: #e53e3e;
-                color: white;
-                padding: 6px 12px;
-                border-radius: 12px;
-            """)
-            card_layout.addWidget(badge)
-            
-            sender = QLabel(email.sender)
-            sender.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-            sender.setStyleSheet("color: #742a2a;")
-            card_layout.addWidget(sender)
-            
-            subject = QLabel(email.subject)
-            subject.setFont(QFont("Arial", 13))
-            subject.setStyleSheet("color: #9b2c2c;")
-            subject.setWordWrap(True)
-            card_layout.addWidget(subject)
-            
-            reason_label = QLabel(f"💡 {reason}")
-            reason_label.setFont(QFont("Arial", 11))
-            reason_label.setStyleSheet("color: #c53030; font-style: italic;")
-            card_layout.addWidget(reason_label)
-            
-            self.results_layout.addWidget(card)
+        # Liste scrollable
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(300)
+        scroll.setMaximumHeight(500)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
+        """)
+        
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        scroll_layout.setSpacing(12)
+        
+        for email in urgent:
+            card = self._create_email_card(email)
+            scroll_layout.addWidget(card)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        self.results_layout.addWidget(scroll)
     
     def _show_needs_reply(self, results: dict):
         """Affiche les emails nécessitant réponse."""
@@ -1100,207 +1062,202 @@ class AIAssistantView(QWidget):
         
         title = QLabel(f"💬 {len(needs_reply)} emails nécessitent une réponse")
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        title.setStyleSheet("color: #1a202c;")
+        title.setStyleSheet("color: #000000;")
         self.results_layout.addWidget(title)
         
         if not needs_reply:
-            empty = QLabel("Tous vos emails ont été traités !")
+            empty = QLabel("Aucun email en attente de réponse.")
             empty.setFont(QFont("Arial", 14))
-            empty.setStyleSheet("color: #718096; padding: 40px;")
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.setStyleSheet("color: #6b7280;")
             self.results_layout.addWidget(empty)
             return
         
-        for item in needs_reply:
-            email = item['email']
-            suggestion = item['suggestion']
-            
-            # Email
-            email_label = QLabel(f"De: {email.sender}")
-            email_label.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-            email_label.setStyleSheet("color: #2d3748;")
-            self.results_layout.addWidget(email_label)
-            
-            subject_label = QLabel(f"Sujet: {email.subject}")
-            subject_label.setFont(QFont("Arial", 12))
-            subject_label.setStyleSheet("color: #4a5568;")
-            self.results_layout.addWidget(subject_label)
-            
-            # Suggestion
-            suggestion_frame = QFrame()
-            suggestion_frame.setStyleSheet("""
-                QFrame {
-                    background-color: #f0fff4;
-                    border: 2px solid #9ae6b4;
-                    border-radius: 10px;
-                    padding: 16px;
-                }
-            """)
-            
-            suggestion_layout = QVBoxLayout(suggestion_frame)
-            suggestion_layout.setSpacing(10)
-            
-            suggestion_title = QLabel("💡 Suggestion de réponse")
-            suggestion_title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-            suggestion_title.setStyleSheet("color: #22543d;")
-            suggestion_layout.addWidget(suggestion_title)
-            
-            suggestion_text = QLabel(suggestion)
-            suggestion_text.setFont(QFont("Arial", 11))
-            suggestion_text.setStyleSheet("color: #2f855a;")
-            suggestion_text.setWordWrap(True)
-            suggestion_layout.addWidget(suggestion_text)
-            
-            copy_btn = QPushButton("📋 Copier cette réponse")
-            copy_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            copy_btn.clicked.connect(lambda checked, s=suggestion: self._copy_text(s))
-            copy_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #48bb78;
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px 16px;
-                }
-                QPushButton:hover {
-                    background-color: #38a169;
-                }
-            """)
-            suggestion_layout.addWidget(copy_btn)
-            
-            self.results_layout.addWidget(suggestion_frame)
-            
-            # Séparateur
-            sep = QFrame()
-            sep.setFrameShape(QFrame.Shape.HLine)
-            sep.setStyleSheet("background-color: #e2e8f0; max-height: 1px;")
-            self.results_layout.addWidget(sep)
-    
-    def _show_health(self, results: dict):
-        """Affiche la santé inbox."""
-        total = results['total']
-        unread = results['unread']
-        read_rate = results['read_rate']
-        score = results['score']
-        recommendations = results['recommendations']
-        
-        title = QLabel("💚 Santé de votre Inbox")
-        title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        title.setStyleSheet("color: #1a202c;")
-        self.results_layout.addWidget(title)
-        
-        # Score
-        health_frame = QFrame()
-        health_frame.setFixedHeight(130)
-        
-        if score >= 80:
-            bg_color = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #48bb78, stop:1 #38a169)"
-            emoji = "🎉"
-        elif score >= 60:
-            bg_color = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ed8936, stop:1 #dd6b20)"
-            emoji = "👍"
-        else:
-            bg_color = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #fc8181, stop:1 #f56565)"
-            emoji = "⚠️"
-        
-        health_frame.setStyleSheet(f"""
-            QFrame {{
-                background: {bg_color};
-                border-radius: 12px;
-            }}
+        # Liste scrollable
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(300)
+        scroll.setMaximumHeight(500)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
         """)
         
-        health_layout = QHBoxLayout(health_frame)
-        health_layout.setContentsMargins(32, 24, 32, 24)
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        scroll_layout.setSpacing(12)
         
-        score_layout = QVBoxLayout()
-        score_layout.setSpacing(6)
+        for item in needs_reply:
+            card = self._create_reply_card(item)
+            scroll_layout.addWidget(card)
         
-        score_label = QLabel(f"{score}/100")
-        score_label.setFont(QFont("Arial", 48, QFont.Weight.Bold))
-        score_label.setStyleSheet("color: #ffffff;")
-        score_layout.addWidget(score_label)
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        self.results_layout.addWidget(scroll)
+    
+    def _create_email_card(self, email: Email) -> QFrame:
+        """Crée une carte email."""
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #fef2f2;
+                border: 1px solid #fecaca;
+                border-radius: 8px;
+                padding: 16px;
+            }
+        """)
         
-        score_desc = QLabel("Score de santé")
-        score_desc.setFont(QFont("Arial", 15))
-        score_desc.setStyleSheet("color: rgba(255, 255, 255, 0.9);")
-        score_layout.addWidget(score_desc)
+        layout = QVBoxLayout(card)
+        layout.setSpacing(8)
         
-        health_layout.addLayout(score_layout)
-        health_layout.addStretch()
+        subject = QLabel(email.subject)
+        subject.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        subject.setStyleSheet("color: #000000;")
+        subject.setWordWrap(True)
+        layout.addWidget(subject)
         
-        emoji_label = QLabel(emoji)
-        emoji_label.setFont(QFont("Arial", 64))
-        health_layout.addWidget(emoji_label)
+        from_label = QLabel(f"De: {email.sender}")
+        from_label.setFont(QFont("Arial", 12))
+        from_label.setStyleSheet("color: #6b7280;")
+        layout.addWidget(from_label)
         
-        self.results_layout.addWidget(health_frame)
+        snippet = QLabel(email.snippet[:100] + "..." if len(email.snippet) > 100 else email.snippet)
+        snippet.setFont(QFont("Arial", 11))
+        snippet.setStyleSheet("color: #9ca3af;")
+        snippet.setWordWrap(True)
+        layout.addWidget(snippet)
+        
+        return card
+    
+    def _create_reply_card(self, item: dict) -> QFrame:
+        """Crée une carte avec suggestion de réponse."""
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #f0fdf4;
+                border: 1px solid #bbf7d0;
+                border-radius: 8px;
+                padding: 16px;
+            }
+        """)
+        
+        layout = QVBoxLayout(card)
+        layout.setSpacing(12)
+        
+        email = item['email']
+        
+        subject = QLabel(email.subject)
+        subject.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        subject.setStyleSheet("color: #000000;")
+        subject.setWordWrap(True)
+        layout.addWidget(subject)
+        
+        from_label = QLabel(f"De: {email.sender}")
+        from_label.setFont(QFont("Arial", 12))
+        from_label.setStyleSheet("color: #6b7280;")
+        layout.addWidget(from_label)
+        
+        suggestion_label = QLabel("💡 Suggestion de réponse :")
+        suggestion_label.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        suggestion_label.setStyleSheet("color: #059669;")
+        layout.addWidget(suggestion_label)
+        
+        suggestion_text = QLabel(item['suggestion'][:150] + "...")
+        suggestion_text.setFont(QFont("Arial", 11))
+        suggestion_text.setStyleSheet("color: #6b7280;")
+        suggestion_text.setWordWrap(True)
+        layout.addWidget(suggestion_text)
+        
+        return card
+    
+    def _show_health(self, results: dict):
+        """Affiche la santé de l'inbox."""
+        score = results['score']
+        
+        title = QLabel(f"💚 Score de santé : {score}/100")
+        title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        title.setStyleSheet("color: #000000;")
+        self.results_layout.addWidget(title)
+        
+        # Barre de score
+        score_bar = QProgressBar()
+        score_bar.setValue(score)
+        score_bar.setFixedHeight(30)
+        score_bar.setTextVisible(True)
+        
+        if score >= 80:
+            color = "#10b981"
+        elif score >= 60:
+            color = "#f59e0b"
+        else:
+            color = "#ef4444"
+        
+        score_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: #e5e7eb;
+                border-radius: 15px;
+                text-align: center;
+                color: #000000;
+                font-weight: bold;
+            }}
+            QProgressBar::chunk {{
+                background-color: {color};
+                border-radius: 15px;
+            }}
+        """)
+        self.results_layout.addWidget(score_bar)
         
         # Stats
         stats_frame = QFrame()
         stats_frame.setStyleSheet("""
             QFrame {
-                background-color: #f7fafc;
-                border: 2px solid #cbd5e0;
-                border-radius: 12px;
-                padding: 24px;
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 20px;
             }
         """)
         
-        stats_layout = QVBoxLayout(stats_frame)
-        stats_layout.setSpacing(16)
+        stats_layout = QHBoxLayout(stats_frame)
+        stats_layout.setSpacing(30)
         
-        stats_title = QLabel("📊 Métriques")
-        stats_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        stats_title.setStyleSheet("color: #2d3748;")
-        stats_layout.addWidget(stats_title)
-        
-        stat_items = [
-            ("📧 Total emails", str(total)),
-            ("✉️ Non lus", str(unread)),
-            ("📖 Taux de lecture", f"{read_rate}%")
+        stats_data = [
+            ("Total", results['total']),
+            ("Non lus", results['unread']),
+            ("Taux de lecture", f"{results['read_rate']}%")
         ]
         
-        for label, value in stat_items:
-            row = QHBoxLayout()
+        for label, value in stats_data:
+            stat_layout = QVBoxLayout()
+            stat_layout.setSpacing(4)
+            
+            value_label = QLabel(str(value))
+            value_label.setFont(QFont("Arial", 28, QFont.Weight.Bold))
+            value_label.setStyleSheet("color: #5b21b6;")
+            value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            stat_layout.addWidget(value_label)
             
             label_widget = QLabel(label)
-            label_widget.setFont(QFont("Arial", 13))
-            label_widget.setStyleSheet("color: #4a5568;")
-            row.addWidget(label_widget)
+            label_widget.setFont(QFont("Arial", 12))
+            label_widget.setStyleSheet("color: #6b7280;")
+            label_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            stat_layout.addWidget(label_widget)
             
-            row.addStretch()
-            
-            value_widget = QLabel(value)
-            value_widget.setFont(QFont("Arial", 15, QFont.Weight.Bold))
-            value_widget.setStyleSheet("color: #1a202c;")
-            row.addWidget(value_widget)
-            
-            stats_layout.addLayout(row)
+            stats_layout.addLayout(stat_layout)
         
         self.results_layout.addWidget(stats_frame)
         
         # Recommandations
-        reco_title = QLabel("💡 Recommandations")
-        reco_title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        reco_title.setStyleSheet("color: #2d3748;")
-        self.results_layout.addWidget(reco_title)
+        recs_label = QLabel("📋 Recommandations :")
+        recs_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        recs_label.setStyleSheet("color: #000000;")
+        self.results_layout.addWidget(recs_label)
         
-        for reco in recommendations:
-            reco_label = QLabel(reco)
-            reco_label.setFont(QFont("Arial", 13))
-            reco_label.setStyleSheet("""
-                color: #4a5568;
-                background-color: #edf2f7;
-                padding: 12px 16px;
-                border-radius: 8px;
-            """)
-            reco_label.setWordWrap(True)
-            self.results_layout.addWidget(reco_label)
-    
-    def _copy_text(self, text: str):
-        """Copie le texte."""
-        from PyQt6.QtWidgets import QApplication, QMessageBox
-        clipboard = QApplication.clipboard()
-        clipboard.setText(text)
-        QMessageBox.information(self, "✅ Copié", "Le texte a été copié !")
+        for rec in results['recommendations']:
+            rec_label = QLabel(f"• {rec}")
+            rec_label.setFont(QFont("Arial", 13))
+            rec_label.setStyleSheet("color: #4b5563;")
+            rec_label.setWordWrap(True)
+            self.results_layout.addWidget(rec_label)
